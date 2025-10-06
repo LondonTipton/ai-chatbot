@@ -11,6 +11,15 @@ import {
   titleModel,
 } from './models.test';
 import { isTestEnvironment } from '../constants';
+import { getBalancedGoogleProvider } from './gemini-key-balancer';
+
+// Get load-balanced Google provider for production
+const getGoogleProvider = () => {
+  if (isTestEnvironment) {
+    return google;
+  }
+  return getBalancedGoogleProvider();
+};
 
 export const myProvider = isTestEnvironment
   ? customProvider({
@@ -23,15 +32,15 @@ export const myProvider = isTestEnvironment
     })
   : customProvider({
       languageModels: {
-        'chat-model': google('gemini-2.0-flash-exp'),
+        'chat-model': getGoogleProvider()('gemini-2.0-flash-exp'),
         'chat-model-reasoning': wrapLanguageModel({
-          model: google('gemini-2.0-flash-thinking-exp-1219'),
+          model: getGoogleProvider()('gemini-2.0-flash-thinking-exp-1219'),
           middleware: extractReasoningMiddleware({ tagName: 'think' }),
         }),
-        'title-model': google('gemini-2.0-flash-exp'),
-        'artifact-model': google('gemini-2.0-flash-exp'),
+        'title-model': getGoogleProvider()('gemini-2.0-flash-exp'),
+        'artifact-model': getGoogleProvider()('gemini-2.0-flash-exp'),
       },
       imageModels: {
-        'small-model': google.imageModel('imagen-3.0-generate-001'),
+        'small-model': getGoogleProvider().imageModel('imagen-3.0-generate-001'),
       },
     });

@@ -1,7 +1,7 @@
 {
     "name": "extracted-artifacts",
     "version": "1.0.0",
-    "description": "Portable artifact/document side panel component extracted from ai-chatbot",
+    "description": "Portable artifact/document side panel component extracted from DeepCounsel",
     "main": "index.ts",
     "type": "module",
     "scripts": {

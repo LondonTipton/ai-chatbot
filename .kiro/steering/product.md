@@ -1,6 +1,6 @@
 # Product Overview
 
-Chat SDK is an open-source AI chatbot template built with Next.js and the AI SDK. It provides a production-ready foundation for building powerful conversational AI applications with modern web technologies.
+DeepCounsel is an AI-powered legal assistant chatbot built with Next.js and the AI SDK. It provides a production-ready foundation for building powerful conversational AI applications with modern web technologies.
 
 ## Key Features
 
