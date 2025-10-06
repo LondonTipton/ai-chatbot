@@ -8,6 +8,13 @@ const components: Partial<Components> = {
   // @ts-expect-error
   code: CodeBlock,
   pre: ({ children }) => <>{children}</>,
+  p: ({ node, children, ...props }) => {
+    return (
+      <div className="mb-2 last:mb-0" {...props}>
+        {children}
+      </div>
+    );
+  },
   ol: ({ node, children, ...props }) => {
     return (
       <ol className="list-decimal list-outside ml-4" {...props}>
