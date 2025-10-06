@@ -222,6 +222,9 @@ export async function POST(request: Request) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
+  // Ensure a response is always returned even for unexpected errors
+  console.error('Unexpected error in chat POST handler:', error);
+  return new ChatSDKError('bad_request:api').toResponse();
   }
 }
 
