@@ -20,24 +20,24 @@ function PureSuggestedActions({
 }: SuggestedActionsProps) {
   const suggestedActions = [
     {
-      title: 'What are the advantages',
-      label: 'of using Next.js?',
-      action: 'What are the advantages of using Next.js?',
+      title: 'What are the key differences',
+      label: 'between customary and general law in Zimbabwe?',
+      action: 'What are the key differences between customary and general law in Zimbabwe?',
     },
     {
-      title: 'Write code to',
-      label: `demonstrate djikstra's algorithm`,
-      action: `Write code to demonstrate djikstra's algorithm`,
+      title: 'Explain the constitutional provisions',
+      label: `for property rights under the 2013 Constitution`,
+      action: `Explain the constitutional provisions for property rights under the 2013 Constitution of Zimbabwe`,
     },
     {
-      title: 'Help me write an essay',
-      label: `about silicon valley`,
-      action: `Help me write an essay about silicon valley`,
+      title: 'How does the Labour Act',
+      label: `protect workers' rights in Zimbabwe?`,
+      action: `How does the Labour Act protect workers' rights in Zimbabwe?`,
     },
     {
-      title: 'What is the weather',
-      label: 'in San Francisco?',
-      action: 'What is the weather in San Francisco?',
+      title: 'What is the legal framework',
+      label: 'for intellectual property in Zimbabwe?',
+      action: 'What is the legal framework for intellectual property in Zimbabwe?',
     },
   ];
 

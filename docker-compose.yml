@@ -2,7 +2,7 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16
-    container_name: ai-chatbot-postgres
+    container_name: deepcounsel-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
