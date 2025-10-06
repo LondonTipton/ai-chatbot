@@ -18,13 +18,17 @@
 
 ## Features
 
+- **Legal Assistant Focus**
+  - Specialized in Zimbabwean law and legal information
+  - Web search integration via [Tavily](https://tavily.com) for current legal information
+  - Professional legal context and terminology
 - [Next.js](https://nextjs.org) App Router
   - Advanced routing for seamless navigation and performance
   - React Server Components (RSCs) and Server Actions for server-side rendering and increased performance
 - [AI SDK](https://sdk.vercel.ai/docs)
   - Unified API for generating text, structured objects, and tool calls with LLMs
   - Hooks for building dynamic chat and generative user interfaces
-  - Supports xAI (default), OpenAI, Fireworks, and other model providers
+  - Supports Google Gemini (default) with load balancing across multiple API keys
 - [shadcn/ui](https://ui.shadcn.com)
   - Styling with [Tailwind CSS](https://tailwindcss.com)
   - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
@@ -33,6 +37,10 @@
   - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
 - [Auth.js](https://authjs.dev)
   - Simple and secure authentication
+- **Advanced Features**
+  - Gemini API key load balancing (up to 5 keys)
+  - Real-time web search for current legal information
+  - Source citation and reference tracking
 
 ## Model Providers
 
@@ -60,3 +68,30 @@ pnpm dev
 ```
 
 Your app template should now be running on [localhost:3000](http://localhost:3000).
+
+## Testing Integrations
+
+### Test Tavily Search API
+
+```bash
+# Visit the test endpoint
+curl http://localhost:3000/api/test/tavily
+
+# Or open in browser
+open http://localhost:3000/api/test/tavily
+```
+
+### Test Gemini Load Balancer
+
+```bash
+# View API key statistics
+curl http://localhost:3000/api/admin/gemini-stats
+```
+
+## Documentation
+
+- [FEATURES.md](./FEATURES.md) - Complete feature overview
+- [TAVILY_QUICK_START.md](./TAVILY_QUICK_START.md) - Web search setup (3 minutes)
+- [GEMINI_LOAD_BALANCER.md](./GEMINI_LOAD_BALANCER.md) - Multi-key load balancing
+- [MESSAGE_LIMITS.md](./MESSAGE_LIMITS.md) - Configure usage limits
+- [TAVILY_TROUBLESHOOTING.md](./TAVILY_TROUBLESHOOTING.md) - Common issues and solutions
