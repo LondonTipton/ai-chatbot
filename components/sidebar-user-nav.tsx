@@ -79,6 +79,14 @@ export function SidebarUserNav({ user }: { user: User }) {
               {`Toggle ${resolvedTheme === 'light' ? 'dark' : 'light'} mode`}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem
+              data-testid="user-nav-item-pricing"
+              className="cursor-pointer"
+              onSelect={() => router.push('/pricing')}
+            >
+              Pricing
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem asChild data-testid="user-nav-item-auth">
               <button
                 type="button"
