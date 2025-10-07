@@ -13,6 +13,7 @@ import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { type VisibilityType, VisibilitySelector } from './visibility-selector';
 import type { Session } from 'next-auth';
+import { guestRegex } from '@/lib/constants';
 
 function PureChatHeader({
   chatId,
@@ -29,6 +30,7 @@ function PureChatHeader({
 }) {
   const router = useRouter();
   const { open } = useSidebar();
+  const isGuest = guestRegex.test(session?.user?.email ?? '');
 
   const { width: windowWidth } = useWindowSize();
 
@@ -71,8 +73,18 @@ function PureChatHeader({
         />
       )}
 
+      {isGuest && (
+        <Button
+          variant="default"
+          className="order-1 md:order-4 md:px-3 px-2 md:h-[34px] bg-primary hover:bg-primary/90"
+          onClick={() => router.push('/pricing')}
+        >
+          Upgrade
+        </Button>
+      )}
+
       <Button
-        className="bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-zinc-50 dark:text-zinc-900 hidden md:flex py-1.5 px-2 h-fit md:h-[34px] order-4 md:ml-auto"
+        className="bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-zinc-50 dark:text-zinc-900 hidden md:flex py-1.5 px-2 h-fit md:h-[34px] order-5 md:ml-auto"
         asChild
       >
         <Link
