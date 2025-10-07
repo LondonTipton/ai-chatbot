@@ -3,7 +3,7 @@
  * Rotates through multiple API keys to distribute load and avoid rate limits
  */
 
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
 interface KeyUsageStats {
   key: string;
@@ -40,10 +40,18 @@ class GeminiKeyBalancer {
   private loadApiKeys(): string[] {
     const keys: string[] = [];
 
+    // Debug: Log all environment variables that start with GOOGLE
+    console.log("[Gemini Balancer] Checking environment variables...");
+    console.log(
+      "[Gemini Balancer] Primary key exists:",
+      !!process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    );
+
     // Primary key
     const primaryKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     if (primaryKey) {
       keys.push(primaryKey);
+      console.log("[Gemini Balancer] Added primary key");
     }
 
     // Additional keys (1-5)
@@ -51,12 +59,18 @@ class GeminiKeyBalancer {
       const key = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`];
       if (key) {
         keys.push(key);
+        console.log(`[Gemini Balancer] Added key ${i}`);
       }
     }
 
     if (keys.length === 0) {
+      console.error("[Gemini Balancer] No API keys found in environment");
+      console.error(
+        "[Gemini Balancer] Available env vars:",
+        Object.keys(process.env).filter((k) => k.includes("GOOGLE"))
+      );
       throw new Error(
-        'No Gemini API keys found. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY_1 through _5',
+        "No Gemini API keys found. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY_1 through _5"
       );
     }
 
@@ -93,7 +107,7 @@ class GeminiKeyBalancer {
 
     const provider = this.providers.get(key);
     if (!provider) {
-      throw new Error('Provider not found for key');
+      throw new Error("Provider not found for key");
     }
 
     return provider;
