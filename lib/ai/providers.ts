@@ -44,6 +44,8 @@ export const myProvider = isTestEnvironment
         "artifact-model": getGoogleProvider()("gemini-2.0-flash-exp"),
       },
       imageModels: {
-        "small-model": getGoogleProvider().imageModel("imagen-3.0-generate-001"),
+        "small-model": getGoogleProvider().imageModel(
+          "imagen-3.0-generate-001"
+        ),
       },
     });
