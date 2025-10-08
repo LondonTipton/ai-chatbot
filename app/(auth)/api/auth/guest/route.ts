@@ -1,8 +1,8 @@
-import { signIn } from "@/app/(auth)/auth";
-import { isDevelopmentEnvironment } from "@/lib/constants";
-import { AUTH_SECRET } from "@/lib/auth-secret";
-import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
+import { signIn } from "@/app/(auth)/auth";
+import { AUTH_SECRET } from "@/lib/auth-secret";
+import { isDevelopmentEnvironment } from "@/lib/constants";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
