@@ -15,6 +15,7 @@ export type {
   ArtifactToolbarContext,
   ArtifactToolbarItem,
   Suggestion,
+  CustomUIDataTypes,
 } from "./extracted-components/create-artifact";
 
 // Hooks
@@ -56,5 +57,4 @@ export type {
   ChatMessage,
   Attachment,
   VisibilityType,
-  CustomUIDataTypes,
 } from "./extracted-components/artifact";
