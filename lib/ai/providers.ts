@@ -6,10 +6,9 @@ import {
 } from "ai";
 import { google } from "@ai-sdk/google";
 import { isTestEnvironment } from "../constants";
-// import { getBalancedGoogleProvider } from "./gemini-key-balancer";
+import { getBalancedGoogleProvider } from "./gemini-key-balancer";
 
-// Temporarily use standard provider to debug
-const googleProvider = google;
+const googleProvider = getBalancedGoogleProvider();
 
 export const myProvider = isTestEnvironment
   ? (() => {
