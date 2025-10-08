@@ -6,15 +6,10 @@ import {
 } from "ai";
 import { google } from "@ai-sdk/google";
 import { isTestEnvironment } from "../constants";
-import { getBalancedGoogleProvider } from "./gemini-key-balancer";
+// import { getBalancedGoogleProvider } from "./gemini-key-balancer";
 
-// Get load-balanced Google provider for production
-const getGoogleProvider = () => {
-  if (isTestEnvironment) {
-    return google;
-  }
-  return getBalancedGoogleProvider();
-};
+// Temporarily use standard provider to debug
+const googleProvider = google;
 
 export const myProvider = isTestEnvironment
   ? (() => {
@@ -35,17 +30,16 @@ export const myProvider = isTestEnvironment
     })()
   : customProvider({
       languageModels: {
-        "chat-model": getGoogleProvider()("gemini-2.0-flash-exp"),
+        "chat-model": googleProvider("gemini-2.0-flash-exp"),
         "chat-model-reasoning": wrapLanguageModel({
-          model: getGoogleProvider()("gemini-2.0-flash-thinking-exp-1219"),
+          model: googleProvider("gemini-2.0-flash-thinking-exp"),
           middleware: extractReasoningMiddleware({ tagName: "think" }),
         }),
-        "title-model": getGoogleProvider()("gemini-2.0-flash-exp"),
-        "artifact-model": getGoogleProvider()("gemini-2.0-flash-exp"),
+        "chat-model-image": googleProvider("gemini-2.5-flash"),
+        "title-model": googleProvider("gemini-2.0-flash-exp"),
+        "artifact-model": googleProvider("gemini-2.0-flash-exp"),
       },
       imageModels: {
-        "small-model": getGoogleProvider().imageModel(
-          "imagen-3.0-generate-001"
-        ),
+        "small-model": googleProvider.imageModel("imagen-3.0-generate-001"),
       },
     });

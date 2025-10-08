@@ -76,7 +76,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
     }
 
     return (
-      <div className="flex flex-row px-4 py-8 md:p-20">
+      <div className="flex flex-row px-8 pt-2 pb-8 md:px-16 md:pt-4 md:pb-12">
         <Editor
           content={content}
           currentVersionIndex={currentVersionIndex}
