@@ -6,9 +6,12 @@ import {
 } from "ai";
 import { google } from "@ai-sdk/google";
 import { isTestEnvironment } from "../constants";
-import { getBalancedGoogleProvider } from "./gemini-key-balancer";
 
-const googleProvider = getBalancedGoogleProvider();
+// Use balanced provider on server, standard provider on client
+const googleProvider =
+  typeof window === "undefined"
+    ? require("./gemini-key-balancer").getBalancedGoogleProvider()
+    : google;
 
 export const myProvider = isTestEnvironment
   ? (() => {
