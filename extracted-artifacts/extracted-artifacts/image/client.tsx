@@ -89,7 +89,7 @@ export const imageArtifact = new Artifact<'image', ImageArtifactMetadata>({
     if (streamPart.type === 'data-imagePrompt') {
       setMetadata((metadata) => ({
         ...metadata,
-        prompt: streamPart.data,
+        prompt: streamPart.data as unknown as string,
       }));
     }
   },
