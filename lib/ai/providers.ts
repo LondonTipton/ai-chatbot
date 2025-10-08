@@ -1,4 +1,3 @@
-import { gateway } from "@ai-sdk/gateway";
 import {
   customProvider,
   extractReasoningMiddleware,
@@ -8,6 +7,7 @@ import { google } from "@ai-sdk/google";
 import { isTestEnvironment } from "../constants";
 
 // Use balanced provider on server, standard provider on client
+// The balancer automatically rotates through available keys on each getProvider() call
 const googleProvider =
   typeof window === "undefined"
     ? require("./gemini-key-balancer").getBalancedGoogleProvider()
@@ -32,14 +32,14 @@ export const myProvider = isTestEnvironment
     })()
   : customProvider({
       languageModels: {
-        "chat-model": googleProvider("gemini-2.0-flash-exp"),
+        "chat-model": googleProvider("gemini-2.5-flash"),
         "chat-model-reasoning": wrapLanguageModel({
-          model: googleProvider("gemini-2.0-flash-thinking-exp"),
+          model: googleProvider("gemini-2.5-pro"),
           middleware: extractReasoningMiddleware({ tagName: "think" }),
         }),
         "chat-model-image": googleProvider("gemini-2.5-flash"),
-        "title-model": googleProvider("gemini-2.0-flash-exp"),
-        "artifact-model": googleProvider("gemini-2.0-flash-exp"),
+        "title-model": googleProvider("gemini-2.5-flash"),
+        "artifact-model": googleProvider("gemini-2.5-flash"),
       },
       imageModels: {
         "small-model": googleProvider.imageModel("imagen-3.0-generate-001"),
