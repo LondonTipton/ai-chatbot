@@ -9,6 +9,10 @@ interface KeyUsageStats {
   key: string;
   lastUsed: number;
   requestCount: number;
+  errorCount: number;
+  lastError?: string;
+  isDisabled: boolean;
+  disabledUntil?: number;
 }
 
 class GeminiKeyBalancer {
@@ -39,6 +43,8 @@ class GeminiKeyBalancer {
         key,
         lastUsed: 0,
         requestCount: 0,
+        errorCount: 0,
+        isDisabled: false,
       });
       this.providers.set(key, createGoogleGenerativeAI({ apiKey: key }));
     });
@@ -76,12 +82,62 @@ class GeminiKeyBalancer {
   }
 
   /**
-   * Get the next API key using round-robin strategy
+   * Get the next available API key using round-robin strategy
+   * Skips disabled keys and re-enables keys after cooldown period
    */
   private getNextKey(): string {
-    const key = this.keys[this.currentIndex];
-    this.currentIndex = (this.currentIndex + 1) % this.keys.length;
-    return key;
+    const now = Date.now();
+    let attempts = 0;
+    const maxAttempts = this.keys.length;
+
+    while (attempts < maxAttempts) {
+      const key = this.keys[this.currentIndex];
+      const stats = this.keyStats.get(key);
+
+      this.currentIndex = (this.currentIndex + 1) % this.keys.length;
+      attempts++;
+
+      if (!stats) continue;
+
+      // Re-enable key if cooldown period has passed
+      if (
+        stats.isDisabled &&
+        stats.disabledUntil &&
+        now >= stats.disabledUntil
+      ) {
+        stats.isDisabled = false;
+        stats.disabledUntil = undefined;
+        console.log(
+          `[Gemini Balancer] Re-enabled key ${key.substring(
+            0,
+            8
+          )}... after cooldown`
+        );
+      }
+
+      // Return key if it's not disabled
+      if (!stats.isDisabled) {
+        return key;
+      }
+    }
+
+    // If all keys are disabled, return the least recently disabled one
+    console.warn(
+      "[Gemini Balancer] All keys disabled, using least recently disabled key"
+    );
+    const leastRecentlyDisabled = Array.from(this.keyStats.entries())
+      .filter(([_, stats]) => stats.isDisabled)
+      .sort((a, b) => (a[1].disabledUntil || 0) - (b[1].disabledUntil || 0))[0];
+
+    if (leastRecentlyDisabled) {
+      const [key, stats] = leastRecentlyDisabled;
+      stats.isDisabled = false;
+      stats.disabledUntil = undefined;
+      return key;
+    }
+
+    // Fallback to first key
+    return this.keys[0];
   }
 
   /**
@@ -114,6 +170,32 @@ class GeminiKeyBalancer {
     }
 
     return provider;
+  }
+
+  /**
+   * Mark a key as failed and disable it temporarily
+   */
+  public markKeyAsFailed(
+    key: string,
+    error: string,
+    retryDelaySeconds?: number
+  ): void {
+    const stats = this.keyStats.get(key);
+    if (!stats) return;
+
+    stats.errorCount++;
+    stats.lastError = error;
+    stats.isDisabled = true;
+
+    // Default to 60 seconds cooldown, or use the retry delay from the error
+    const cooldownMs = (retryDelaySeconds || 60) * 1000;
+    stats.disabledUntil = Date.now() + cooldownMs;
+
+    console.warn(
+      `[Gemini Balancer] Disabled key ${key.substring(0, 8)}... for ${
+        retryDelaySeconds || 60
+      }s due to: ${error}`
+    );
   }
 
   /**
@@ -154,4 +236,31 @@ export function getBalancedGoogleProvider(): ReturnType<
   typeof createGoogleGenerativeAI
 > {
   return getGeminiBalancer().getProvider();
+}
+
+/**
+ * Handle API errors and mark keys as failed for automatic rotation
+ * Call this from error handlers to disable problematic keys
+ */
+export function handleGeminiError(error: any, apiKey?: string): void {
+  const balancer = getGeminiBalancer();
+
+  // Check if it's a quota/rate limit error
+  const isQuotaError =
+    error?.statusCode === 429 ||
+    error?.message?.includes("quota") ||
+    error?.message?.includes("rate limit") ||
+    error?.message?.includes("RESOURCE_EXHAUSTED");
+
+  if (isQuotaError && apiKey) {
+    // Extract retry delay from error if available
+    const retryMatch = error?.message?.match(/retry in ([\d.]+)s/i);
+    const retryDelay = retryMatch ? parseFloat(retryMatch[1]) : 60;
+
+    balancer.markKeyAsFailed(
+      apiKey,
+      error?.message || "Quota exceeded",
+      retryDelay
+    );
+  }
 }
