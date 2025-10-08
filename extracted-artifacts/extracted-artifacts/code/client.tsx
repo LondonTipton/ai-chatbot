@@ -61,7 +61,7 @@ export const codeArtifact = new Artifact<'code', CodeArtifactMetadata>({
       setArtifact((draftArtifact) => {
         return {
           ...draftArtifact,
-          content: draftArtifact.content + (streamPart.data as string),
+          content: draftArtifact.content + (streamPart.data as unknown as string),
           isVisible: draftArtifact.content.length > 50 ? true : draftArtifact.isVisible,
           status: 'streaming',
         };

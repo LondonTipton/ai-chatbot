@@ -79,7 +79,7 @@ export const imageArtifact = new Artifact<'image', ImageArtifactMetadata>({
       setArtifact((draftArtifact) => {
         return {
           ...draftArtifact,
-          content: streamPart.data as string,
+          content: streamPart.data as unknown as string,
           isVisible: true,
           status: 'idle',
         };
