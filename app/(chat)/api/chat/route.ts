@@ -34,6 +34,7 @@ import {
   getChatById,
   getMessageCountByUserId,
   getMessagesByChatId,
+  getUserById,
   saveChat,
   saveMessages,
   updateChatLastContextById,
@@ -111,6 +112,15 @@ export async function POST(request: Request) {
     const session = await auth();
 
     if (!session?.user) {
+      return new ChatSDKError("unauthorized:chat").toResponse();
+    }
+
+    // Verify user exists in database
+    const userExists = await getUserById(session.user.id);
+    if (!userExists) {
+      console.error(
+        `[Auth Error] User ID ${session.user.id} from session not found in database`
+      );
       return new ChatSDKError("unauthorized:chat").toResponse();
     }
 
