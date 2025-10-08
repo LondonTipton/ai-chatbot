@@ -72,7 +72,7 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
       setArtifact((draftArtifact) => {
         return {
           ...draftArtifact,
-          content: draftArtifact.content + streamPart.data,
+          content: draftArtifact.content + (streamPart.data as string),
           isVisible:
             draftArtifact.status === 'streaming' &&
             draftArtifact.content.length > 400 &&
