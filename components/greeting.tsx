@@ -13,7 +13,11 @@ export const Greeting = () => {
         transition={{ delay: 0.5 }}
         className="text-2xl font-semibold"
       >
-        Welcome, Counsel.
+        Welcome,{' '}
+        <span className="bg-gradient-to-r from-blue-500 via-blue-600 to-cyan-500 bg-clip-text text-transparent">
+          Counsel
+        </span>
+        .
       </motion.div>
       <motion.div
         initial={{ opacity: 0, y: 10 }}
