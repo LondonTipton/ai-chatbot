@@ -111,7 +111,7 @@ export const sheetArtifact = new Artifact<'sheet', SheetArtifactMetadata>({
       setArtifact((draftArtifact) => {
         return {
           ...draftArtifact,
-          content: streamPart.data,
+          content: streamPart.data as string,
           isVisible: true,
           status: 'streaming',
         };
