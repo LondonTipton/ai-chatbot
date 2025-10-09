@@ -225,7 +225,7 @@ app/(chat)/api/chat/
 
 ```bash
 # Required for Tavily integration
-TAVILY_API_KEY=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
+TAVILY_API_KEY=your_tavily_api_key_here
 ```
 
 ### Test Queries

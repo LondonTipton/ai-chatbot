@@ -55,27 +55,27 @@ Add the following variables for **Production**, **Preview**, and **Development**
 
 ```bash
 # Authentication
-AUTH_SECRET=t9+H4MiULcLHFwvCO2kObhVap128DO/CLCudm6duEZ4=
+AUTH_SECRET=your_auth_secret_here
 
 # Google AI (Primary + Load Balancing Keys)
-GOOGLE_GENERATIVE_AI_API_KEY=AIzaSyC4l1fnsk9PPvTvhBOreuuVk5i-2bshakc
-GOOGLE_GENERATIVE_AI_API_KEY_1=AIzaSyCqBBllFuJ2uG9Jn86_Vt0qktonmonxChM
-GOOGLE_GENERATIVE_AI_API_KEY_2=AIzaSyDe5UZrPkILyoxVHiKKVaQNcg399Mxd0K4
-GOOGLE_GENERATIVE_AI_API_KEY_3=AIzaSyBm03ExXI63HpRJnmcyP645ix9y0xY_Wx4
-GOOGLE_GENERATIVE_AI_API_KEY_4=AIzaSyBlkp-zPBf6uLGTJBa3Yg1_i36rYZ5AlWw
-GOOGLE_GENERATIVE_AI_API_KEY_5=AIzaSyA_Cli4OegvDdfvYoaD97KWFiAIo6sU1e4
+GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key_here
+GOOGLE_GENERATIVE_AI_API_KEY_1=your_google_api_key_1_here
+GOOGLE_GENERATIVE_AI_API_KEY_2=your_google_api_key_2_here
+GOOGLE_GENERATIVE_AI_API_KEY_3=your_google_api_key_3_here
+GOOGLE_GENERATIVE_AI_API_KEY_4=your_google_api_key_4_here
+GOOGLE_GENERATIVE_AI_API_KEY_5=your_google_api_key_5_here
 
 # Vercel Storage
-BLOB_READ_WRITE_TOKEN=vercel_blob_rw_r7cU583KqcqFb2xx_IpPrJ0yHolXnOWIEd9XV4U4QHNERLx
+BLOB_READ_WRITE_TOKEN=your_blob_token_here
 
 # Database
-POSTGRES_URL=postgresql://neondb_owner:npg_8qPOpWd4bVIA@ep-young-paper-adbt7o4r-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+POSTGRES_URL=your_postgres_url_here
 
 # Redis (for resumable streams)
-REDIS_URL=redis://default:2M4ZYTaTGn43F1bQsD2imLBcZTW7kiX0@redis-10374.c261.us-east-1-4.ec2.redns.redis-cloud.com:10374
+REDIS_URL=your_redis_url_here
 
 # Tavily (NEW - for web search)
-TAVILY_API_KEY=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
+TAVILY_API_KEY=your_tavily_api_key_here
 ```
 
 #### Optional Variables
@@ -451,9 +451,9 @@ Before marking deployment complete:
 
 ---
 
-**Deployment Date:** ******\_******
-**Deployed By:** ******\_******
-**Production URL:** ******\_******
+**Deployment Date:** **\*\***\_**\*\***
+**Deployed By:** **\*\***\_**\*\***
+**Production URL:** **\*\***\_**\*\***
 **Status:** ✅ Complete / ⏳ In Progress / ❌ Issues
 
 ---

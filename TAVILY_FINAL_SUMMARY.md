@@ -287,7 +287,7 @@ See `TAVILY_TESTING_GUIDE.md` for comprehensive test suite.
 
    ```
    Vercel Dashboard → Settings → Environment Variables
-   TAVILY_API_KEY=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
+   TAVILY_API_KEY=your_tavily_api_key_here
    ```
 
 2. **Deploy**
