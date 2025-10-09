@@ -1,4 +1,4 @@
-import type { ComponentType, Dispatch, ReactNode, SetStateAction } from 'react';
+import type { ComponentType, Dispatch, ReactNode, SetStateAction } from "react";
 
 // Types that need to be defined in your project
 export interface Suggestion {
@@ -11,7 +11,7 @@ export interface Suggestion {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   createdAt?: Date;
 }
@@ -24,10 +24,10 @@ export interface CustomUIDataTypes {
 // Artifact-related types
 export type ArtifactActionContext<M = any> = {
   content: string;
-  handleVersionChange: (type: 'next' | 'prev' | 'toggle' | 'latest') => void;
+  handleVersionChange: (type: "next" | "prev" | "toggle" | "latest") => void;
   currentVersionIndex: number;
   isCurrentVersion: boolean;
-  mode: 'edit' | 'diff';
+  mode: "edit" | "diff";
   metadata: M;
   setMetadata: Dispatch<SetStateAction<M>>;
 };
@@ -53,10 +53,10 @@ export type ArtifactToolbarItem = {
 interface ArtifactContent<M = any> {
   title: string;
   content: string;
-  mode: 'edit' | 'diff';
+  mode: "edit" | "diff";
   isCurrentVersion: boolean;
   currentVersionIndex: number;
-  status: 'streaming' | 'idle';
+  status: "streaming" | "idle";
   suggestions: Array<Suggestion>;
   onSaveContent: (updatedContent: string, debounce: boolean) => void;
   isInline: boolean;
@@ -72,7 +72,7 @@ interface InitializeParameters<M = any> {
 }
 
 // Import from your artifact types
-import { UIArtifact } from '../extracted-components/artifact';
+import type { UIArtifact } from "../extracted-components/artifact";
 
 interface DataUIPart<T> {
   type: string;

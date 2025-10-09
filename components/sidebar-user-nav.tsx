@@ -81,9 +81,9 @@ export function SidebarUserNav({ user }: { user: User }) {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              data-testid="user-nav-item-pricing"
               className="cursor-pointer"
-              onSelect={() => router.push('/pricing')}
+              data-testid="user-nav-item-pricing"
+              onSelect={() => router.push("/pricing")}
             >
               Pricing
             </DropdownMenuItem>

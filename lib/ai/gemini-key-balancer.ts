@@ -17,7 +17,7 @@ interface KeyUsageStats {
 
 class GeminiKeyBalancer {
   private keys: string[];
-  private currentIndex: number = 0;
+  private currentIndex = 0;
   private keyStats: Map<string, KeyUsageStats>;
   private providers: Map<string, ReturnType<typeof createGoogleGenerativeAI>>;
 
@@ -255,7 +255,7 @@ export function handleGeminiError(error: any, apiKey?: string): void {
   if (isQuotaError && apiKey) {
     // Extract retry delay from error if available
     const retryMatch = error?.message?.match(/retry in ([\d.]+)s/i);
-    const retryDelay = retryMatch ? parseFloat(retryMatch[1]) : 60;
+    const retryDelay = retryMatch ? Number.parseFloat(retryMatch[1]) : 60;
 
     balancer.markKeyAsFailed(
       apiKey,

@@ -1,20 +1,20 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-interface TavilySearchResult {
+type TavilySearchResult = {
   title: string;
   url: string;
   content: string;
   score: number;
   published_date?: string;
-}
+};
 
-interface TavilyResponse {
+type TavilyResponse = {
   query: string;
   results: TavilySearchResult[];
   answer?: string;
   response_time: number;
-}
+};
 
 export const tavilySearch = tool({
   description:

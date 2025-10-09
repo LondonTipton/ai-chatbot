@@ -1,10 +1,6 @@
-import { Artifact } from '../../extracted-components/create-artifact';
-import { DocumentSkeleton } from '../../ui/document-skeleton';
-import {
-  CopyIcon,
-  RedoIcon,
-  UndoIcon,
-} from '../../ui/icons';
+import { Artifact } from "../../extracted-components/create-artifact";
+import { DocumentSkeleton } from "../../ui/document-skeleton";
+import { CopyIcon, RedoIcon, UndoIcon } from "../../ui/icons";
 
 // Simple toast implementation - replace with your preferred toast library
 const toast = {
@@ -15,7 +11,7 @@ const toast = {
   error: (message: string) => {
     console.error(`Error: ${message}`);
     // Replace with your toast implementation
-  }
+  },
 };
 
 interface SheetArtifactMetadata {
@@ -26,34 +22,40 @@ interface SheetArtifactMetadata {
 const SpreadsheetEditor: React.FC<{
   content: string;
   isCurrentVersion: boolean;
-  status: 'streaming' | 'idle';
+  status: "streaming" | "idle";
   onSaveContent: (content: string, debounce: boolean) => void;
 }> = ({ content, isCurrentVersion, status, onSaveContent }) => {
   // Parse CSV content into rows and columns
   const parseCSV = (csvContent: string) => {
     if (!csvContent.trim()) {
       // Default empty spreadsheet
-      return Array(10).fill(null).map(() => Array(5).fill(''));
+      return Array(10)
+        .fill(null)
+        .map(() => Array(5).fill(""));
     }
-    
-    return csvContent.split('\n').map(row => 
-      row.split(',').map(cell => cell.trim())
-    );
+
+    return csvContent
+      .split("\n")
+      .map((row) => row.split(",").map((cell) => cell.trim()));
   };
 
   const data = parseCSV(content);
 
-  const handleCellChange = (rowIndex: number, colIndex: number, value: string) => {
+  const handleCellChange = (
+    rowIndex: number,
+    colIndex: number,
+    value: string
+  ) => {
     const newData = [...data];
     if (!newData[rowIndex]) newData[rowIndex] = [];
     newData[rowIndex][colIndex] = value;
-    
+
     // Convert back to CSV
-    const csvContent = newData.map(row => row.join(',')).join('\n');
+    const csvContent = newData.map((row) => row.join(",")).join("\n");
     onSaveContent(csvContent, true);
   };
 
-  const maxCols = Math.max(...data.map(row => row.length), 5);
+  const maxCols = Math.max(...data.map((row) => row.length), 5);
 
   return (
     <div className="h-full w-full overflow-auto p-4">
@@ -61,33 +63,42 @@ const SpreadsheetEditor: React.FC<{
         <table className="border-collapse border border-border">
           <thead>
             <tr>
-              <th className="w-12 border border-border bg-muted text-center text-sm font-medium p-2">
+              <th className="w-12 border border-border bg-muted p-2 text-center font-medium text-sm">
                 #
               </th>
-              {Array(maxCols).fill(null).map((_, colIndex) => (
-                <th key={colIndex} className="border border-border bg-muted text-center text-sm font-medium p-2 min-w-[100px]">
-                  {String.fromCharCode(65 + colIndex)}
-                </th>
-              ))}
+              {Array(maxCols)
+                .fill(null)
+                .map((_, colIndex) => (
+                  <th
+                    className="min-w-[100px] border border-border bg-muted p-2 text-center font-medium text-sm"
+                    key={colIndex}
+                  >
+                    {String.fromCharCode(65 + colIndex)}
+                  </th>
+                ))}
             </tr>
           </thead>
           <tbody>
             {data.map((row, rowIndex) => (
               <tr key={rowIndex}>
-                <td className="border border-border bg-muted text-center text-sm font-medium p-2">
+                <td className="border border-border bg-muted p-2 text-center font-medium text-sm">
                   {rowIndex + 1}
                 </td>
-                {Array(maxCols).fill(null).map((_, colIndex) => (
-                  <td key={colIndex} className="border border-border p-0">
-                    <input
-                      type="text"
-                      value={row[colIndex] || ''}
-                      onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                      className="w-full h-full p-2 border-none outline-none bg-transparent text-sm"
-                      disabled={!isCurrentVersion || status === 'streaming'}
-                    />
-                  </td>
-                ))}
+                {Array(maxCols)
+                  .fill(null)
+                  .map((_, colIndex) => (
+                    <td className="border border-border p-0" key={colIndex}>
+                      <input
+                        className="h-full w-full border-none bg-transparent p-2 text-sm outline-none"
+                        disabled={!isCurrentVersion || status === "streaming"}
+                        onChange={(e) =>
+                          handleCellChange(rowIndex, colIndex, e.target.value)
+                        }
+                        type="text"
+                        value={row[colIndex] || ""}
+                      />
+                    </td>
+                  ))}
               </tr>
             ))}
           </tbody>
@@ -97,9 +108,9 @@ const SpreadsheetEditor: React.FC<{
   );
 };
 
-export const sheetArtifact = new Artifact<'sheet', SheetArtifactMetadata>({
-  kind: 'sheet',
-  description: 'Useful for working with spreadsheets and tabular data.',
+export const sheetArtifact = new Artifact<"sheet", SheetArtifactMetadata>({
+  kind: "sheet",
+  description: "Useful for working with spreadsheets and tabular data.",
   initialize: async ({ documentId, setMetadata }) => {
     setMetadata({
       rows: 10,
@@ -107,13 +118,13 @@ export const sheetArtifact = new Artifact<'sheet', SheetArtifactMetadata>({
     });
   },
   onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
-    if (streamPart.type === 'data-sheetDelta') {
+    if (streamPart.type === "data-sheetDelta") {
       setArtifact((draftArtifact) => {
         return {
           ...draftArtifact,
           content: streamPart.data as unknown as string,
           isVisible: true,
-          status: 'streaming',
+          status: "streaming",
         };
       });
     }
@@ -133,17 +144,17 @@ export const sheetArtifact = new Artifact<'sheet', SheetArtifactMetadata>({
       <SpreadsheetEditor
         content={content}
         isCurrentVersion={isCurrentVersion}
-        status={status}
         onSaveContent={onSaveContent}
+        status={status}
       />
     );
   },
   actions: [
     {
       icon: <UndoIcon size={18} />,
-      description: 'Previous version',
+      description: "Previous version",
       onClick: ({ handleVersionChange }) => {
-        handleVersionChange('prev');
+        handleVersionChange("prev");
       },
       isDisabled: ({ currentVersionIndex }) => {
         return currentVersionIndex === 0;
@@ -151,9 +162,9 @@ export const sheetArtifact = new Artifact<'sheet', SheetArtifactMetadata>({
     },
     {
       icon: <RedoIcon size={18} />,
-      description: 'Next version',
+      description: "Next version",
       onClick: ({ handleVersionChange }) => {
-        handleVersionChange('next');
+        handleVersionChange("next");
       },
       isDisabled: ({ isCurrentVersion }) => {
         return isCurrentVersion;
@@ -161,10 +172,10 @@ export const sheetArtifact = new Artifact<'sheet', SheetArtifactMetadata>({
     },
     {
       icon: <CopyIcon size={18} />,
-      description: 'Copy as CSV',
+      description: "Copy as CSV",
       onClick: ({ content }) => {
         navigator.clipboard.writeText(content);
-        toast.success('Spreadsheet copied to clipboard as CSV!');
+        toast.success("Spreadsheet copied to clipboard as CSV!");
       },
     },
   ],

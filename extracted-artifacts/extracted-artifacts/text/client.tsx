@@ -1,7 +1,6 @@
-import { Artifact } from '../../extracted-components/create-artifact';
-import { DiffView } from '../../ui/diffview';
-import { DocumentSkeleton } from '../../ui/document-skeleton';
-import { Editor } from '../../ui/text-editor';
+import { Artifact } from "../../extracted-components/create-artifact";
+import { DiffView } from "../../ui/diffview";
+import { DocumentSkeleton } from "../../ui/document-skeleton";
 import {
   ClockRewind,
   CopyIcon,
@@ -9,7 +8,8 @@ import {
   PenIcon,
   RedoIcon,
   UndoIcon,
-} from '../../ui/icons';
+} from "../../ui/icons";
+import { Editor } from "../../ui/text-editor";
 
 // Simple toast implementation - replace with your preferred toast library
 const toast = {
@@ -20,7 +20,7 @@ const toast = {
   error: (message: string) => {
     console.error(`Error: ${message}`);
     // Replace with your toast implementation
-  }
+  },
 };
 
 // Suggestion interface - adapt to your data structure
@@ -37,21 +37,25 @@ interface TextArtifactMetadata {
 }
 
 // This function would need to be implemented in your project
-const getSuggestions = async ({ documentId }: { documentId: string }): Promise<Suggestion[]> => {
+const getSuggestions = async ({
+  documentId,
+}: {
+  documentId: string;
+}): Promise<Suggestion[]> => {
   // Replace with your API call
   try {
     const response = await fetch(`/api/suggestions?documentId=${documentId}`);
     if (!response.ok) return [];
     return await response.json();
   } catch (error) {
-    console.error('Failed to fetch suggestions:', error);
+    console.error("Failed to fetch suggestions:", error);
     return [];
   }
 };
 
-export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
-  kind: 'text',
-  description: 'Useful for text content, like drafting essays and emails.',
+export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
+  kind: "text",
+  description: "Useful for text content, like drafting essays and emails.",
   initialize: async ({ documentId, setMetadata }) => {
     const suggestions = await getSuggestions({ documentId });
 
@@ -60,26 +64,30 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
     });
   },
   onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
-    if (streamPart.type === 'data-suggestion') {
+    if (streamPart.type === "data-suggestion") {
       setMetadata((metadata) => {
         return {
-          suggestions: [...metadata.suggestions, streamPart.data as unknown as Suggestion],
+          suggestions: [
+            ...metadata.suggestions,
+            streamPart.data as unknown as Suggestion,
+          ],
         };
       });
     }
 
-    if (streamPart.type === 'data-textDelta') {
+    if (streamPart.type === "data-textDelta") {
       setArtifact((draftArtifact) => {
         return {
           ...draftArtifact,
-          content: draftArtifact.content + (streamPart.data as unknown as string),
+          content:
+            draftArtifact.content + (streamPart.data as unknown as string),
           isVisible:
-            draftArtifact.status === 'streaming' &&
+            draftArtifact.status === "streaming" &&
             draftArtifact.content.length > 400 &&
             draftArtifact.content.length < 450
               ? true
               : draftArtifact.isVisible,
-          status: 'streaming',
+          status: "streaming",
         };
       });
     }
@@ -99,27 +107,27 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
       return <DocumentSkeleton artifactKind="text" />;
     }
 
-    if (mode === 'diff') {
+    if (mode === "diff") {
       const oldContent = getDocumentContentById(currentVersionIndex - 1);
       const newContent = getDocumentContentById(currentVersionIndex);
 
-      return <DiffView oldContent={oldContent} newContent={newContent} />;
+      return <DiffView newContent={newContent} oldContent={oldContent} />;
     }
 
     return (
       <>
-        <div className="flex flex-row py-8 md:p-20 px-4">
+        <div className="flex flex-row px-4 py-8 md:p-20">
           <Editor
             content={content}
-            suggestions={metadata ? metadata.suggestions : []}
-            isCurrentVersion={isCurrentVersion}
             currentVersionIndex={currentVersionIndex}
-            status={status}
+            isCurrentVersion={isCurrentVersion}
             onSaveContent={onSaveContent}
+            status={status}
+            suggestions={metadata ? metadata.suggestions : []}
           />
 
           {metadata?.suggestions && metadata.suggestions.length > 0 ? (
-            <div className="md:hidden h-dvh w-12 shrink-0" />
+            <div className="h-dvh w-12 shrink-0 md:hidden" />
           ) : null}
         </div>
       </>
@@ -128,9 +136,9 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
   actions: [
     {
       icon: <ClockRewind size={18} />,
-      description: 'View changes',
+      description: "View changes",
       onClick: ({ handleVersionChange }) => {
-        handleVersionChange('toggle');
+        handleVersionChange("toggle");
       },
       isDisabled: ({ currentVersionIndex }) => {
         if (currentVersionIndex === 0) {
@@ -141,9 +149,9 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
     },
     {
       icon: <UndoIcon size={18} />,
-      description: 'View Previous version',
+      description: "View Previous version",
       onClick: ({ handleVersionChange }) => {
-        handleVersionChange('prev');
+        handleVersionChange("prev");
       },
       isDisabled: ({ currentVersionIndex }) => {
         if (currentVersionIndex === 0) {
@@ -154,9 +162,9 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
     },
     {
       icon: <RedoIcon size={18} />,
-      description: 'View Next version',
+      description: "View Next version",
       onClick: ({ handleVersionChange }) => {
-        handleVersionChange('next');
+        handleVersionChange("next");
       },
       isDisabled: ({ isCurrentVersion }) => {
         if (isCurrentVersion) {
@@ -167,33 +175,35 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
     },
     {
       icon: <CopyIcon size={18} />,
-      description: 'Copy to clipboard',
+      description: "Copy to clipboard",
       onClick: ({ content }) => {
         navigator.clipboard.writeText(content);
-        toast.success('Copied to clipboard!');
+        toast.success("Copied to clipboard!");
       },
     },
   ],
   toolbar: [
     {
       icon: <PenIcon />,
-      description: 'Add final polish',
+      description: "Add final polish",
       onClick: ({ sendMessage }) => {
         sendMessage({
           id: Date.now().toString(),
-          role: 'user',
-          content: 'Please add final polish and check for grammar, add section titles for better structure, and ensure everything reads smoothly.',
+          role: "user",
+          content:
+            "Please add final polish and check for grammar, add section titles for better structure, and ensure everything reads smoothly.",
         });
       },
     },
     {
       icon: <MessageIcon />,
-      description: 'Request suggestions',
+      description: "Request suggestions",
       onClick: ({ sendMessage }) => {
         sendMessage({
           id: Date.now().toString(),
-          role: 'user',
-          content: 'Please add suggestions you have that could improve the writing.',
+          role: "user",
+          content:
+            "Please add suggestions you have that could improve the writing.",
         });
       },
     },

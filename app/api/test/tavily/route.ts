@@ -58,8 +58,8 @@ export async function GET() {
             response.status === 401
               ? "Invalid API key - please check your key at tavily.com/dashboard"
               : response.status === 429
-              ? "Rate limit exceeded - check your usage at tavily.com/dashboard"
-              : "API request failed - check Tavily service status",
+                ? "Rate limit exceeded - check your usage at tavily.com/dashboard"
+                : "API request failed - check Tavily service status",
         },
         { status: response.status }
       );
