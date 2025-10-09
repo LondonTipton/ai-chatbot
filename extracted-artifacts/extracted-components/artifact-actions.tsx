@@ -1,9 +1,9 @@
-import { Button } from '../ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-import { artifactDefinitions, UIArtifact } from './artifact';
-import { Dispatch, memo, SetStateAction, useState } from 'react';
-import { ArtifactActionContext } from './create-artifact';
-import { cn } from '../extracted-utils/utils';
+import { type Dispatch, memo, type SetStateAction, useState } from "react";
+import { cn } from "../extracted-utils/utils";
+import { Button } from "../ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { artifactDefinitions, type UIArtifact } from "./artifact";
+import type { ArtifactActionContext } from "./create-artifact";
 
 // Simple toast implementation - replace with your preferred toast library
 const toast = {
@@ -11,15 +11,15 @@ const toast = {
     console.error(message);
     // Replace with your toast implementation
     alert(`Error: ${message}`);
-  }
+  },
 };
 
 interface ArtifactActionsProps {
   artifact: UIArtifact;
-  handleVersionChange: (type: 'next' | 'prev' | 'toggle' | 'latest') => void;
+  handleVersionChange: (type: "next" | "prev" | "toggle" | "latest") => void;
   currentVersionIndex: number;
   isCurrentVersion: boolean;
-  mode: 'edit' | 'diff';
+  mode: "edit" | "diff";
   metadata: any;
   setMetadata: Dispatch<SetStateAction<any>>;
 }
@@ -36,11 +36,11 @@ function PureArtifactActions({
   const [isLoading, setIsLoading] = useState(false);
 
   const artifactDefinition = artifactDefinitions.find(
-    (definition) => definition.kind === artifact.kind,
+    (definition) => definition.kind === artifact.kind
   );
 
   if (!artifactDefinition) {
-    throw new Error('Artifact definition not found!');
+    throw new Error("Artifact definition not found!");
   }
 
   const actionContext: ArtifactActionContext = {
@@ -59,29 +59,29 @@ function PureArtifactActions({
         <Tooltip key={action.description}>
           <TooltipTrigger asChild>
             <Button
-              variant="outline"
-              className={cn('h-fit dark:hover:bg-zinc-700', {
-                'p-2': !action.label,
-                'py-1.5 px-2': action.label,
+              className={cn("h-fit dark:hover:bg-zinc-700", {
+                "p-2": !action.label,
+                "px-2 py-1.5": action.label,
               })}
+              disabled={
+                isLoading || artifact.status === "streaming"
+                  ? true
+                  : action.isDisabled
+                    ? action.isDisabled(actionContext)
+                    : false
+              }
               onClick={async () => {
                 setIsLoading(true);
 
                 try {
                   await Promise.resolve(action.onClick(actionContext));
                 } catch (error) {
-                  toast.error('Failed to execute action');
+                  toast.error("Failed to execute action");
                 } finally {
                   setIsLoading(false);
                 }
               }}
-              disabled={
-                isLoading || artifact.status === 'streaming'
-                  ? true
-                  : action.isDisabled
-                    ? action.isDisabled(actionContext)
-                    : false
-              }
+              variant="outline"
             >
               {action.icon}
               {action.label}
@@ -104,5 +104,5 @@ export const ArtifactActions = memo(
     if (prevProps.artifact.content !== nextProps.artifact.content) return false;
 
     return true;
-  },
+  }
 );

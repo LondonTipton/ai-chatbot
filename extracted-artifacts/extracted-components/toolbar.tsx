@@ -1,9 +1,9 @@
-import React from 'react';
-import { ArtifactKind } from './artifact';
+import type React from "react";
+import type { ArtifactKind } from "./artifact";
 
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   createdAt?: Date;
 }
@@ -12,9 +12,11 @@ interface ToolbarProps {
   isToolbarVisible: boolean;
   setIsToolbarVisible: (visible: boolean) => void;
   sendMessage: (message: ChatMessage) => void;
-  status: 'idle' | 'loading' | 'streaming' | 'submitted';
+  status: "idle" | "loading" | "streaming" | "submitted";
   stop: () => void;
-  setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
+  setMessages: (
+    messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])
+  ) => void;
   artifactKind: ArtifactKind;
 }
 
@@ -30,8 +32,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   if (!isToolbarVisible) {
     return (
       <button
+        className="fixed right-4 bottom-4 rounded-full bg-primary p-2 text-primary-foreground shadow-lg"
         onClick={() => setIsToolbarVisible(true)}
-        className="fixed bottom-4 right-4 bg-primary text-primary-foreground p-2 rounded-full shadow-lg"
       >
         ⚡
       </button>
@@ -39,42 +41,42 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   }
 
   return (
-    <div className="fixed bottom-4 right-4 bg-background border border-border rounded-lg p-4 shadow-lg">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium">Quick Actions</span>
+    <div className="fixed right-4 bottom-4 rounded-lg border border-border bg-background p-4 shadow-lg">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="font-medium text-sm">Quick Actions</span>
         <button
-          onClick={() => setIsToolbarVisible(false)}
           className="text-muted-foreground hover:text-foreground"
+          onClick={() => setIsToolbarVisible(false)}
         >
           ✕
         </button>
       </div>
-      
+
       <div className="flex flex-col gap-2">
         <button
+          className="rounded px-2 py-1 text-left text-sm hover:bg-muted"
+          disabled={status === "streaming"}
           onClick={() => {
             sendMessage({
               id: Date.now().toString(),
-              role: 'user',
-              content: 'Please improve this document',
+              role: "user",
+              content: "Please improve this document",
             });
           }}
-          className="text-left text-sm px-2 py-1 hover:bg-muted rounded"
-          disabled={status === 'streaming'}
         >
           Improve Document
         </button>
-        
+
         <button
+          className="rounded px-2 py-1 text-left text-sm hover:bg-muted"
+          disabled={status === "streaming"}
           onClick={() => {
             sendMessage({
               id: Date.now().toString(),
-              role: 'user',
-              content: 'Please add suggestions for this document',
+              role: "user",
+              content: "Please add suggestions for this document",
             });
           }}
-          className="text-left text-sm px-2 py-1 hover:bg-muted rounded"
-          disabled={status === 'streaming'}
         >
           Add Suggestions
         </button>

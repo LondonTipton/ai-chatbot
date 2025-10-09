@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import type React from "react";
+import { useEffect, useState } from "react";
 
 interface Suggestion {
   id: string;
@@ -13,7 +14,7 @@ interface EditorProps {
   suggestions?: Suggestion[];
   isCurrentVersion: boolean;
   currentVersionIndex: number;
-  status: 'streaming' | 'idle';
+  status: "streaming" | "idle";
   onSaveContent: (content: string, debounce: boolean) => void;
 }
 
@@ -38,20 +39,20 @@ export const Editor: React.FC<EditorProps> = ({
   };
 
   return (
-    <div className="w-full h-full">
+    <div className="h-full w-full">
       <textarea
-        value={localContent}
+        className="h-full min-h-[400px] w-full resize-none border-none bg-transparent p-4 text-foreground outline-none"
+        disabled={!isCurrentVersion || status === "streaming"}
         onChange={handleContentChange}
-        className="w-full h-full min-h-[400px] p-4 border-none outline-none resize-none bg-transparent text-foreground"
         placeholder="Start writing your document..."
-        disabled={!isCurrentVersion || status === 'streaming'}
+        value={localContent}
       />
       {suggestions.length > 0 && (
-        <div className="mt-4 p-4 border-t">
-          <h4 className="font-medium mb-2">Suggestions:</h4>
+        <div className="mt-4 border-t p-4">
+          <h4 className="mb-2 font-medium">Suggestions:</h4>
           <ul className="space-y-2">
             {suggestions.map((suggestion) => (
-              <li key={suggestion.id} className="text-sm text-muted-foreground">
+              <li className="text-muted-foreground text-sm" key={suggestion.id}>
                 {suggestion.content}
               </li>
             ))}

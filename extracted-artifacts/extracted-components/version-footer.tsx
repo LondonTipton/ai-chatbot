@@ -1,5 +1,5 @@
-import React from 'react';
-import { Button } from '../ui/button';
+import type React from "react";
+import { Button } from "../ui/button";
 
 interface Document {
   id: string;
@@ -13,7 +13,7 @@ interface Document {
 interface VersionFooterProps {
   currentVersionIndex: number;
   documents: Document[] | undefined;
-  handleVersionChange: (type: 'next' | 'prev' | 'toggle' | 'latest') => void;
+  handleVersionChange: (type: "next" | "prev" | "toggle" | "latest") => void;
 }
 
 export const VersionFooter: React.FC<VersionFooterProps> = ({
@@ -26,34 +26,34 @@ export const VersionFooter: React.FC<VersionFooterProps> = ({
   }
 
   return (
-    <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-background border border-border rounded-lg p-2 shadow-lg flex items-center gap-2">
+    <div className="-translate-x-1/2 fixed bottom-4 left-1/2 flex transform items-center gap-2 rounded-lg border border-border bg-background p-2 shadow-lg">
       <Button
-        variant="outline"
-        size="sm"
-        onClick={() => handleVersionChange('prev')}
         disabled={currentVersionIndex === 0}
+        onClick={() => handleVersionChange("prev")}
+        size="sm"
+        variant="outline"
       >
         ←
       </Button>
-      
-      <span className="text-sm px-2">
+
+      <span className="px-2 text-sm">
         Version {currentVersionIndex + 1} of {documents.length}
       </span>
-      
+
       <Button
-        variant="outline"
-        size="sm"
-        onClick={() => handleVersionChange('next')}
         disabled={currentVersionIndex === documents.length - 1}
+        onClick={() => handleVersionChange("next")}
+        size="sm"
+        variant="outline"
       >
         →
       </Button>
-      
+
       <Button
-        variant="outline"
-        size="sm"
-        onClick={() => handleVersionChange('latest')}
         disabled={currentVersionIndex === documents.length - 1}
+        onClick={() => handleVersionChange("latest")}
+        size="sm"
+        variant="outline"
       >
         Latest
       </Button>

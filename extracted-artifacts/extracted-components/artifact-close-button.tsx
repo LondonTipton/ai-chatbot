@@ -1,26 +1,29 @@
-import { memo } from 'react';
-import { CrossIcon } from '../ui/icons';
-import { Button } from '../ui/button';
-import { initialArtifactData, useArtifact } from '../extracted-hooks/use-artifact';
+import { memo } from "react";
+import {
+  initialArtifactData,
+  useArtifact,
+} from "../extracted-hooks/use-artifact";
+import { Button } from "../ui/button";
+import { CrossIcon } from "../ui/icons";
 
 function PureArtifactCloseButton() {
   const { setArtifact } = useArtifact();
 
   return (
     <Button
-      data-testid="artifact-close-button"
-      variant="outline"
       className="h-fit p-2 dark:hover:bg-zinc-700"
+      data-testid="artifact-close-button"
       onClick={() => {
         setArtifact((currentArtifact) =>
-          currentArtifact.status === 'streaming'
+          currentArtifact.status === "streaming"
             ? {
                 ...currentArtifact,
                 isVisible: false,
               }
-            : { ...initialArtifactData, status: 'idle' },
+            : { ...initialArtifactData, status: "idle" }
         );
       }}
+      variant="outline"
     >
       <CrossIcon size={18} />
     </Button>

@@ -25,8 +25,9 @@ import { myProvider } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
-import { updateDocument } from "@/lib/ai/tools/update-document";
+import { tavilyExtract } from "@/lib/ai/tools/tavily-extract";
 import { tavilySearch } from "@/lib/ai/tools/tavily-search";
+import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -200,11 +201,13 @@ export async function POST(request: Request) {
                   "updateDocument",
                   "requestSuggestions",
                   "tavilySearch",
+                  "tavilyExtract",
                 ],
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
             getWeather,
             tavilySearch,
+            tavilyExtract,
             createDocument: createDocument({ session, dataStream }),
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({

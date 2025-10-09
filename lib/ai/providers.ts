@@ -1,9 +1,9 @@
+import { google } from "@ai-sdk/google";
 import {
   customProvider,
   extractReasoningMiddleware,
   wrapLanguageModel,
 } from "ai";
-import { google } from "@ai-sdk/google";
 import { isTestEnvironment } from "../constants";
 
 // Use balanced provider on server, standard provider on client

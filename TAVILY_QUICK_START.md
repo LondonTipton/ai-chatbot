@@ -1,61 +1,184 @@
-# Tavily Search - Quick Start Guide
+# Tavily Integration - Quick Start Guide
 
-Get DeepCounsel's web search capability up and running in 3 minutes.
+## 🚀 Get Started in 5 Minutes
 
-## Step 1: Get Your API Key
+Your Tavily integration is already complete! Follow these steps to test and deploy.
 
-1. Go to [tavily.com](https://tavily.com)
-2. Sign up (free tier available)
-3. Copy your API key from the dashboard
+---
 
-## Step 2: Add to Environment
+## Step 1: Verify Setup (30 seconds)
 
-Open your `.env.local` file and add:
+Check that everything is in place:
 
 ```bash
-TAVILY_API_KEY=tvly-your-actual-key-here
-```
+# 1. Check environment variable
+cat .env.local | grep TAVILY_API_KEY
+# Should show: TAVILY_API_KEY=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
 
-## Step 3: Restart
+# 2. Check tools exist
+ls lib/ai/tools/tavily-*.ts
+# Should show: tavily-search.ts, tavily-extract.ts
 
-```bash
+# 3. Start dev server
 pnpm dev
 ```
 
-## That's It!
+✅ If all checks pass, you're ready to test!
 
-DeepCounsel can now search the web for current legal information.
+---
 
-## Try It Out
+## Step 2: Test Locally (2 minutes)
 
-Ask questions like:
+Open your app at `http://localhost:3000` and try these queries:
 
-- "What are recent amendments to Zimbabwe's Labour Act?"
-- "Find Supreme Court cases on property rights in Zimbabwe"
-- "What are the current company registration requirements?"
+### Test 1: Basic Search
 
-The AI will automatically search when needed and cite sources.
+```
+Search for "Zimbabwe Labour Act amendments"
+```
 
-## Free Tier Limits
+**Expected:** Search results with sources and URLs
 
-- 1,000 searches per month
-- Perfect for development and testing
-- Upgrade to Pro for production use
+### Test 2: Case Research with Document Creation
 
-## Need Help?
+```
+Find the Bowers v Minister of Lands case and show me the full text
+```
 
-See [TAVILY_SEARCH_INTEGRATION.md](./TAVILY_SEARCH_INTEGRATION.md) for detailed documentation.
+**Expected:**
 
-## Common Issues
+- Search executes
+- Full content extracted
+- Two documents created in artifact panel
+- Sources cited
 
-**Search not working?**
+### Test 3: Constitutional Lookup
 
-- Check API key is in `.env.local`
-- Restart your dev server
-- Verify key at tavily.com/dashboard
+```
+What does Section 71 of the Zimbabwe Constitution say about property rights?
+```
 
-**Rate limit errors?**
+**Expected:**
 
-- Check usage at tavily.com/dashboard
-- Wait for monthly reset
-- Consider upgrading to Pro tier
+- Search and extract
+- Document created with full text
+- Clear explanation
+
+---
+
+## Step 3: Deploy to Vercel (2 minutes)
+
+### Add Environment Variable
+
+1. Go to **Vercel Dashboard** → Your Project → **Settings** → **Environment Variables**
+
+2. Add new variable:
+
+   ```
+   Name: TAVILY_API_KEY
+   Value: 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
+   Environments: Production, Preview, Development
+   ```
+
+3. Click **Save**
+
+### Deploy
+
+```bash
+# Commit any changes
+git add .
+git commit -m "Tavily integration ready"
+
+# Push to deploy
+git push origin main
+```
+
+### Test Production
+
+1. Wait for deployment to complete (1-2 minutes)
+2. Visit your production URL
+3. Try the same test queries
+4. Verify everything works
+
+---
+
+## Step 4: Monitor Usage (30 seconds)
+
+Visit **Tavily Dashboard:** https://app.tavily.com
+
+Check:
+
+- ✅ Credits used
+- ✅ Credits remaining (out of 1,000/month)
+- ✅ Request success rate
+
+Set up email alerts for 80% usage.
+
+---
+
+## That's It! 🎉
+
+Your Tavily integration is live and working.
+
+### What You Can Do Now
+
+**Legal Research:**
+
+```
+"Find Supreme Court cases on property rights from 2023"
+```
+
+**Statute Lookup:**
+
+```
+"Get the full text of Zimbabwe Labour Act Section 12"
+```
+
+**Current Events:**
+
+```
+"What's the latest on Zimbabwe mining regulations?"
+```
+
+**Document Drafting:**
+
+```
+"Draft a motion citing recent property rights cases"
+```
+
+---
+
+## Need More Help?
+
+- **Full Implementation Guide:** `TAVILY_INTEGRATION_COMPLETE.md`
+- **Testing Guide:** `TAVILY_TESTING_GUIDE.md`
+- **Deployment Checklist:** `VERCEL_DEPLOYMENT_CHECKLIST.md`
+- **Complete Summary:** `TAVILY_FINAL_SUMMARY.md`
+
+---
+
+## Quick Troubleshooting
+
+### "TAVILY_API_KEY is not configured"
+
+```bash
+# Add to .env.local
+echo 'TAVILY_API_KEY=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' >> .env.local
+
+# Restart dev server
+pnpm dev
+```
+
+### Search doesn't trigger
+
+- Make sure query is about legal cases or current information
+- Try: "Search for [your query]"
+
+### Extract fails
+
+- Some sites block scraping
+- Try different URL from search results
+
+---
+
+**Ready to go! Start searching and researching with AI-powered web search.** 🚀
