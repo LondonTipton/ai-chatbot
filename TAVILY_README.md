@@ -36,7 +36,7 @@ pnpm dev
 ```bash
 # Add TAVILY_API_KEY to Vercel Dashboard
 # Settings → Environment Variables
-# TAVILY_API_KEY=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
+# TAVILY_API_KEY=your_tavily_api_key_here
 
 # Deploy
 git push origin main
@@ -206,7 +206,7 @@ Monitor:
 
 ```bash
 # Add to .env.local
-echo 'TAVILY_API_KEY=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' >> .env.local
+echo 'TAVILY_API_KEY=your_tavily_api_key_here' >> .env.local
 pnpm dev
 ```
 

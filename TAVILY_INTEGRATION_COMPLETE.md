@@ -71,7 +71,7 @@ Comprehensive instructions added for:
 Files: `.env.example`, `.env.local`
 
 ```bash
-TAVILY_API_KEY=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  # ✅ Set
+TAVILY_API_KEY=your_tavily_api_key_here  # ✅ Set
 ```
 
 ---
@@ -314,7 +314,7 @@ With 1,000 credits/month, you can handle **200-300 research queries** per month.
 
    ```bash
    # In Vercel Dashboard → Settings → Environment Variables
-   TAVILY_API_KEY=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
+   TAVILY_API_KEY=your_tavily_api_key_here
    ```
 
 2. **Verify Other Required Variables**

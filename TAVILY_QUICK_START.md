@@ -13,7 +13,7 @@ Check that everything is in place:
 ```bash
 # 1. Check environment variable
 cat .env.local | grep TAVILY_API_KEY
-# Should show: TAVILY_API_KEY=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
+# Should show: TAVILY_API_KEY=your_tavily_api_key_here
 
 # 2. Check tools exist
 ls lib/ai/tools/tavily-*.ts
@@ -76,7 +76,7 @@ What does Section 71 of the Zimbabwe Constitution say about property rights?
 
    ```
    Name: TAVILY_API_KEY
-   Value: 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
+   Value: your_tavily_api_key_here
    Environments: Production, Preview, Development
    ```
 
@@ -163,7 +163,7 @@ Your Tavily integration is live and working.
 
 ```bash
 # Add to .env.local
-echo 'TAVILY_API_KEY=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' >> .env.local
+echo 'TAVILY_API_KEY=your_tavily_api_key_here' >> .env.local
 
 # Restart dev server
 pnpm dev
