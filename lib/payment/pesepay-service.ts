@@ -29,11 +29,12 @@ export class PesepayService {
     const encryptionKey = process.env.PESEPAY_ENCRYPTION_KEY;
 
     if (!integrationKey || !encryptionKey) {
-      console.error("Pesepay credentials missing:", {
-        hasIntegrationKey: !!integrationKey,
-        hasEncryptionKey: !!encryptionKey,
-      });
-      throw new Error("Pesepay credentials not configured");
+      console.warn(
+        "Pesepay credentials missing - payment features will be disabled"
+      );
+      // Create a dummy client that will fail at runtime if used
+      this.client = null as any;
+      return;
     }
 
     console.log("Initializing Pesepay direct client with credentials");
@@ -135,4 +136,27 @@ export class PesepayService {
   }
 }
 
-export const pesepayService = new PesepayService();
+// Lazy initialization to avoid build-time errors when env vars are missing
+let pesepayServiceInstance: PesepayService | null = null;
+
+function getPesepayService(): PesepayService {
+  if (!pesepayServiceInstance) {
+    pesepayServiceInstance = new PesepayService();
+  }
+  return pesepayServiceInstance;
+}
+
+export const pesepayService = {
+  getActiveCurrencies() {
+    return getPesepayService().getActiveCurrencies();
+  },
+  getPaymentMethodsByCurrency(currency: string) {
+    return getPesepayService().getPaymentMethodsByCurrency(currency);
+  },
+  initiateSeamlessTransaction(data: SeamlessTransactionData) {
+    return getPesepayService().initiateSeamlessTransaction(data);
+  },
+  checkTransactionStatus(referenceNumber: string) {
+    return getPesepayService().checkTransactionStatus(referenceNumber);
+  },
+};
