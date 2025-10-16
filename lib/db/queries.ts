@@ -25,12 +25,16 @@ import {
   type DBMessage,
   document,
   message,
+  messageDeprecated,
   type Suggestion,
   stream,
   suggestion,
   type User,
   user,
   vote,
+  voteDeprecated,
+  subscription,
+  payment,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
 
@@ -40,7 +44,24 @@ import { generateHashedPassword } from "./utils";
 
 // biome-ignore lint: Forbidden non-null assertion.
 const client = postgres(process.env.POSTGRES_URL!);
-const db = drizzle(client);
+const db = drizzle(client, {
+  schema: {
+    user,
+    chat,
+    message,
+    messageDeprecated,
+    vote,
+    voteDeprecated,
+    document,
+    suggestion,
+    stream,
+    subscription,
+    payment,
+  },
+});
+
+// Export db for use in other modules
+export { db };
 
 export async function getUser(email: string): Promise<User[]> {
   try {

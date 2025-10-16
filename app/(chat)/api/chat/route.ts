@@ -88,6 +88,10 @@ export function getStreamContext() {
 }
 
 export async function POST(request: Request) {
+  console.log("=".repeat(80));
+  console.log("🔵 MAIN CHAT ROUTE INVOKED");
+  console.log("=".repeat(80));
+
   let requestBody: PostRequestBody;
 
   try {
@@ -109,6 +113,16 @@ export async function POST(request: Request) {
       selectedChatModel: ChatModel["id"];
       selectedVisibilityType: VisibilityType;
     } = requestBody;
+
+    console.log(`[Main Chat] Chat ID: ${id}`);
+    console.log(`[Main Chat] Selected Model: ${selectedChatModel}`);
+    console.log(
+      `[Main Chat] Message: ${
+        typeof message.parts[0] === "object" && "text" in message.parts[0]
+          ? message.parts[0].text.substring(0, 100)
+          : "N/A"
+      }...`
+    );
 
     const session = await auth();
 
@@ -185,8 +199,17 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
 
+    console.log(`[Main Chat] Starting stream with model: ${selectedChatModel}`);
+    console.log(`[Main Chat] Message count: ${uiMessages.length}`);
+
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
+        console.log(
+          `[Main Chat] Executing streamText with provider: ${
+            myProvider.languageModel(selectedChatModel).modelId
+          }`
+        );
+
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),

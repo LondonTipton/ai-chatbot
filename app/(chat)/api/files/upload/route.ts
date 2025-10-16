@@ -24,6 +24,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (session.user.type === "guest") {
+    return NextResponse.json(
+      {
+        error: "upgrade_required",
+        message:
+          "File uploads require a paid plan. Please upgrade to continue.",
+      },
+      { status: 403 }
+    );
+  }
+
   if (request.body === null) {
     return new Response("Request body is empty", { status: 400 });
   }

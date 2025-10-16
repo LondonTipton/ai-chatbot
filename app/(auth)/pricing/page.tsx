@@ -125,7 +125,7 @@ export default function PricingPage() {
                   className="w-full"
                   variant={plan.highlighted ? "default" : "outline"}
                 >
-                  <Link href="/register">{plan.cta}</Link>
+                  <Link href={`/checkout?plan=${plan.name}`}>{plan.cta}</Link>
                 </Button>
               </CardFooter>
             </Card>

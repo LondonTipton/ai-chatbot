@@ -171,3 +171,54 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+// Subscription plans
+export const subscription = pgTable("Subscription", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  plan: varchar("plan", { enum: ["Basic", "Pro", "Pro+", "Ultra"] }).notNull(),
+  status: varchar("status", {
+    enum: ["active", "cancelled", "expired", "pending"],
+  })
+    .notNull()
+    .default("pending"),
+  amount: varchar("amount", { length: 20 }).notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default("USD"),
+  startDate: timestamp("startDate").notNull(),
+  nextBillingDate: timestamp("nextBillingDate").notNull(),
+  cancelledAt: timestamp("cancelledAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type Subscription = InferSelectModel<typeof subscription>;
+
+// Payment transactions
+export const payment = pgTable("Payment", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  subscriptionId: uuid("subscriptionId").references(() => subscription.id),
+  amount: varchar("amount", { length: 20 }).notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default("USD"),
+  status: varchar("status", {
+    enum: ["pending", "completed", "failed", "cancelled"],
+  })
+    .notNull()
+    .default("pending"),
+  paymentMethod: varchar("paymentMethod", { length: 50 })
+    .notNull()
+    .default("ecocash"),
+  referenceNumber: varchar("referenceNumber", { length: 100 }).unique(),
+  pollUrl: text("pollUrl"),
+  phoneNumber: varchar("phoneNumber", { length: 20 }),
+  description: text("description"),
+  pesepayResponse: json("pesepayResponse"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type Payment = InferSelectModel<typeof payment>;
