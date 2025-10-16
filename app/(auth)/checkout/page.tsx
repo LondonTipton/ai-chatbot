@@ -2,8 +2,11 @@
 
 import { useSearchParams } from "next/navigation";
 import { CheckoutForm } from "@/components/checkout-form";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircleFillIcon } from "@/components/icons";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+// Force dynamic rendering for this page
+export const dynamic = "force-dynamic";
 
 const planDetails = {
   Basic: {
@@ -120,7 +123,7 @@ export default function CheckoutPage() {
           </Card>
 
           {/* Payment Form */}
-          <CheckoutForm plan={plan} amount={selectedPlan.price} />
+          <CheckoutForm amount={selectedPlan.price} plan={plan} />
         </div>
       </div>
     </div>
