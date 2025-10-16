@@ -1,12 +1,10 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { CheckoutForm } from "@/components/checkout-form";
 import { CheckCircleFillIcon } from "@/components/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-// Force dynamic rendering for this page
-export const dynamic = "force-dynamic";
 
 const planDetails = {
   Basic: {
@@ -53,7 +51,7 @@ const planDetails = {
   },
 };
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const searchParams = useSearchParams();
   const plan = searchParams.get("plan") as keyof typeof planDetails;
 
@@ -127,5 +125,19 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-16 text-center">
+          <p>Loading...</p>
+        </div>
+      }
+    >
+      <CheckoutContent />
+    </Suspense>
   );
 }

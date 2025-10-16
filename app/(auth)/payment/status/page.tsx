@@ -2,16 +2,13 @@
 
 import { CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type PaymentStatus = "pending" | "completed" | "failed";
 
-// Force dynamic rendering for this page
-export const dynamic = "force-dynamic";
-
-export default function PaymentStatusPage() {
+function PaymentStatusContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const referenceNumber = searchParams.get("ref");
@@ -216,5 +213,19 @@ export default function PaymentStatusPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function PaymentStatusPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-16 text-center">
+          <p>Loading payment status...</p>
+        </div>
+      }
+    >
+      <PaymentStatusContent />
+    </Suspense>
   );
 }
