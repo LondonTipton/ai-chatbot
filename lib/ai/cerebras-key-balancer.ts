@@ -258,14 +258,25 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
     error?.message?.includes("rate limit") ||
     error?.message?.includes("RESOURCE_EXHAUSTED");
 
-  if (isQuotaError && apiKey) {
+  // Check if it's a server error (500)
+  const isServerError =
+    error?.statusCode === 500 ||
+    error?.status_code === 500 ||
+    error?.message?.includes("server error") ||
+    error?.message?.includes("500");
+
+  if ((isQuotaError || isServerError) && apiKey) {
     // Extract retry delay from error if available
     const retryMatch = error?.message?.match(RETRY_DELAY_REGEX);
-    const retryDelay = retryMatch ? Number.parseFloat(retryMatch[1]) : 60;
+    const retryDelay = retryMatch
+      ? Number.parseFloat(retryMatch[1])
+      : isServerError
+      ? 30
+      : 60;
 
     balancer.markKeyAsFailed(
       apiKey,
-      error?.message || "Quota exceeded",
+      error?.message || (isServerError ? "Server error" : "Quota exceeded"),
       retryDelay
     );
   }

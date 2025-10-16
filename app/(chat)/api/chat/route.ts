@@ -215,6 +215,7 @@ export async function POST(request: Request) {
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
+          maxRetries: 2,
           experimental_activeTools:
             selectedChatModel === "chat-model-reasoning"
               ? []
@@ -308,8 +309,33 @@ export async function POST(request: Request) {
           }
         }
       },
-      onError: () => {
-        return "Oops, an error occurred!";
+      onError: (error) => {
+        console.error("[Main Chat] Stream error:", error);
+
+        // Provide user-friendly error messages based on error type
+        if (error instanceof Error) {
+          const errorMessage = error.message.toLowerCase();
+
+          if (
+            errorMessage.includes("server error") ||
+            errorMessage.includes("500")
+          ) {
+            return "The AI service is temporarily unavailable. Please try again in a moment.";
+          }
+
+          if (errorMessage.includes("type validation")) {
+            return "The AI service returned an unexpected response. Please try again.";
+          }
+
+          if (
+            errorMessage.includes("rate limit") ||
+            errorMessage.includes("429")
+          ) {
+            return "Too many requests. Please wait a moment and try again.";
+          }
+        }
+
+        return "An error occurred while processing your request. Please try again.";
       },
     });
 

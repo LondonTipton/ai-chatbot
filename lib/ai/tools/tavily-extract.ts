@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { summarizeContent } from "./summarize-content";
 
 type TavilyExtractResult = {
   url: string;
@@ -95,15 +96,53 @@ export const tavilyExtract = tool({
 
       const data: TavilyExtractResponse = await response.json();
 
-      // Format results for better readability
-      const formattedResults = data.results.map((result, index) => ({
-        position: index + 1,
-        url: result.url,
-        title: result.title || "Untitled",
-        content: result.raw_content,
-        contentLength: result.raw_content.length,
-        format,
-      }));
+      // Smart content handling to prevent context overflow
+      const MAX_CONTENT_LENGTH = 5000;
+      const SUMMARIZE_THRESHOLD = 45_000; // ~45K chars ≈ 11K tokens
+
+      // Format results with smart summarization for large content
+      const formattedResults = await Promise.all(
+        data.results.map(async (result, index) => {
+          let processedContent = result.raw_content;
+          let processingMethod = "full";
+
+          // For very large content, use AI summarization
+          if (result.raw_content.length > SUMMARIZE_THRESHOLD) {
+            try {
+              processedContent = await summarizeContent(
+                result.raw_content,
+                MAX_CONTENT_LENGTH,
+                `Legal document from ${result.title || result.url}`
+              );
+              processingMethod = "summarized";
+            } catch (_error) {
+              processedContent =
+                result.raw_content.substring(0, MAX_CONTENT_LENGTH) +
+                "\n\n[Truncated. Original: " +
+                result.raw_content.length +
+                " chars]";
+              processingMethod = "truncated";
+            }
+          } else if (result.raw_content.length > MAX_CONTENT_LENGTH) {
+            processedContent =
+              result.raw_content.substring(0, MAX_CONTENT_LENGTH) +
+              "\n\n[Truncated. Original: " +
+              result.raw_content.length +
+              " chars]";
+            processingMethod = "truncated";
+          }
+
+          return {
+            position: index + 1,
+            url: result.url,
+            title: result.title || "Untitled",
+            content: processedContent,
+            contentLength: result.raw_content.length,
+            processingMethod,
+            format,
+          };
+        })
+      );
 
       return {
         results: formattedResults,
