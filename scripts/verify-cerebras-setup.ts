@@ -18,9 +18,9 @@ try {
   console.log("   ✅ Cerebras balancer loaded");
   console.log(`   ✅ Keys available: ${cerebrasKeyCount}`);
   console.log("   📊 Key stats:");
-  cerebrasStats.forEach((stat) => {
+  cerebrasStats.forEach((stat, index) => {
     console.log(
-      `      - Key #${stat.keyNumber}: ${stat.requestCount} requests, ${
+      `      - Key #${index + 1}: ${stat.requestCount} requests, ${
         stat.errorCount
       } errors, ${stat.isDisabled ? "❌ disabled" : "✅ active"}`
     );
