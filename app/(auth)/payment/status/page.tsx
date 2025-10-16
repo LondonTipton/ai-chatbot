@@ -1,12 +1,15 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
+import { CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type PaymentStatus = "pending" | "completed" | "failed";
+
+// Force dynamic rendering for this page
+export const dynamic = "force-dynamic";
 
 export default function PaymentStatusPage() {
   const searchParams = useSearchParams();
@@ -165,8 +168,8 @@ export default function PaymentStatusPage() {
               {status === "completed" && (
                 <Button
                   className="w-full"
-                  size="lg"
                   onClick={() => router.push("/")}
+                  size="lg"
                 >
                   Start Using DeepCounsel
                 </Button>
@@ -176,16 +179,16 @@ export default function PaymentStatusPage() {
                 <>
                   <Button
                     className="w-full"
-                    size="lg"
                     onClick={() => router.push("/pricing")}
+                    size="lg"
                   >
                     Try Again
                   </Button>
                   <Button
                     className="w-full"
+                    onClick={() => router.push("/")}
                     size="lg"
                     variant="outline"
-                    onClick={() => router.push("/")}
                   >
                     Back to Home
                   </Button>
