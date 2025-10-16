@@ -15,16 +15,17 @@ type TavilyExtractResponse = {
   response_time: number;
 };
 
+// URL validation pattern (moved to top level for performance)
+const URL_PATTERN = /^https?:\/\/.+/i;
+
 export const tavilyExtract = tool({
   description:
     "Extract clean, structured content from web URLs. Perfect for: extracting full text from legal documents, court cases, or rulings; getting complete article or documentation content; cleaning and formatting web content for analysis; extracting content from multiple URLs at once. Use this AFTER tavilySearch to get the full content of relevant sources. Returns the full content in markdown format, cleaned and ready for analysis or document creation.",
   inputSchema: z.object({
     urls: z
-      .array(z.string().url())
-      .min(1)
-      .max(5)
+      .array(z.string())
       .describe(
-        "URLs to extract content from (max 5). Use URLs from tavilySearch results to get full content of relevant sources."
+        "URLs to extract content from (max 5). Use URLs from tavilySearch results to get full content of relevant sources. Must be valid URLs with https://"
       ),
     format: z
       .enum(["markdown", "text"])
@@ -41,7 +42,28 @@ export const tavilyExtract = tool({
         'Extraction depth: "basic" for standard content, "advanced" for complex pages with tables and embedded content'
       ),
   }),
-  execute: async ({ urls, format = "markdown", extractDepth = "basic" }) => {
+  execute: async ({
+    urls: rawUrls,
+    format = "markdown",
+    extractDepth = "basic",
+  }) => {
+    // Validate URLs array constraints (since we can't use .min/.max with Cerebras)
+    const urls = Array.isArray(rawUrls) ? rawUrls.slice(0, 5) : [];
+
+    if (urls.length === 0) {
+      throw new Error("At least one URL is required for extraction");
+    }
+
+    // Validate URL format (since we can't use .url() with Cerebras)
+    const invalidUrls = urls.filter((url) => !URL_PATTERN.test(url));
+    if (invalidUrls.length > 0) {
+      throw new Error(
+        `Invalid URLs provided: ${invalidUrls.join(
+          ", "
+        )}. URLs must start with http:// or https://`
+      );
+    }
+
     const apiKey = process.env.TAVILY_API_KEY;
 
     if (!apiKey) {

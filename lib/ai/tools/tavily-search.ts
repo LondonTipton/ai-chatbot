@@ -18,7 +18,7 @@ type TavilyResponse = {
 
 export const tavilySearch = tool({
   description:
-    "Search the web for current legal information, case law, statutes, and regulations. ALWAYS use this tool when users ask about: specific court cases (with or without full citations), recent legal developments, current statutes or amendments, Zimbabwean legal matters, government regulations, or any legal information that requires verification. You can search with partial information (e.g., case names, parties, general topics) and refine based on results. DO NOT ask users for more details before searching - search first with available information, then ask for clarification if needed.",
+    "Search the web for current legal information, case law, statutes, and regulations. ALWAYS use this tool when users ask about: specific court cases (with or without full citations), recent legal developments, current statutes or amendments, Zimbabwean legal matters, government regulations, or any legal information that requires verification. You can search with partial information (e.g., case names, parties, general topics) and refine based on results. DO NOT ask users for more details before searching - search first with available information, then ask for clarification if needed. After calling this tool, you MUST provide a comprehensive analysis of the search results.",
   inputSchema: z.object({
     query: z
       .string()
@@ -34,8 +34,6 @@ export const tavilySearch = tool({
       ),
     maxResults: z
       .number()
-      .min(1)
-      .max(10)
       .optional()
       .default(5)
       .describe("Maximum number of search results to return (1-10)"),
@@ -53,10 +51,12 @@ export const tavilySearch = tool({
   execute: async ({
     query,
     searchDepth = "basic",
-    maxResults = 5,
+    maxResults: rawMaxResults = 5,
     includeDomains,
     excludeDomains,
   }) => {
+    // Validate maxResults constraints (since we can't use .min/.max with Cerebras)
+    const maxResults = Math.min(Math.max(rawMaxResults, 1), 10);
     const apiKey = process.env.TAVILY_API_KEY;
 
     if (!apiKey) {

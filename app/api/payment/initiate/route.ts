@@ -1,0 +1,197 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/app/(auth)/auth";
+import { db } from "@/lib/db/queries";
+import { payment, subscription } from "@/lib/db/schema";
+import { pesepayService } from "@/lib/payment/pesepay-service";
+import { eq } from "drizzle-orm";
+
+export async function POST(request: NextRequest) {
+  try {
+    // Check if Pesepay credentials are configured
+    if (
+      !process.env.PESEPAY_INTEGRATION_KEY ||
+      !process.env.PESEPAY_ENCRYPTION_KEY
+    ) {
+      console.error("Pesepay credentials not configured");
+      return NextResponse.json(
+        {
+          error:
+            "Payment system not configured. Please add Pesepay credentials to environment variables.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const session = await auth();
+
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const {
+      plan,
+      amount,
+      currency,
+      customerName,
+      customerEmail,
+      customerPhone,
+    } = body;
+
+    if (!plan || !amount || !customerName || !customerEmail || !customerPhone) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Generate unique reference number
+    const referenceNumber = `DC-${Date.now()}-${session.user.id.slice(0, 8)}`;
+
+    // Get Ecocash payment method code for USD
+    let paymentMethods;
+    try {
+      paymentMethods = await pesepayService.getPaymentMethodsByCurrency("USD");
+    } catch (error) {
+      console.error("Error fetching payment methods:", error);
+      return NextResponse.json(
+        {
+          error:
+            "Failed to fetch payment methods. Please check Pesepay credentials.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const ecocashMethod = paymentMethods.find((method: any) =>
+      method.name.toLowerCase().includes("ecocash")
+    );
+
+    if (!ecocashMethod) {
+      return NextResponse.json(
+        { error: "Ecocash payment method not available for USD" },
+        { status: 400 }
+      );
+    }
+
+    // Create payment record
+    let newPayment;
+    try {
+      [newPayment] = await db
+        .insert(payment)
+        .values({
+          userId: session.user.id,
+          amount: amount.toString(),
+          currency: currency || "USD",
+          status: "pending",
+          paymentMethod: "ecocash",
+          referenceNumber,
+          phoneNumber: customerPhone,
+          description: `${plan} Plan Subscription`,
+        })
+        .returning();
+    } catch (error) {
+      console.error("Database error creating payment:", error);
+      return NextResponse.json(
+        {
+          error:
+            "Database error. Please run the payment setup script: pnpm tsx scripts/setup-payments.ts",
+        },
+        { status: 500 }
+      );
+    }
+
+    // Initiate seamless transaction with Pesepay
+    console.log("Initiating Pesepay transaction with:", {
+      referenceNumber,
+      amount,
+      currency: currency || "USD",
+      paymentMethodCode: ecocashMethod.code,
+      customerPhone,
+    });
+
+    let transactionResponse;
+    try {
+      transactionResponse = await pesepayService.initiateSeamlessTransaction({
+        customerName,
+        customerEmail,
+        customerPhone,
+        amount,
+        currency: currency || "USD",
+        description: `DeepCounsel ${plan} Plan`,
+        referenceNumber,
+        paymentMethodCode: ecocashMethod.code,
+      });
+      console.log("Pesepay response:", transactionResponse);
+    } catch (error) {
+      console.error("Pesepay API error:", error);
+      return NextResponse.json(
+        {
+          error: `Pesepay API error: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Update payment with Pesepay response
+    await db
+      .update(payment)
+      .set({
+        pollUrl: transactionResponse.pollUrl,
+        pesepayResponse: transactionResponse,
+        updatedAt: new Date(),
+      })
+      .where(eq(payment.id, newPayment.id));
+
+    // Check if user already has an active subscription
+    const existingSubscription = await db.query.subscription.findFirst({
+      where: (sub: any, { and, eq }: any) =>
+        and(eq(sub.userId, session.user.id), eq(sub.status, "active")),
+    });
+
+    // Create or update subscription (pending until payment confirmed)
+    if (existingSubscription) {
+      await db
+        .update(subscription)
+        .set({
+          plan,
+          amount: amount.toString(),
+          status: "pending",
+          updatedAt: new Date(),
+        })
+        .where(eq(subscription.id, existingSubscription.id));
+    } else {
+      const startDate = new Date();
+      const nextBillingDate = new Date(startDate);
+      nextBillingDate.setDate(nextBillingDate.getDate() + 30);
+
+      await db.insert(subscription).values({
+        userId: session.user.id,
+        plan,
+        amount: amount.toString(),
+        currency: currency || "USD",
+        status: "pending",
+        startDate,
+        nextBillingDate,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      referenceNumber,
+      pollUrl: transactionResponse.pollUrl,
+      message: "Payment initiated. Please check your phone for Ecocash prompt.",
+    });
+  } catch (error) {
+    console.error("Payment initiation error:", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to initiate payment",
+      },
+      { status: 500 }
+    );
+  }
+}

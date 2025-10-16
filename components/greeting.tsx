@@ -15,9 +15,8 @@ export const Greeting = () => {
       >
         Welcome,{" "}
         <span className="bg-gradient-to-r from-blue-500 via-blue-600 to-cyan-500 bg-clip-text text-transparent">
-          Counsel
+          Counsel.
         </span>
-        .
       </motion.div>
       <motion.div
         animate={{ opacity: 1, y: 0 }}
@@ -26,7 +25,15 @@ export const Greeting = () => {
         initial={{ opacity: 0, y: 10 }}
         transition={{ delay: 0.6 }}
       >
-        How can I assist you with your legal matters today?
+        How can I{" "}
+        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+          assist
+        </span>{" "}
+        you with your{" "}
+        <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+          legal matters
+        </span>{" "}
+        today?
       </motion.div>
     </div>
   );

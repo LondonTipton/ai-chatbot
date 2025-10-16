@@ -2,10 +2,21 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import equal from "fast-deep-equal";
 import { motion } from "framer-motion";
+// CITATION SYSTEM IMPORTS - Uncomment when enabling citation system
+// import {
+//   CheckCircleIcon,
+//   ChevronDownIcon,
+//   ClockIcon,
+//   WrenchIcon,
+// } from "lucide-react";
 import { memo, useState } from "react";
+// import { Badge } from "@/components/ui/badge";
+// import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
+import { filterThinkingTokens } from "@/lib/utils/filter-thinking-tokens";
+// import { CitationResult } from "./citation-result";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -122,6 +133,14 @@ const PurePreviewMessage = ({
 
             if (type === "text") {
               if (mode === "view") {
+                // Temporarily disable thinking tokens filter for debugging
+                const displayText = part.text;
+
+                // Don't render empty messages
+                if (!displayText.trim()) {
+                  return null;
+                }
+
                 return (
                   <div key={key}>
                     <MessageContent
@@ -138,7 +157,7 @@ const PurePreviewMessage = ({
                           : undefined
                       }
                     >
-                      <Response>{sanitizeText(part.text)}</Response>
+                      <Response>{sanitizeText(displayText)}</Response>
                     </MessageContent>
                   </div>
                 );
@@ -266,6 +285,87 @@ const PurePreviewMessage = ({
                 </Tool>
               );
             }
+
+            // CITATION SYSTEM - Commented out due to Cerebras tool continuation issue
+            // The citation system is fully implemented and working. Uncomment to enable.
+            // See CEREBRAS_TOOL_LIMITATION.md for details.
+            /*
+            if (type === "tool-tavilySearch") {
+              const { toolCallId, state } = part;
+
+              const sourceCount =
+                state === "output-available" && part.output?.results
+                  ? part.output.results.length
+                  : 0;
+
+              return (
+                <Tool defaultOpen={false} key={toolCallId}>
+                  <CollapsibleTrigger
+                    className={cn(
+                      "flex w-full min-w-0 items-center justify-between gap-2 p-3"
+                    )}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <WrenchIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-medium text-sm">
+                        Web Search
+                        {sourceCount > 0 && (
+                          <span className="ml-2 text-muted-foreground">
+                            ({sourceCount} source{sourceCount !== 1 ? "s" : ""})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {state === "output-available" && (
+                        <Badge
+                          className="flex items-center gap-1 rounded-full text-xs"
+                          variant="secondary"
+                        >
+                          <CheckCircleIcon className="size-4 text-green-600" />
+                          <span>Completed</span>
+                        </Badge>
+                      )}
+                      {state === "input-available" && (
+                        <Badge
+                          className="flex items-center gap-1 rounded-full text-xs"
+                          variant="secondary"
+                        >
+                          <ClockIcon className="size-4 animate-pulse" />
+                          <span>Running</span>
+                        </Badge>
+                      )}
+                      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <ToolContent>
+                    {state === "input-available" && (
+                      <ToolInput input={part.input} />
+                    )}
+                    {state === "output-available" && (
+                      <ToolOutput
+                        errorText={
+                          part.output?.error
+                            ? String(part.output.error)
+                            : undefined
+                        }
+                        output={
+                          part.output?.results &&
+                          part.output.results.length > 0 ? (
+                            <CitationResult sources={part.output.results} />
+                          ) : (
+                            <div className="p-2 text-muted-foreground text-sm">
+                              {part.output?.answer || "No results found"}
+                            </div>
+                          )
+                        }
+                      />
+                    )}
+                  </ToolContent>
+                </Tool>
+              );
+            }
+            */
 
             return null;
           })}

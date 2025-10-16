@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Required for Mastra integration
+  serverExternalPackages: ["@mastra/*"],
 };
 
 export default nextConfig;
