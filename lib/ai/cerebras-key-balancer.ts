@@ -48,6 +48,17 @@ class CerebrasKeyBalancer {
       });
       this.providers.set(key, createCerebras({ apiKey: key }));
     }
+
+    // Log initialized keys for visibility
+    console.log("[Cerebras Balancer] 🔑 Initialized keys:");
+    for (let i = 0; i < this.keys.length; i++) {
+      console.log(
+        `[Cerebras Balancer]   Key ${i + 1}: ${this.keys[i].substring(
+          0,
+          8
+        )}... ✅`
+      );
+    }
   }
 
   /**
@@ -109,11 +120,16 @@ class CerebrasKeyBalancer {
       ) {
         stats.isDisabled = false;
         stats.disabledUntil = undefined;
+        const availableKeys = Array.from(this.keyStats.values()).filter(
+          (s) => !s.isDisabled
+        ).length;
         console.log(
-          `[Cerebras Balancer] Re-enabled key ${key.substring(
+          `[Cerebras Balancer] ✅ Re-enabled key ${key.substring(
             0,
             8
-          )}... after cooldown`
+          )}... after cooldown (${availableKeys}/${
+            this.keys.length
+          } keys now available)`
         );
       }
 
@@ -125,7 +141,7 @@ class CerebrasKeyBalancer {
 
     // If all keys are disabled, return the least recently disabled one
     console.warn(
-      "[Cerebras Balancer] All keys disabled, using least recently disabled key"
+      "[Cerebras Balancer] ⚠️  ALL KEYS DISABLED - forcing re-enable of least recently disabled key"
     );
     const leastRecentlyDisabled = Array.from(this.keyStats.entries())
       .filter(([_, stats]) => stats.isDisabled)
@@ -135,6 +151,14 @@ class CerebrasKeyBalancer {
       const [key, stats] = leastRecentlyDisabled;
       stats.isDisabled = false;
       stats.disabledUntil = undefined;
+      console.warn(
+        `[Cerebras Balancer] 🔄 Force re-enabled key ${key.substring(
+          0,
+          8
+        )}... (was disabled until ${new Date(
+          stats.disabledUntil || 0
+        ).toLocaleTimeString()})`
+      );
       return key;
     }
 
@@ -150,6 +174,15 @@ class CerebrasKeyBalancer {
     if (stats) {
       stats.lastUsed = Date.now();
       stats.requestCount++;
+
+      // Log key usage for monitoring
+      const keyPreview = key.substring(0, 8);
+      const availableKeys = Array.from(this.keyStats.values()).filter(
+        (s) => !s.isDisabled
+      ).length;
+      console.log(
+        `[Cerebras Balancer] 🔑 Using key ${keyPreview}... (Request #${stats.requestCount}, ${availableKeys}/${this.keys.length} keys available)`
+      );
     }
   }
 
@@ -195,10 +228,17 @@ class CerebrasKeyBalancer {
     const cooldownMs = (retryDelaySeconds || 60) * 1000;
     stats.disabledUntil = Date.now() + cooldownMs;
 
+    const availableKeys = Array.from(this.keyStats.values()).filter(
+      (s) => !s.isDisabled
+    ).length;
+
     console.warn(
-      `[Cerebras Balancer] Disabled key ${key.substring(0, 8)}... for ${
+      `[Cerebras Balancer] ⚠️  DISABLED key ${key.substring(0, 8)}... for ${
         retryDelaySeconds || 60
       }s due to: ${error}`
+    );
+    console.warn(
+      `[Cerebras Balancer] 📊 Status: ${availableKeys}/${this.keys.length} keys available, ${stats.errorCount} total errors on this key`
     );
   }
 
@@ -217,6 +257,16 @@ class CerebrasKeyBalancer {
    */
   getKeyCount(): number {
     return this.keys.length;
+  }
+
+  /**
+   * Get the most recently used key (for error handling when key is not specified)
+   */
+  getMostRecentlyUsedKey(): string | undefined {
+    const sortedKeys = Array.from(this.keyStats.entries()).sort(
+      (a, b) => b[1].lastUsed - a[1].lastUsed
+    );
+    return sortedKeys[0]?.[0];
   }
 }
 
@@ -251,33 +301,133 @@ const RETRY_DELAY_REGEX = /retry in ([\d.]+)s/i;
 export function handleCerebrasError(error: any, apiKey?: string): void {
   const balancer = getCerebrasBalancer();
 
+  // Extract error details from nested error structure
+  const lastError = error?.lastError || error;
+  const statusCode = lastError?.statusCode || error?.statusCode;
+  const errorMessage = lastError?.message || error?.message || "";
+  const errorData = lastError?.data || error?.data;
+  const errorCode = errorData?.code || "";
+
+  console.log(
+    `[Cerebras Balancer] 🔍 Analyzing error: Status ${statusCode}, Code: ${errorCode}`
+  );
+
+  // Check if it's a queue exceeded error (429 with queue_exceeded code)
+  const isQueueExceeded =
+    statusCode === 429 &&
+    (errorCode === "queue_exceeded" ||
+      errorMessage.includes("high traffic") ||
+      errorMessage.includes("queue"));
+
   // Check if it's a quota/rate limit error
   const isQuotaError =
-    error?.statusCode === 429 ||
-    error?.message?.includes("quota") ||
-    error?.message?.includes("rate limit") ||
-    error?.message?.includes("RESOURCE_EXHAUSTED");
+    statusCode === 429 ||
+    errorMessage.includes("quota") ||
+    errorMessage.includes("rate limit") ||
+    errorMessage.includes("RESOURCE_EXHAUSTED");
 
   // Check if it's a server error (500)
   const isServerError =
-    error?.statusCode === 500 ||
-    error?.status_code === 500 ||
-    error?.message?.includes("server error") ||
-    error?.message?.includes("500");
+    statusCode === 500 ||
+    errorMessage.includes("server error") ||
+    errorMessage.includes("500");
 
-  if ((isQuotaError || isServerError) && apiKey) {
-    // Extract retry delay from error if available
-    const retryMatch = error?.message?.match(RETRY_DELAY_REGEX);
-    const retryDelay = retryMatch
-      ? Number.parseFloat(retryMatch[1])
-      : isServerError
-      ? 30
-      : 60;
+  if (isQueueExceeded || isQuotaError || isServerError) {
+    // For queue exceeded, use shorter cooldown since it's temporary traffic
+    // For quota errors, use longer cooldown
+    // For server errors, use medium cooldown
+    let retryDelay = 60; // default
+    let errorType = "Unknown";
 
-    balancer.markKeyAsFailed(
-      apiKey,
-      error?.message || (isServerError ? "Server error" : "Quota exceeded"),
-      retryDelay
+    if (isQueueExceeded) {
+      retryDelay = 15; // Queue issues are usually temporary
+      errorType = "Queue Exceeded";
+      console.log(
+        "[Cerebras Balancer] 🚦 Queue exceeded error detected - using 15s cooldown"
+      );
+    } else if (isServerError) {
+      retryDelay = 30;
+      errorType = "Server Error";
+      console.log(
+        "[Cerebras Balancer] 🔧 Server error detected - using 30s cooldown"
+      );
+    } else {
+      errorType = "Rate Limit";
+      // Extract retry delay from error if available
+      const retryMatch = errorMessage.match(RETRY_DELAY_REGEX);
+      retryDelay = retryMatch ? Number.parseFloat(retryMatch[1]) : 60;
+      console.log(
+        `[Cerebras Balancer] ⏱️  Rate limit detected - using ${retryDelay}s cooldown`
+      );
+    }
+
+    // If we have a specific API key, mark it as failed
+    // Otherwise, mark the most recently used key
+    const keyToMark = apiKey || balancer.getMostRecentlyUsedKey();
+
+    if (keyToMark) {
+      console.log(
+        `[Cerebras Balancer] 🔄 Rotating away from failed key ${keyToMark.substring(
+          0,
+          8
+        )}...`
+      );
+      balancer.markKeyAsFailed(
+        keyToMark,
+        errorMessage ||
+          (isQueueExceeded
+            ? "Queue exceeded"
+            : isServerError
+            ? "Server error"
+            : "Quota exceeded"),
+        retryDelay
+      );
+    } else {
+      console.warn(
+        "[Cerebras Balancer] ⚠️  Could not identify which key failed"
+      );
+    }
+  } else {
+    console.log(
+      "[Cerebras Balancer] ℹ️  Error not related to rate limits or server issues - no key rotation needed"
     );
   }
+}
+
+/**
+ * Get statistics about key usage and health
+ */
+export function getCerebrasStats(): KeyUsageStats[] {
+  return getCerebrasBalancer().getStats();
+}
+
+/**
+ * Log detailed health status of all keys
+ */
+export function logCerebrasHealth(): void {
+  const stats = getCerebrasStats();
+  const healthyKeys = stats.filter((s) => !s.isDisabled).length;
+
+  console.log("=".repeat(60));
+  console.log("[Cerebras Balancer] 📊 KEY HEALTH REPORT");
+  console.log("=".repeat(60));
+  console.log(`Overall Status: ${healthyKeys}/${stats.length} keys available`);
+  console.log("");
+
+  for (const stat of stats) {
+    const status = stat.isDisabled ? "🔴 DISABLED" : "🟢 ACTIVE";
+    const cooldownInfo = stat.disabledUntil
+      ? ` (until ${new Date(stat.disabledUntil).toLocaleTimeString()})`
+      : "";
+
+    console.log(`Key: ${stat.key}`);
+    console.log(`  Status: ${status}${cooldownInfo}`);
+    console.log(`  Requests: ${stat.requestCount}`);
+    console.log(`  Errors: ${stat.errorCount}`);
+    if (stat.lastError) {
+      console.log(`  Last Error: ${stat.lastError}`);
+    }
+    console.log("");
+  }
+  console.log("=".repeat(60));
 }

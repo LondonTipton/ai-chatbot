@@ -44,6 +44,10 @@ import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import {
+  getMessageSummary,
+  validateResponse,
+} from "@/lib/utils/validate-response";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
@@ -114,10 +118,10 @@ export async function POST(request: Request) {
       selectedVisibilityType: VisibilityType;
     } = requestBody;
 
-    console.log(`[Main Chat] Chat ID: ${id}`);
-    console.log(`[Main Chat] Selected Model: ${selectedChatModel}`);
+    console.log(`[Main Chat] 💬 Chat ID: ${id}`);
+    console.log(`[Main Chat] 🤖 Selected Model: ${selectedChatModel}`);
     console.log(
-      `[Main Chat] Message: ${
+      `[Main Chat] 📝 Message: ${
         typeof message.parts[0] === "object" && "text" in message.parts[0]
           ? message.parts[0].text.substring(0, 100)
           : "N/A"
@@ -199,8 +203,10 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
 
-    console.log(`[Main Chat] Starting stream with model: ${selectedChatModel}`);
-    console.log(`[Main Chat] Message count: ${uiMessages.length}`);
+    console.log(
+      `[Main Chat] 🚀 Starting stream with model: ${selectedChatModel}`
+    );
+    console.log(`[Main Chat] 📊 Message count: ${uiMessages.length}`);
 
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
@@ -215,7 +221,7 @@ export async function POST(request: Request) {
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
-          maxRetries: 2,
+          maxRetries: 5, // Increased retries for better resilience with multiple keys
           experimental_activeTools:
             selectedChatModel === "chat-model-reasoning"
               ? []
@@ -281,12 +287,43 @@ export async function POST(request: Request) {
 
         dataStream.merge(
           result.toUIMessageStream({
-            sendReasoning: true,
+            sendReasoning: false,
           })
         );
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
+        // Validate response content
+        const validation = validateResponse(messages);
+        const summary = getMessageSummary(messages);
+
+        if (validation.isValid) {
+          console.log(`[Main Chat] ✅ Response completed: ${summary}`);
+        } else {
+          console.warn(
+            "[Main Chat] ⚠️  Response completed but contains no meaningful content!"
+          );
+          console.warn(`[Main Chat] 📊 Summary: ${summary}`);
+
+          // Log detailed structure for debugging
+          const assistantMessages = messages.filter(
+            (m) => m.role === "assistant"
+          );
+          assistantMessages.forEach((msg, idx) => {
+            const partDetails = msg.parts.map(
+              (p) =>
+                `${p.type}${
+                  p.type === "text" ? `(${p.text?.length || 0} chars)` : ""
+                }`
+            );
+            console.warn(
+              `[Main Chat] Message ${idx + 1}: ${
+                msg.parts.length
+              } parts - ${partDetails.join(", ")}`
+            );
+          });
+        }
+
         await saveMessages({
           messages: messages.map((currentMessage) => ({
             id: currentMessage.id,
@@ -310,12 +347,60 @@ export async function POST(request: Request) {
         }
       },
       onError: (error) => {
-        console.error("[Main Chat] Stream error:", error);
+        console.error("[Main Chat] ❌ Stream error:", error);
+
+        // Handle Cerebras-specific errors with key rotation
+        if (typeof window === "undefined") {
+          try {
+            const {
+              handleCerebrasError,
+              getCerebrasStats,
+            } = require("@/lib/ai/cerebras-key-balancer");
+
+            // Check if this is a Cerebras model error
+            if (selectedChatModel !== "chat-model-image") {
+              console.log(
+                "[Main Chat] 🔄 Attempting automatic key rotation..."
+              );
+              handleCerebrasError(error);
+
+              // Log current key health status
+              const stats = getCerebrasStats();
+              const healthyKeys = stats.filter(
+                (s: any) => !s.isDisabled
+              ).length;
+              console.log(
+                `[Main Chat] 📊 Key Health: ${healthyKeys}/${stats.length} keys available`
+              );
+            }
+          } catch (err) {
+            console.warn("[Main Chat] Could not handle Cerebras error:", err);
+          }
+        }
 
         // Provide user-friendly error messages based on error type
         if (error instanceof Error) {
           const errorMessage = error.message.toLowerCase();
 
+          // Cerebras queue exceeded (429)
+          if (
+            errorMessage.includes("high traffic") ||
+            errorMessage.includes("queue_exceeded") ||
+            errorMessage.includes("queue")
+          ) {
+            return "Our AI service is experiencing high demand. We're automatically switching to another server. Please try again.";
+          }
+
+          // Generic rate limit (429)
+          if (
+            errorMessage.includes("rate limit") ||
+            errorMessage.includes("429") ||
+            errorMessage.includes("too many requests")
+          ) {
+            return "Too many requests. Our system is automatically rotating to available servers. Please wait 10-15 seconds and try again.";
+          }
+
+          // Server errors (500)
           if (
             errorMessage.includes("server error") ||
             errorMessage.includes("500")
@@ -323,15 +408,17 @@ export async function POST(request: Request) {
             return "The AI service is temporarily unavailable. Please try again in a moment.";
           }
 
+          // Type validation errors
           if (errorMessage.includes("type validation")) {
             return "The AI service returned an unexpected response. Please try again.";
           }
 
+          // Retry exhausted
           if (
-            errorMessage.includes("rate limit") ||
-            errorMessage.includes("429")
+            errorMessage.includes("failed after") &&
+            errorMessage.includes("attempts")
           ) {
-            return "Too many requests. Please wait a moment and try again.";
+            return "All available AI servers are currently busy. Please wait 30-60 seconds before trying again.";
           }
         }
 
