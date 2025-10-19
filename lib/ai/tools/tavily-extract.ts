@@ -98,13 +98,25 @@ export const tavilyExtract = tool({
 
       // Smart content handling to prevent context overflow
       const MAX_CONTENT_LENGTH = 5000;
-      const SUMMARIZE_THRESHOLD = 45_000; // ~45K chars ≈ 11K tokens
+      const SUMMARIZE_THRESHOLD = 100_000; // With llama-3.3-70b's 128K context, we can handle much more
+      const ABSOLUTE_MAX_LENGTH = 400_000; // Hard limit before summarization (matches summarizer limit)
 
       // Format results with smart summarization for large content
       const formattedResults = await Promise.all(
         data.results.map(async (result, index) => {
           let processedContent = result.raw_content;
           let processingMethod = "full";
+
+          // Pre-truncate extremely large content before summarization
+          if (result.raw_content.length > ABSOLUTE_MAX_LENGTH) {
+            console.log(
+              `[Tavily Extract] Content extremely large (${result.raw_content.length} chars), pre-truncating to ${ABSOLUTE_MAX_LENGTH}`
+            );
+            result.raw_content = result.raw_content.substring(
+              0,
+              ABSOLUTE_MAX_LENGTH
+            );
+          }
 
           // For very large content, use AI summarization
           if (result.raw_content.length > SUMMARIZE_THRESHOLD) {
@@ -116,6 +128,9 @@ export const tavilyExtract = tool({
               );
               processingMethod = "summarized";
             } catch (_error) {
+              console.warn(
+                `[Tavily Extract] Summarization failed for ${result.url}, using truncation`
+              );
               processedContent =
                 result.raw_content.substring(0, MAX_CONTENT_LENGTH) +
                 "\n\n[Truncated. Original: " +

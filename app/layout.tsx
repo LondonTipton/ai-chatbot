@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   title: "DeepCounsel - AI Legal Assistant",
   description:
     "DeepCounsel is an AI-powered legal assistant chatbot built with Next.js and the AI SDK.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport = {

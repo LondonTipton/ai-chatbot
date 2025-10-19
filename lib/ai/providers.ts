@@ -115,10 +115,10 @@ export const myProvider = isTestEnvironment
           }
         })(),
 
-        // Title generation - Cerebras llama3.1-8b (fast, no tools needed)
+        // Title generation - Cerebras llama-3.3-70b (128K context, better for summarization)
         "title-model": (() => {
           try {
-            return cerebrasProvider("llama3.1-8b");
+            return cerebrasProvider("llama-3.3-70b");
           } catch (error) {
             console.warn(
               "[Providers] Cerebras unavailable for titles, using Gemini"
