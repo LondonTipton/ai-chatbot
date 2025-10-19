@@ -221,7 +221,9 @@ export async function POST(request: Request) {
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
-          maxRetries: 5, // Increased retries for better resilience with multiple keys
+          maxRetries: 5, // Try all 5 keys before failing
+          // With proper key rotation, this should be fast (each key tried once)
+          // Previous slow performance was due to broken error detection, now fixed
           experimental_activeTools:
             selectedChatModel === "chat-model-reasoning"
               ? []
