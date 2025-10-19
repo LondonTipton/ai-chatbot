@@ -46,6 +46,8 @@ class CerebrasKeyBalancer {
         errorCount: 0,
         isDisabled: false,
       });
+      // Note: @ai-sdk/cerebras doesn't expose maxRetries option
+      // Retries are handled at the AI SDK level (streamText maxRetries: 5)
       this.providers.set(key, createCerebras({ apiKey: key }));
     }
 
@@ -302,29 +304,38 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
   const balancer = getCerebrasBalancer();
 
   // Extract error details from nested error structure
+  // AI_RetryError has lastError property with the actual API error
   const lastError = error?.lastError || error;
   const statusCode = lastError?.statusCode || error?.statusCode;
   const errorMessage = lastError?.message || error?.message || "";
   const errorData = lastError?.data || error?.data;
   const errorCode = errorData?.code || "";
 
+  // Also check the error message directly for queue_exceeded
+  const fullErrorString = JSON.stringify(error);
+  const hasQueueError =
+    fullErrorString.includes("queue_exceeded") ||
+    fullErrorString.includes("high traffic");
+
   console.log(
-    `[Cerebras Balancer] 🔍 Analyzing error: Status ${statusCode}, Code: ${errorCode}`
+    `[Cerebras Balancer] 🔍 Analyzing error: Status ${statusCode}, Code: ${errorCode}, HasQueue: ${hasQueueError}`
   );
 
   // Check if it's a queue exceeded error (429 with queue_exceeded code)
   const isQueueExceeded =
-    statusCode === 429 &&
-    (errorCode === "queue_exceeded" ||
-      errorMessage.includes("high traffic") ||
-      errorMessage.includes("queue"));
+    hasQueueError ||
+    (statusCode === 429 &&
+      (errorCode === "queue_exceeded" ||
+        errorMessage.includes("high traffic") ||
+        errorMessage.includes("queue")));
 
   // Check if it's a quota/rate limit error
   const isQuotaError =
     statusCode === 429 ||
     errorMessage.includes("quota") ||
     errorMessage.includes("rate limit") ||
-    errorMessage.includes("RESOURCE_EXHAUSTED");
+    errorMessage.includes("RESOURCE_EXHAUSTED") ||
+    errorMessage.includes("too_many_requests");
 
   // Check if it's a server error (500)
   const isServerError =
