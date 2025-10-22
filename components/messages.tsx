@@ -3,6 +3,7 @@ import equal from "fast-deep-equal";
 import { ArrowDownIcon } from "lucide-react";
 import { memo, useEffect } from "react";
 import { useMessages } from "@/hooks/use-messages";
+import { useToolExecution } from "@/hooks/use-tool-execution";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { useDataStream } from "./data-stream-provider";
@@ -10,6 +11,7 @@ import { Conversation, ConversationContent } from "./elements/conversation";
 import { Greeting } from "./greeting";
 import { PreviewMessage } from "./message";
 import { ProcessingMessage } from "./processing-message";
+import { ResearchProgress } from "./research-progress";
 
 type MessagesProps = {
   chatId: string;
@@ -44,6 +46,7 @@ function PureMessages({
   });
 
   useDataStream();
+  const { tools } = useToolExecution();
 
   useEffect(() => {
     if (status === "submitted") {
@@ -61,10 +64,17 @@ function PureMessages({
 
   return (
     <div
-      className="overscroll-behavior-contain -webkit-overflow-scrolling-touch flex-1 touch-pan-y overflow-y-scroll"
+      className="overscroll-behavior-contain -webkit-overflow-scrolling-touch relative flex-1 touch-pan-y overflow-y-scroll"
       ref={messagesContainerRef}
       style={{ overflowAnchor: "none" }}
     >
+      {/* Fixed Research Progress at top */}
+      {tools.length > 0 && (
+        <div className="sticky top-0 z-20 mx-auto max-w-4xl px-2 pt-4 md:px-4">
+          <ResearchProgress tools={tools} />
+        </div>
+      )}
+
       <Conversation className="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 md:gap-6">
         <ConversationContent className="flex flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
           {messages.length === 0 && <Greeting />}

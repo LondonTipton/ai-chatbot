@@ -26,15 +26,15 @@ import {
   document,
   message,
   messageDeprecated,
+  payment,
   type Suggestion,
   stream,
+  subscription,
   suggestion,
   type User,
   user,
   vote,
   voteDeprecated,
-  subscription,
-  payment,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
 
@@ -94,15 +94,22 @@ export async function createUser(email: string, password: string) {
 }
 
 export async function createGuestUser() {
-  const email = `guest-${Date.now()}`;
-  const password = generateHashedPassword(generateUUID());
+  const email = `guest-${Date.now()}@temp.local`;
+  const password = await generateHashedPassword(generateUUID());
 
   try {
-    return await db.insert(user).values({ email, password }).returning({
+    console.log("[createGuestUser] Creating guest user with email:", email);
+    const result = await db.insert(user).values({ email, password }).returning({
       id: user.id,
       email: user.email,
     });
-  } catch (_error) {
+    console.log(
+      "[createGuestUser] Guest user created successfully:",
+      result[0]?.id
+    );
+    return result;
+  } catch (error) {
+    console.error("[createGuestUser] Database error:", error);
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to create guest user"

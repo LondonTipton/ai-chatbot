@@ -220,7 +220,7 @@ export async function POST(request: Request) {
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
-          stopWhen: stepCountIs(5),
+          stopWhen: stepCountIs(10), // Increased from 5 to allow text generation after tools
           maxRetries: 5, // Try all 5 keys before failing
           // With proper key rotation, this should be fast (each key tried once)
           // Previous slow performance was due to broken error detection, now fixed
@@ -238,8 +238,8 @@ export async function POST(request: Request) {
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
             getWeather,
-            tavilySearch,
-            tavilyExtract,
+            tavilySearch: tavilySearch({ dataStream }),
+            tavilyExtract: tavilyExtract({ dataStream }),
             createDocument: createDocument({ session, dataStream }),
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({
@@ -285,8 +285,6 @@ export async function POST(request: Request) {
           },
         });
 
-        result.consumeStream();
-
         dataStream.merge(
           result.toUIMessageStream({
             sendReasoning: false,
@@ -324,6 +322,16 @@ export async function POST(request: Request) {
               } parts - ${partDetails.join(", ")}`
             );
           });
+
+          // CRITICAL: This is a Cerebras limitation - it stops after tool calls
+          // without generating a text response. This happens when stepCountIs(5)
+          // is reached during tool execution.
+          console.warn(
+            "[Main Chat] 🔧 This is likely due to Cerebras stopping after tool execution."
+          );
+          console.warn(
+            "[Main Chat] 💡 Consider: 1) Increasing stepCountIs limit, 2) Using a different model for tool-heavy queries, or 3) Implementing a follow-up mechanism"
+          );
         }
 
         await saveMessages({

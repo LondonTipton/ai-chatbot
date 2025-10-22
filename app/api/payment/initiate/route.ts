@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
 import { pesepayService } from "@/lib/payment/pesepay-service";
-import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,6 +28,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Verify user exists in database
+    const existingUser = await db.query.user.findFirst({
+      where: (users: any, { eq }: any) => eq(users.id, session.user.id),
+    });
+
+    if (!existingUser) {
+      console.error("User not found in database:", session.user.id);
+      return NextResponse.json(
+        {
+          error: "User session invalid. Please refresh the page and try again.",
+        },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const {
       plan,
@@ -48,10 +63,12 @@ export async function POST(request: NextRequest) {
     // Generate unique reference number
     const referenceNumber = `DC-${Date.now()}-${session.user.id.slice(0, 8)}`;
 
-    // Get Ecocash payment method code for USD
+    // Get Ecocash payment method code for the specified currency
     let paymentMethods;
     try {
-      paymentMethods = await pesepayService.getPaymentMethodsByCurrency("USD");
+      paymentMethods = await pesepayService.getPaymentMethodsByCurrency(
+        currency || "USD"
+      );
     } catch (error) {
       console.error("Error fetching payment methods:", error);
       return NextResponse.json(
@@ -69,10 +86,21 @@ export async function POST(request: NextRequest) {
 
     if (!ecocashMethod) {
       return NextResponse.json(
-        { error: "Ecocash payment method not available for USD" },
+        {
+          error: `Ecocash payment method not available for ${
+            currency || "USD"
+          }`,
+        },
         { status: 400 }
       );
     }
+
+    console.log("[Payment] Using payment method:", {
+      code: ecocashMethod.code,
+      name: ecocashMethod.name,
+      minAmount: ecocashMethod.minimumAmount,
+      maxAmount: ecocashMethod.maximumAmount,
+    });
 
     // Create payment record
     let newPayment;
@@ -101,7 +129,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initiate seamless transaction with Pesepay
+    // Initiate transaction with Pesepay (v1 API)
     console.log("Initiating Pesepay transaction with:", {
       referenceNumber,
       amount,
@@ -135,11 +163,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // v1 API returns redirectUrl instead of pollUrl
+    const redirectUrl =
+      transactionResponse.redirectUrl || transactionResponse.pollUrl;
+
     // Update payment with Pesepay response
     await db
       .update(payment)
       .set({
-        pollUrl: transactionResponse.pollUrl,
+        pollUrl: redirectUrl,
         pesepayResponse: transactionResponse,
         updatedAt: new Date(),
       })
@@ -181,8 +213,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       referenceNumber,
-      pollUrl: transactionResponse.pollUrl,
-      message: "Payment initiated. Please check your phone for Ecocash prompt.",
+      redirectUrl,
+      pollUrl: redirectUrl, // Keep for backward compatibility
+      message:
+        "Payment initiated. Please complete payment via the redirect URL.",
     });
   } catch (error) {
     console.error("Payment initiation error:", error);
