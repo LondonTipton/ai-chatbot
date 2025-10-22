@@ -46,6 +46,14 @@ export type CustomUIDataTypes = {
   clear: null;
   finish: null;
   usage: AppUsage;
+  toolStart: {
+    id: string;
+    tool: string;
+    message: string;
+  };
+  toolComplete: {
+    id: string;
+  };
 };
 
 export type ChatMessage = UIMessage<
