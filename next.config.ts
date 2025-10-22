@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Required for Mastra integration
-  serverExternalPackages: ["@mastra/*"],
+  // Required for Mastra integration and Pesepay
+  serverExternalPackages: ["@mastra/*", "pesepay"],
 };
 
 export default nextConfig;

@@ -109,12 +109,27 @@ export class PesepayService {
         data.referenceNumber
       );
 
+      // Prepare required fields based on payment method
+      const requiredFields: Record<string, string> = {};
+
+      // For Ecocash (PZW211), add customerPhoneNumber
+      if (data.paymentMethodCode === "PZW211") {
+        requiredFields.customerPhoneNumber = data.customerPhone;
+      }
+
+      console.log("[PesepayService] Payment details:", {
+        amount: data.amount,
+        description: data.description,
+        referenceNumber: data.referenceNumber,
+        requiredFields,
+      });
+
       // Make seamless payment
       const response = await this.pesepay.makeSeamlessPayment(
         payment,
         data.description,
         data.amount,
-        {} // requiredFields - empty for now
+        requiredFields
       );
 
       console.log("[PesepayService] Seamless payment response:", {
