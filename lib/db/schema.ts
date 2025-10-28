@@ -19,6 +19,16 @@ export const user = pgTable("User", {
   password: varchar("password", { length: 64 }), // Kept for backward compatibility during migration
   appwriteId: varchar("appwriteId", { length: 64 }).unique(),
   isGuest: boolean("isGuest").default(false),
+  plan: varchar("plan", { enum: ["Free", "Basic", "Pro", "Pro+", "Ultra"] })
+    .notNull()
+    .default("Free"),
+  requestsToday: varchar("requestsToday", { length: 10 })
+    .notNull()
+    .default("0"),
+  dailyRequestLimit: varchar("dailyRequestLimit", { length: 10 })
+    .notNull()
+    .default("5"),
+  lastRequestReset: timestamp("lastRequestReset").notNull().defaultNow(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });

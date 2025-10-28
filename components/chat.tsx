@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { UpgradeModal } from "@/components/upgrade-modal";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
@@ -61,6 +62,12 @@ export function Chat({
   const [input, setInput] = useState<string>("");
   const [usage, setUsage] = useState<AppUsage | undefined>(initialLastContext);
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalData, setUpgradeModalData] = useState({
+    requestsToday: 0,
+    dailyLimit: 5,
+    currentPlan: "Free",
+  });
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
 
@@ -113,6 +120,42 @@ export function Chat({
         ) {
           setShowCreditCardAlert(true);
         } else {
+          toast({
+            type: "error",
+            description: error.message,
+          });
+        }
+      } else if (error instanceof Error) {
+        // Check if it's a rate limit error
+        try {
+          const errorMessage = error.message;
+          if (errorMessage.includes("daily_limit_reached")) {
+            // Parse the error to get usage info
+            const usageLimitRegex = /(\d+)\/(\d+)/;
+            const match = errorMessage.match(usageLimitRegex);
+            if (match) {
+              const requestsToday = Number.parseInt(match[1], 10);
+              const dailyLimit = Number.parseInt(match[2], 10);
+              setShowUpgradeModal(true);
+              setUpgradeModalData({
+                requestsToday,
+                dailyLimit,
+                currentPlan: "Free",
+              });
+            } else {
+              toast({
+                type: "error",
+                description:
+                  "You've reached your daily limit. Please upgrade to continue.",
+              });
+            }
+          } else {
+            toast({
+              type: "error",
+              description: error.message,
+            });
+          }
+        } catch {
           toast({
             type: "error",
             description: error.message,
@@ -209,6 +252,14 @@ export function Chat({
         status={status}
         stop={stop}
         votes={votes}
+      />
+
+      <UpgradeModal
+        currentPlan={upgradeModalData.currentPlan}
+        dailyLimit={upgradeModalData.dailyLimit}
+        onOpenChange={setShowUpgradeModal}
+        open={showUpgradeModal}
+        requestsToday={upgradeModalData.requestsToday}
       />
 
       <AlertDialog
