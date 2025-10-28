@@ -1,13 +1,11 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "@/components/toast";
 import { createBrowserClient } from "@/lib/appwrite/config";
 
-export const dynamic = "force-dynamic";
-
-export default function VerifyPage() {
+function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"verifying" | "success" | "error">(
@@ -144,5 +142,26 @@ export default function VerifyPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-dvh w-screen items-start justify-center bg-background pt-12 md:items-center md:pt-0">
+          <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8">
+            <div className="flex flex-col items-center justify-center gap-4 text-center">
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900 dark:border-zinc-700 dark:border-t-zinc-50" />
+              <h3 className="font-semibold text-xl dark:text-zinc-50">
+                Loading...
+              </h3>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <VerifyContent />
+    </Suspense>
   );
 }
