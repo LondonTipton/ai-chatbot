@@ -3,9 +3,9 @@
  * Run with: pnpm tsx scripts/setup-payments.ts
  */
 
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { sql } from "drizzle-orm";
 
 // Create database connection
 const client = postgres(process.env.POSTGRES_URL!);

@@ -16,9 +16,8 @@ import {
 import type { ModelCatalog } from "tokenlens/core";
 import { fetchModels } from "tokenlens/fetch";
 import { getUsage } from "tokenlens/helpers";
-import { auth, type UserType } from "@/app/(auth)/auth";
 import type { VisibilityType } from "@/components/visibility-selector";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { defaultEntitlements } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
@@ -28,6 +27,7 @@ import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { tavilyExtract } from "@/lib/ai/tools/tavily-extract";
 import { tavilySearch } from "@/lib/ai/tools/tavily-search";
 import { updateDocument } from "@/lib/ai/tools/update-document";
+import { auth } from "@/lib/appwrite/server-auth";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -35,6 +35,7 @@ import {
   getChatById,
   getMessageCountByUserId,
   getMessagesByChatId,
+  getUserByAppwriteId,
   getUserById,
   saveChat,
   saveMessages,
@@ -134,30 +135,29 @@ export async function POST(request: Request) {
       return new ChatSDKError("unauthorized:chat").toResponse();
     }
 
-    // Verify user exists in database
-    const userExists = await getUserById(session.user.id);
-    if (!userExists) {
+    // Verify user exists in database using Appwrite ID
+    const dbUser = await getUserByAppwriteId(session.user.id);
+    if (!dbUser) {
       console.error(
-        `[Auth Error] User ID ${session.user.id} from session not found in database`
+        `[Auth Error] User with Appwrite ID ${session.user.id} not found in database`
       );
       return new ChatSDKError("unauthorized:chat").toResponse();
     }
 
-    const userType: UserType = session.user.type;
-
     const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
+      id: dbUser.id, // Use database UUID
       differenceInHours: 24,
     });
 
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+    if (messageCount > defaultEntitlements.maxMessagesPerDay) {
       return new ChatSDKError("rate_limit:chat").toResponse();
     }
 
     const chat = await getChatById({ id });
 
     if (chat) {
-      if (chat.userId !== session.user.id) {
+      if (chat.userId !== dbUser.id) {
+        // Use database UUID
         return new ChatSDKError("forbidden:chat").toResponse();
       }
     } else {
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
 
       await saveChat({
         id,
-        userId: session.user.id,
+        userId: dbUser.id, // Use database UUID
         title,
         visibility: selectedVisibilityType,
       });
@@ -483,9 +483,16 @@ export async function DELETE(request: Request) {
     return new ChatSDKError("unauthorized:chat").toResponse();
   }
 
+  // Get database user by Appwrite ID
+  const dbUser = await getUserByAppwriteId(session.user.id);
+  if (!dbUser) {
+    return new ChatSDKError("unauthorized:chat").toResponse();
+  }
+
   const chat = await getChatById({ id });
 
-  if (chat?.userId !== session.user.id) {
+  if (chat?.userId !== dbUser.id) {
+    // Use database UUID
     return new ChatSDKError("forbidden:chat").toResponse();
   }
 

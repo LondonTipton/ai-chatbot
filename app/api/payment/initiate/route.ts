@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
-import { auth } from "@/app/(auth)/auth";
+import { getCurrentUser } from "@/lib/appwrite/auth";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
 import { pesepayService } from "@/lib/payment/pesepay-service";
@@ -22,19 +22,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = await auth();
+    const user = await getCurrentUser();
 
-    if (!session || !session.user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify user exists in database
+    // Verify user exists in database using Appwrite ID
     const existingUser = await db.query.user.findFirst({
-      where: (users: any, { eq }: any) => eq(users.id, session.user.id),
+      where: (users: any, { eq }: any) => eq(users.appwriteId, user.$id),
     });
 
     if (!existingUser) {
-      console.error("User not found in database:", session.user.id);
+      console.error("User not found in database:", user.$id);
       return NextResponse.json(
         {
           error: "User session invalid. Please refresh the page and try again.",
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate unique reference number
-    const referenceNumber = `DC-${Date.now()}-${session.user.id.slice(0, 8)}`;
+    const referenceNumber = `DC-${Date.now()}-${existingUser.id.slice(0, 8)}`;
 
     // Get Ecocash payment method code for the specified currency
     let paymentMethods;
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       [newPayment] = await db
         .insert(payment)
         .values({
-          userId: session.user.id,
+          userId: existingUser.id,
           amount: amount.toString(),
           currency: currency || "USD",
           status: "pending",
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     // Check if user already has an active subscription
     const existingSubscription = await db.query.subscription.findFirst({
       where: (sub: any, { and, eq }: any) =>
-        and(eq(sub.userId, session.user.id), eq(sub.status, "active")),
+        and(eq(sub.userId, existingUser.id), eq(sub.status, "active")),
     });
 
     // Create or update subscription (pending until payment confirmed)
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       nextBillingDate.setDate(nextBillingDate.getDate() + 30);
 
       await db.insert(subscription).values({
-        userId: session.user.id,
+        userId: existingUser.id,
         plan,
         amount: amount.toString(),
         currency: currency || "USD",

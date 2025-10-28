@@ -1,6 +1,6 @@
+import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db/queries";
-import { sql } from "drizzle-orm";
 
 export async function GET() {
   const checks = {

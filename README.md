@@ -35,8 +35,9 @@
 - Data Persistence
   - [Neon Serverless Postgres](https://vercel.com/marketplace/neon) for saving chat history and user data
   - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
-- [Auth.js](https://authjs.dev)
-  - Simple and secure authentication
+- [Appwrite](https://appwrite.io)
+  - Cloud-based authentication with email/password and anonymous sessions
+  - Guest user support with seamless upgrade to registered accounts
 - **Advanced Features**
   - Gemini API key load balancing (up to 5 keys)
   - Real-time web search for current legal information
@@ -68,6 +69,52 @@ pnpm dev
 ```
 
 Your app template should now be running on [localhost:3000](http://localhost:3000).
+
+## Authentication Setup
+
+DeepCounsel uses [Appwrite](https://appwrite.io) for authentication. Follow these steps to set up authentication:
+
+### 1. Create an Appwrite Project
+
+1. Go to [Appwrite Cloud](https://cloud.appwrite.io/) and create a free account
+2. Create a new project
+3. Copy your Project ID from Settings > General
+
+### 2. Configure Authentication
+
+1. Navigate to **Auth** in your Appwrite project
+2. Enable **Email/Password** authentication
+3. Enable **Anonymous Sessions** (for guest users)
+4. Configure session limits and security settings as needed
+
+### 3. Create an API Key
+
+1. Go to **Settings > API Keys**
+2. Create a new API key with the following scopes:
+   - `users.read`
+   - `users.write`
+3. Copy the API key (you won't be able to see it again)
+
+### 4. Set Environment Variables
+
+Add the following to your `.env.local` file:
+
+```bash
+# Appwrite Configuration
+NEXT_PUBLIC_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
+NEXT_PUBLIC_APPWRITE_PROJECT_ID=your_project_id_here
+APPWRITE_API_KEY=your_api_key_here
+```
+
+### Authentication Features
+
+- **Guest Users**: Unauthenticated users can access the app with anonymous sessions
+- **Registration**: Users can create accounts with email and password
+- **Login**: Registered users can log in with their credentials
+- **Guest Upgrade**: Guest users can upgrade to full accounts while preserving chat history
+- **Session Management**: Automatic session refresh and validation
+
+For more details on the authentication migration, see [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md).
 
 ## Testing Integrations
 

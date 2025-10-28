@@ -16,7 +16,11 @@ import type { AppUsage } from "../usage";
 export const user = pgTable("User", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   email: varchar("email", { length: 64 }).notNull(),
-  password: varchar("password", { length: 64 }),
+  password: varchar("password", { length: 64 }), // Kept for backward compatibility during migration
+  appwriteId: varchar("appwriteId", { length: 64 }).unique(),
+  isGuest: boolean("isGuest").default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
 export type User = InferSelectModel<typeof user>;

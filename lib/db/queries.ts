@@ -18,7 +18,6 @@ import type { ArtifactKind } from "@/components/artifact";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { ChatSDKError } from "../errors";
 import type { AppUsage } from "../usage";
-import { generateUUID } from "../utils";
 import {
   type Chat,
   chat,
@@ -38,9 +37,8 @@ import {
 } from "./schema";
 import { generateHashedPassword } from "./utils";
 
-// Optionally, if not using email/pass login, you can
-// use the Drizzle adapter for Auth.js / NextAuth
-// https://authjs.dev/reference/adapter/drizzle
+// Note: Authentication is handled by Appwrite
+// User records in the database are linked via appwriteId field
 
 // biome-ignore lint: Forbidden non-null assertion.
 const client = postgres(process.env.POSTGRES_URL!);
@@ -74,6 +72,23 @@ export async function getUser(email: string): Promise<User[]> {
   }
 }
 
+export async function getUserByAppwriteId(
+  appwriteId: string
+): Promise<User | null> {
+  try {
+    const users = await db
+      .select()
+      .from(user)
+      .where(eq(user.appwriteId, appwriteId));
+    return users[0] || null;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to get user by Appwrite ID"
+    );
+  }
+}
+
 export async function getUserById(id: string): Promise<User | null> {
   try {
     const users = await db.select().from(user).where(eq(user.id, id));
@@ -93,26 +108,39 @@ export async function createUser(email: string, password: string) {
   }
 }
 
-export async function createGuestUser() {
-  const email = `guest-${Date.now()}@temp.local`;
-  const password = await generateHashedPassword(generateUUID());
-
+export async function createUserWithAppwriteId(
+  email: string,
+  appwriteId: string
+) {
   try {
-    console.log("[createGuestUser] Creating guest user with email:", email);
-    const result = await db.insert(user).values({ email, password }).returning({
-      id: user.id,
-      email: user.email,
-    });
-    console.log(
-      "[createGuestUser] Guest user created successfully:",
-      result[0]?.id
-    );
-    return result;
-  } catch (error) {
-    console.error("[createGuestUser] Database error:", error);
+    return await db
+      .insert(user)
+      .values({
+        email,
+        appwriteId,
+        isGuest: false,
+        password: null,
+      })
+      .returning();
+  } catch (_error) {
     throw new ChatSDKError(
       "bad_request:database",
-      "Failed to create guest user"
+      "Failed to create user with Appwrite ID"
+    );
+  }
+}
+
+export async function updateUserAppwriteId(userId: string, appwriteId: string) {
+  try {
+    return await db
+      .update(user)
+      .set({ appwriteId, updatedAt: new Date() })
+      .where(eq(user.id, userId))
+      .returning();
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update user Appwrite ID"
     );
   }
 }
@@ -172,7 +200,32 @@ export async function getChatsByUserId({
   startingAfter: string | null;
   endingBefore: string | null;
 }) {
+  // First, resolve the Appwrite ID to the database UUID
+  let actualUserId: string = id;
+
   try {
+    // Check if the id is already a valid UUID (36 chars with dashes)
+    if (id.length === 36 && id.includes("-")) {
+      actualUserId = id;
+    } else {
+      // It's an Appwrite ID, look up the corresponding database user
+      const [userRecord] = await db
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.appwriteId, id))
+        .limit(1);
+
+      if (!userRecord) {
+        console.log(`[getChatsByUserId] No user found with appwriteId: ${id}`);
+        return { chats: [], hasMore: false };
+      }
+
+      actualUserId = userRecord.id;
+      console.log(
+        `[getChatsByUserId] Resolved appwriteId ${id} to UUID ${actualUserId}`
+      );
+    }
+
     const extendedLimit = limit + 1;
 
     const query = (whereCondition?: SQL<any>) =>
@@ -181,8 +234,8 @@ export async function getChatsByUserId({
         .from(chat)
         .where(
           whereCondition
-            ? and(whereCondition, eq(chat.userId, id))
-            : eq(chat.userId, id)
+            ? and(whereCondition, eq(chat.userId, actualUserId))
+            : eq(chat.userId, actualUserId)
         )
         .orderBy(desc(chat.createdAt))
         .limit(extendedLimit);
@@ -229,7 +282,14 @@ export async function getChatsByUserId({
       chats: hasMore ? filteredChats.slice(0, limit) : filteredChats,
       hasMore,
     };
-  } catch (_error) {
+  } catch (error) {
+    console.error("[getChatsByUserId] Database error:", error);
+    console.error("[getChatsByUserId] Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      originalId: id,
+      actualUserId: actualUserId || "unknown",
+    });
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to get chats by user id"

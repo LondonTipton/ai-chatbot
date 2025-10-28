@@ -1,9 +1,9 @@
 "use client";
 
+import { AlertCircle, CheckCircle, Loader2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface SetupStatus {
   status: string;
@@ -57,7 +57,9 @@ export default function PaymentSetupPage() {
       <div className="container mx-auto px-4 py-16">
         <Card className="mx-auto max-w-2xl">
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Failed to check setup status</p>
+            <p className="text-muted-foreground">
+              Failed to check setup status
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -139,10 +141,7 @@ export default function PaymentSetupPage() {
                 </h3>
                 <ul className="space-y-1">
                   {status.errors.map((error, index) => (
-                    <li
-                      className="text-muted-foreground text-sm"
-                      key={index}
-                    >
+                    <li className="text-muted-foreground text-sm" key={index}>
                       • {error}
                     </li>
                   ))}
@@ -168,11 +167,7 @@ export default function PaymentSetupPage() {
                 Recheck Status
               </Button>
               {isReady && (
-                <Button
-                  asChild
-                  className="flex-1"
-                  variant="default"
-                >
+                <Button asChild className="flex-1" variant="default">
                   <a href="/pricing">Go to Pricing</a>
                 </Button>
               )}
@@ -181,9 +176,7 @@ export default function PaymentSetupPage() {
             {/* Setup Instructions */}
             {!isReady && (
               <div className="rounded-lg border bg-muted/50 p-4">
-                <h4 className="mb-2 font-medium text-sm">
-                  Quick Setup Guide:
-                </h4>
+                <h4 className="mb-2 font-medium text-sm">Quick Setup Guide:</h4>
                 <div className="space-y-2 text-sm">
                   <p>1. Add to your .env.local file:</p>
                   <pre className="overflow-x-auto rounded bg-black p-2 text-green-400 text-xs">

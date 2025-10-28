@@ -34,7 +34,8 @@
 
 ### Authentication
 
-- **Auth.js (NextAuth v5 beta)** - Authentication with guest and registered user support
+- **Appwrite** - Cloud-based authentication service with email/password and anonymous sessions
+- Custom authentication layer with React Context for client-side state management
 
 ### Code Editors
 

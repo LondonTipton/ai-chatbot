@@ -7,9 +7,8 @@ export async function GET() {
 
     // Test: Get payment methods for USD
     console.log("Fetching payment methods for USD...");
-    const paymentMethods = await pesepayService.getPaymentMethodsByCurrency(
-      "USD"
-    );
+    const paymentMethods =
+      await pesepayService.getPaymentMethodsByCurrency("USD");
     console.log("✅ Payment methods fetched:", paymentMethods);
 
     return NextResponse.json({
