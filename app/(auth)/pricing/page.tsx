@@ -12,62 +12,82 @@ import {
 
 const plans = [
   {
+    name: "Free",
+    price: 0,
+    description: "Try DeepCounsel with limited features",
+    features: [
+      "5 AI requests per day",
+      "Basic model access",
+      "Artifact generation",
+      "Community support",
+    ],
+    cta: "Start Free",
+    highlighted: false,
+    isFree: true,
+  },
+  {
     name: "Basic",
     price: 10,
     description: "Individuals starting with legal AI assistance",
     features: [
-      "Limited AI requests",
+      "50 AI requests per day",
       "Basic model access",
       "Artifact generation",
+      "Email support",
     ],
     cta: "Get Basic",
     highlighted: false,
+    isFree: false,
   },
   {
     name: "Pro",
     price: 30,
     description: "Legal professionals, small practices",
     features: [
-      "Everything in Basic",
-      "Extended AI requests",
+      "200 AI requests per day",
       "Advanced model access",
       "Agentic research",
       "Legal template library",
       "Faster document processing",
       "Document comparison",
+      "Priority support",
     ],
     cta: "Get Pro",
     highlighted: true,
+    isFree: false,
   },
   {
     name: "Pro+",
     price: 50,
     description: "Teams, power users, mid-sized firms",
     features: [
-      "Everything in Pro",
-      "3x usage on all models",
+      "600 AI requests per day",
+      "All Pro features",
       "Team collaboration",
       "Custom workflows",
       "Priority artifact processing",
       "Long-running agents",
+      "Dedicated support",
     ],
     cta: "Get Pro+",
     highlighted: false,
+    isFree: false,
   },
   {
     name: "Ultra",
     price: 100,
     description: "Large firms, advanced legal teams",
     features: [
-      "Everything in Pro+",
-      "20x usage on all models",
-      "Priority access to new legal features",
-      "Dedicated support",
-      "Custom model fine-tuning for legal data",
+      "4000 AI requests per day",
+      "All Pro+ features",
+      "Priority access to new features",
+      "Custom model fine-tuning",
       "API access",
+      "White-glove support",
     ],
     cta: "Get Ultra",
     highlighted: false,
+    isFree: false,
   },
 ];
 
@@ -125,7 +145,13 @@ export default function PricingPage() {
                   className="w-full"
                   variant={plan.highlighted ? "default" : "outline"}
                 >
-                  <Link href={`/checkout?plan=${plan.name}`}>{plan.cta}</Link>
+                  <Link
+                    href={
+                      plan.isFree ? "/register" : `/checkout?plan=${plan.name}`
+                    }
+                  >
+                    {plan.cta}
+                  </Link>
                 </Button>
               </CardFooter>
             </Card>

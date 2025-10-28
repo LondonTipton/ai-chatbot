@@ -144,14 +144,32 @@ export async function POST(request: Request) {
       return new ChatSDKError("unauthorized:chat").toResponse();
     }
 
-    const messageCount = await getMessageCountByUserId({
-      id: dbUser.id, // Use database UUID
-      differenceInHours: 24,
-    });
+    // Check daily usage limit based on user's plan
+    const { checkAndIncrementUsage } = await import("@/lib/db/usage");
+    const usageCheck = await checkAndIncrementUsage(dbUser.id);
 
-    if (messageCount > defaultEntitlements.maxMessagesPerDay) {
-      return new ChatSDKError("rate_limit:chat").toResponse();
+    if (!usageCheck.allowed) {
+      console.log(
+        `[Usage] User ${dbUser.id} exceeded daily limit: ${usageCheck.requestsToday}/${usageCheck.dailyLimit}`
+      );
+      return new Response(
+        JSON.stringify({
+          error: "daily_limit_reached",
+          message: `You've reached your daily limit of ${usageCheck.dailyLimit} requests. Upgrade to continue.`,
+          requestsToday: usageCheck.requestsToday,
+          dailyLimit: usageCheck.dailyLimit,
+          plan: usageCheck.plan,
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
+
+    console.log(
+      `[Usage] User ${dbUser.id} usage: ${usageCheck.requestsToday}/${usageCheck.dailyLimit} (${usageCheck.plan} plan)`
+    );
 
     const chat = await getChatById({ id });
 
