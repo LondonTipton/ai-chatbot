@@ -2,7 +2,7 @@
 
 import Form from "next/form";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,21 @@ import { Label } from "@/components/ui/label";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const userId = searchParams.get("userId");
-  const secret = searchParams.get("secret");
+  // Get userId and secret from URL on client side
+  const [userId, setUserId] = useState<string | null>(null);
+  const [secret, setSecret] = useState<string | null>(null);
+
+  // Extract params from URL on mount
+  useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setUserId(params.get("userId"));
+      setSecret(params.get("secret"));
+    }
+  });
 
   const handleSubmit = async (formData: FormData) => {
     const password = formData.get("password") as string;

@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
@@ -10,15 +10,11 @@ import { useAuth } from "@/hooks/use-auth";
 
 export default function Page() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { register } = useAuth();
 
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  // Get returnUrl from query params, default to "/"
-  const returnUrl = searchParams.get("returnUrl") || "/";
 
   const handleSubmit = useCallback(
     async (formData: FormData) => {
@@ -33,8 +29,7 @@ export default function Page() {
           type: "success",
           description: "Account created successfully!",
         });
-        // Redirect to returnUrl after successful registration
-        router.push(returnUrl);
+        router.push("/");
         router.refresh();
       } catch (e: any) {
         const msg = e?.message || "Failed to create account!";
@@ -44,7 +39,7 @@ export default function Page() {
         setSubmitting(false);
       }
     },
-    [register, router, returnUrl]
+    [register, router]
   );
 
   return (
@@ -64,7 +59,7 @@ export default function Page() {
             {"Already have an account? "}
             <Link
               className="font-semibold text-gray-800 hover:underline dark:text-zinc-200"
-              href={`/login${returnUrl !== "/" ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ""}`}
+              href="/login"
             >
               Sign in
             </Link>
