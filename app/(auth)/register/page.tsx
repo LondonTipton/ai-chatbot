@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -27,9 +27,9 @@ export default function Page() {
         setIsSuccessful(true);
         toast({
           type: "success",
-          description: "Account created successfully!",
+          description: "Account created! Please verify your email.",
         });
-        router.push("/");
+        router.push("/verify-pending");
         router.refresh();
       } catch (e: any) {
         const msg = e?.message || "Failed to create account!";

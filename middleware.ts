@@ -174,7 +174,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public routes that don't require authentication
-  const publicRoutes = ["/login", "/register", "/reset-password"];
+  const publicRoutes = [
+    "/login",
+    "/register",
+    "/reset-password",
+    "/verify",
+    "/verify-pending",
+  ];
   const isWellKnown = pathname.startsWith("/.well-known");
   const isPublicRoute = publicRoutes.includes(pathname);
 
@@ -420,12 +426,40 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // If valid session exists and user is on auth pages, redirect to home
+  // If valid session exists and user is on auth pages (except verify-pending), redirect appropriately
   if (validationResult && (isPublicRoute || isWellKnown)) {
-    console.log(
-      "[middleware] Authenticated user on auth page, redirecting to home"
-    );
-    return NextResponse.redirect(new URL("/", request.url));
+    const { user: authUser } = validationResult;
+
+    // If user is not verified and not on verify/verify-pending pages, redirect to verify-pending
+    if (
+      !authUser.emailVerification &&
+      pathname !== "/verify" &&
+      pathname !== "/verify-pending"
+    ) {
+      console.log(
+        "[middleware] Unverified user on auth page, redirecting to verify-pending"
+      );
+      return NextResponse.redirect(new URL("/verify-pending", request.url));
+    }
+
+    // If user is verified and on verify-pending, redirect to home
+    if (authUser.emailVerification && pathname === "/verify-pending") {
+      console.log(
+        "[middleware] Verified user on verify-pending page, redirecting to home"
+      );
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    // If user is verified and on other auth pages (login/register), redirect to home
+    if (
+      authUser.emailVerification &&
+      (pathname === "/login" || pathname === "/register")
+    ) {
+      console.log(
+        "[middleware] Verified user on auth page, redirecting to home"
+      );
+      return NextResponse.redirect(new URL("/", request.url));
+    }
   }
 
   // If no session and on public route, allow through
@@ -441,10 +475,19 @@ export async function middleware(request: NextRequest) {
 
   const { user, session } = validationResult;
 
+  // Check if user's email is verified for protected routes
+  if (!user.emailVerification && !isPublicRoute && !isWellKnown) {
+    console.log(
+      "[middleware] Unverified user attempting to access protected route, redirecting to verify-pending"
+    );
+    return NextResponse.redirect(new URL("/verify-pending", request.url));
+  }
+
   // Attach session context to request headers for downstream use
   const response = NextResponse.next();
   response.headers.set("x-user-id", user.$id);
   response.headers.set("x-session-id", session.$id);
+  response.headers.set("x-email-verified", user.emailVerification.toString());
 
   return response;
 }

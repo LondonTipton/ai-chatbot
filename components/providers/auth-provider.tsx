@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const currentSession = sessions.sessions.find((s) => s.current);
       console.log(
         "[AuthProvider] Got session:",
-        currentSession ? currentSession.$id.slice(0, 8) + "..." : "None"
+        currentSession ? `${currentSession.$id.slice(0, 8)}...` : "None"
       );
       setSession(currentSession || null);
 
@@ -227,6 +227,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password
       );
 
+      // Send verification email
+      try {
+        const verificationUrl = `${window.location.origin}/verify`;
+        await account.createVerification(verificationUrl);
+        console.log("[auth] Verification email sent successfully");
+      } catch (verificationError) {
+        console.error(
+          "[auth] Failed to send verification email:",
+          verificationError
+        );
+        // Non-fatal - user can resend later
+      }
+
       // Sync httpOnly cookies on our domain for middleware fallback
       try {
         const syncResponse = await fetch("/api/auth/sync", {
@@ -266,6 +279,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       throw new Error("Failed to register. Please try again.");
+    }
+  };
+
+  // Resend verification email
+  const resendVerification = async () => {
+    try {
+      const { account } = createBrowserClient();
+      const verificationUrl = `${window.location.origin}/verify`;
+      await account.createVerification(verificationUrl);
+      console.log("[auth] Verification email resent successfully");
+    } catch (error) {
+      console.error("[auth] Failed to resend verification email:", error);
+      throw new Error("Failed to resend verification email. Please try again.");
     }
   };
 
@@ -399,6 +425,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     logout,
     refreshUser,
+    resendVerification,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

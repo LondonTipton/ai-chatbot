@@ -14,6 +14,7 @@ import { useSidebar } from "./ui/sidebar";
 function PureChatHeader() {
   const router = useRouter();
   const { open } = useSidebar();
+  const isMainChatPage = useIsMainChatPage();
 
   const { width: windowWidth } = useWindowSize();
 
@@ -37,18 +38,27 @@ function PureChatHeader() {
 
       <ThemeToggle className="order-1 md:order-2" />
 
-      <Button
-        asChild
-        className="order-3 hidden bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 md:ml-auto md:flex md:h-fit dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-      >
-        <Link
-          href={"https://deep-counsel.org"}
-          rel="noreferrer"
-          target="_noblank"
+      {isMainChatPage ? (
+        <Button
+          asChild
+          className="order-3 hidden bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 md:ml-auto md:flex md:h-fit dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
+          <Link
+            href={"https://deep-counsel.org"}
+            rel="noreferrer"
+            target="_blank"
+          >
+            DeepCounsel
+          </Link>
+        </Button>
+      ) : (
+        <Button
+          className="order-3 hidden bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 md:ml-auto md:flex md:h-fit dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          onClick={() => router.push("/")}
         >
           DeepCounsel
-        </Link>
-      </Button>
+        </Button>
+      )}
     </header>
   );
 }
