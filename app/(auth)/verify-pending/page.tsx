@@ -1,13 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { toast } from "@/components/toast";
 import { useAuth } from "@/hooks/use-auth";
 
-export const dynamic = "force-dynamic";
-
-export default function VerifyPendingPage() {
+function VerifyPendingContent() {
   const router = useRouter();
   const { user, resendVerification, logout } = useAuth();
   const [isResending, setIsResending] = useState(false);
@@ -108,5 +106,26 @@ export default function VerifyPendingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyPendingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-dvh w-screen items-start justify-center bg-background pt-12 md:items-center md:pt-0">
+          <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8">
+            <div className="flex flex-col items-center justify-center gap-4 text-center">
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900 dark:border-zinc-700 dark:border-t-zinc-50" />
+              <h3 className="font-semibold text-xl dark:text-zinc-50">
+                Loading...
+              </h3>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <VerifyPendingContent />
+    </Suspense>
   );
 }
