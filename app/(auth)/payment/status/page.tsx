@@ -1,22 +1,27 @@
 "use client";
 
 import { CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type PaymentStatus = "pending" | "completed" | "failed";
 
-function PaymentStatusContent() {
-  const searchParams = useSearchParams();
+export default function PaymentStatusPage() {
   const router = useRouter();
-  const referenceNumber = searchParams.get("ref");
-
+  const [referenceNumber, setReferenceNumber] = useState<string | null>(null);
   const [status, setStatus] = useState<PaymentStatus>("pending");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setReferenceNumber(params.get("ref"));
+    }
+  }, []);
 
   useEffect(() => {
     if (!referenceNumber) {
@@ -213,19 +218,5 @@ function PaymentStatusContent() {
         </Card>
       </div>
     </div>
-  );
-}
-
-export default function PaymentStatusPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="container mx-auto px-4 py-16 text-center">
-          <p>Loading payment status...</p>
-        </div>
-      }
-    >
-      <PaymentStatusContent />
-    </Suspense>
   );
 }

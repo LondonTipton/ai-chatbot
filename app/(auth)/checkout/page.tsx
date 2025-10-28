@@ -1,7 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useEffect, useState } from "react";
 import { CheckoutForm } from "@/components/checkout-form";
 import { CheckCircleFillIcon } from "@/components/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,9 +50,16 @@ const planDetails = {
   },
 };
 
-function CheckoutContent() {
-  const searchParams = useSearchParams();
-  const plan = searchParams.get("plan") as keyof typeof planDetails;
+export default function CheckoutPage() {
+  const [plan, setPlan] = useState<keyof typeof planDetails | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const planParam = params.get("plan") as keyof typeof planDetails;
+      setPlan(planParam);
+    }
+  }, []);
 
   if (!plan || !planDetails[plan]) {
     return (
@@ -125,19 +131,5 @@ function CheckoutContent() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function CheckoutPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="container mx-auto px-4 py-16 text-center">
-          <p>Loading...</p>
-        </div>
-      }
-    >
-      <CheckoutContent />
-    </Suspense>
   );
 }

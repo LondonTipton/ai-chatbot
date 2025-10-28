@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AuthForm } from "@/components/auth-form";
@@ -10,8 +10,6 @@ import { useAuth } from "@/hooks/use-auth";
 
 export default function Page() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const returnUrl = searchParams.get("returnUrl") || "/";
   const { login } = useAuth();
 
   const [status, setStatus] = useState<
@@ -55,13 +53,13 @@ export default function Page() {
           );
 
           // Navigate to cookie bridge which will set cookies via JS and redirect
-          window.location.href = `/api/auth/cookie-bridge?sessionId=${session.sessionId}&userId=${session.userId}&returnUrl=${encodeURIComponent(returnUrl)}`;
+          window.location.href = `/api/auth/cookie-bridge?sessionId=${session.sessionId}&userId=${session.userId}&returnUrl=${encodeURIComponent("/")}`;
         } catch (error) {
           console.warn(
             "[login] Failed to parse temp session data, using fallback redirect"
           );
           setTimeout(() => {
-            window.location.href = returnUrl;
+            window.location.href = "/";
           }, 500);
         }
       } else {
@@ -69,11 +67,11 @@ export default function Page() {
           "[login] No temp session data, using direct redirect with delay..."
         );
         setTimeout(() => {
-          window.location.href = returnUrl;
+          window.location.href = "/";
         }, 1000);
       }
     }
-  }, [status, returnUrl]);
+  }, [status]);
 
   return (
     <div className="flex h-dvh w-screen items-start justify-center bg-background pt-12 md:items-center md:pt-0">
@@ -97,7 +95,7 @@ export default function Page() {
             {"Don't have an account? "}
             <Link
               className="font-semibold text-gray-800 hover:underline dark:text-zinc-200"
-              href={`/register${returnUrl !== "/" ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ""}`}
+              href="/register"
             >
               Sign up
             </Link>
