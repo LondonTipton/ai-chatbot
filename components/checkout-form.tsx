@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -12,8 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface CheckoutFormProps {
   plan: string;
@@ -81,9 +81,9 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
       console.error("Payment error:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Failed to process payment";
-      
+
       toast.error(errorMessage);
-      
+
       // If it's a configuration error, suggest checking setup
       if (
         errorMessage.includes("not configured") ||
@@ -93,7 +93,7 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
           toast.info("Check payment setup at /payment/setup");
         }, 2000);
       }
-      
+
       setLoading(false);
     }
   };
@@ -114,13 +114,13 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
             <Input
               disabled={loading}
               id="name"
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
               placeholder="John Doe"
               required
               type="text"
               value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
             />
           </div>
 
@@ -129,13 +129,13 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
             <Input
               disabled={loading}
               id="email"
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
               placeholder="john@example.com"
               required
               type="email"
               value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
             />
           </div>
 
@@ -144,13 +144,13 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
             <Input
               disabled={loading}
               id="phone"
+              onChange={(e) =>
+                setFormData({ ...formData, phone: e.target.value })
+              }
               placeholder="0771234567"
               required
               type="tel"
               value={formData.phone}
-              onChange={(e) =>
-                setFormData({ ...formData, phone: e.target.value })
-              }
             />
             <p className="text-muted-foreground text-xs">
               Enter your Ecocash number (e.g., 0771234567)

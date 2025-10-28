@@ -389,8 +389,8 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
           (isQueueExceeded
             ? "Queue exceeded"
             : isServerError
-            ? "Server error"
-            : "Quota exceeded"),
+              ? "Server error"
+              : "Quota exceeded"),
         retryDelay
       );
     } else {

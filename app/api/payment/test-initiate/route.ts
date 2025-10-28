@@ -95,9 +95,8 @@ export async function GET(request: NextRequest) {
 
     let transactionResponse;
     try {
-      transactionResponse = await pesepayService.initiateSeamlessTransaction(
-        testData
-      );
+      transactionResponse =
+        await pesepayService.initiateSeamlessTransaction(testData);
       console.log("✓ Transaction initiated:", transactionResponse);
     } catch (error) {
       console.error("✗ Failed to initiate transaction:", error);
@@ -114,9 +113,8 @@ export async function GET(request: NextRequest) {
     console.log("\n4. Checking transaction status...");
     let statusResponse;
     try {
-      statusResponse = await pesepayService.checkTransactionStatus(
-        referenceNumber
-      );
+      statusResponse =
+        await pesepayService.checkTransactionStatus(referenceNumber);
       console.log("✓ Status check:", statusResponse);
     } catch (error) {
       console.error("✗ Failed to check status:", error);

@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
       transactionStatus === "SUCCESS"
         ? "completed"
         : transactionStatus === "FAILED"
-        ? "failed"
-        : "pending";
+          ? "failed"
+          : "pending";
 
     await db
       .update(payment)
@@ -105,8 +105,8 @@ export async function GET(request: NextRequest) {
       transactionStatus === "SUCCESS"
         ? "completed"
         : transactionStatus === "FAILED"
-        ? "failed"
-        : "pending";
+          ? "failed"
+          : "pending";
 
     await db
       .update(payment)

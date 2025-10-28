@@ -1,16 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/app/(auth)/auth";
+import { and, eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/appwrite/auth";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
 import { pesepayService } from "@/lib/payment/pesepay-service";
-import { eq, and } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
+    const user = await getCurrentUser();
 
-    if (!session || !session.user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get local user from database using Appwrite ID
+    const localUser = await db.query.user.findFirst({
+      where: (users: any, { eq }: any) => eq(users.appwriteId, user.$id),
+    });
+
+    if (!localUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -26,10 +35,7 @@ export async function GET(request: NextRequest) {
     // Get payment from database
     const paymentRecord = await db.query.payment.findFirst({
       where: (p: any, { and, eq }: any) =>
-        and(
-          eq(p.referenceNumber, referenceNumber),
-          eq(p.userId, session.user.id)
-        ),
+        and(eq(p.referenceNumber, referenceNumber), eq(p.userId, localUser.id)),
     });
 
     if (!paymentRecord) {
@@ -37,17 +43,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Check status with Pesepay
-    const statusResponse = await pesepayService.checkTransactionStatus(
-      referenceNumber
-    );
+    const statusResponse =
+      await pesepayService.checkTransactionStatus(referenceNumber);
 
     // Update payment status in database
     const newStatus =
       statusResponse.transactionStatus === "SUCCESS"
         ? "completed"
         : statusResponse.transactionStatus === "FAILED"
-        ? "failed"
-        : "pending";
+          ? "failed"
+          : "pending";
 
     await db
       .update(payment)
@@ -61,7 +66,7 @@ export async function GET(request: NextRequest) {
     // If payment successful, activate subscription
     if (newStatus === "completed") {
       const userSubscription = await db.query.subscription.findFirst({
-        where: (sub: any, { eq }: any) => eq(sub.userId, session.user.id),
+        where: (sub: any, { eq }: any) => eq(sub.userId, localUser.id),
       });
 
       if (userSubscription) {

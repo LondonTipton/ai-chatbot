@@ -15,6 +15,9 @@
     "db:pull": "drizzle-kit pull",
     "db:check": "drizzle-kit check",
     "db:up": "drizzle-kit up",
+    "migrate:users": "npx tsx scripts/migrate-users-to-appwrite.ts",
+    "migrate:send-reset": "npx tsx scripts/send-password-reset-notifications.ts",
+    "migrate:test": "npx tsx scripts/test-migration.ts",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test"
   },
   "dependencies": {
@@ -45,6 +48,7 @@
     "@vercel/otel": "^1.12.0",
     "@vercel/postgres": "^0.10.0",
     "ai": "5.0.26",
+    "appwrite": "^21.2.1",
     "axios": "^1.12.2",
     "bcrypt-ts": "^5.0.2",
     "class-variance-authority": "^0.7.1",
@@ -63,8 +67,8 @@
     "lucide-react": "^0.446.0",
     "nanoid": "^5.0.8",
     "next": "15.3.0-canary.31",
-    "next-auth": "5.0.0-beta.25",
     "next-themes": "^0.3.0",
+    "node-appwrite": "^20.2.1",
     "orderedmap": "^2.1.1",
     "papaparse": "^5.5.2",
     "pesepay": "^1.0.4",

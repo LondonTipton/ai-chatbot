@@ -1,4 +1,5 @@
 import type { InferUITool, UIMessage } from "ai";
+import type { Models } from "appwrite";
 import { z } from "zod";
 import type { ArtifactKind } from "@/components/artifact";
 import type { createDocument } from "./ai/tools/create-document";
@@ -8,6 +9,16 @@ import type { tavilySearch } from "./ai/tools/tavily-search";
 import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
 import type { AppUsage } from "./usage";
+
+// Session type compatible with Appwrite
+export type Session = {
+  user?: {
+    id: string;
+    email?: string;
+    name?: string;
+  };
+  appwriteSession?: Models.Session;
+};
 
 export type DataPart = { type: "append-message"; message: string };
 

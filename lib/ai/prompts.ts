@@ -258,19 +258,19 @@ Current document content:
 ${currentContent}
 `
     : type === "code"
-    ? `\
+      ? `\
 Improve the following code snippet based on the given prompt.
 
 CRITICAL: Output ONLY the updated code. Do NOT include explanatory text before or after the code.
 
 ${currentContent}
 `
-    : type === "sheet"
-    ? `\
+      : type === "sheet"
+        ? `\
 Improve the following spreadsheet based on the given prompt.
 
 CRITICAL: Output ONLY the updated spreadsheet data in CSV format. Do NOT include explanatory text.
 
 ${currentContent}
 `
-    : "";
+        : "";

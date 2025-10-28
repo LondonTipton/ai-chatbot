@@ -274,8 +274,8 @@ function PureMultimodalInput({
       />
 
       <div className="group relative">
-        <div className="pointer-events-none absolute -inset-[2px] rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-30 group-focus-within:opacity-40">
-          <div className="absolute inset-0 animate-[gradient-rotate_6s_ease-in-out_infinite] rounded-xl bg-gradient-to-r from-blue-500 via-blue-600 to-cyan-500 bg-[length:200%_200%] blur-[2px]" />
+        <div className="-inset-[2px] pointer-events-none absolute rounded-xl opacity-0 transition-opacity duration-300 group-focus-within:opacity-40 group-hover:opacity-30">
+          <div className="absolute inset-0 animate-[gradient-rotate_6s_ease-in-out_infinite] rounded-xl bg-[length:200%_200%] bg-gradient-to-r from-blue-500 via-blue-600 to-cyan-500 blur-[2px]" />
         </div>
         <PromptInput
           className="relative rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200"
