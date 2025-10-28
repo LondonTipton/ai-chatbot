@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { toast } from "@/components/toast";
 import { createBrowserClient } from "@/lib/appwrite/config";
 
+export const dynamic = "force-dynamic";
+
 export default function VerifyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

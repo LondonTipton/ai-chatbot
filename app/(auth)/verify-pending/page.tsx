@@ -5,6 +5,8 @@ import { useState } from "react";
 import { toast } from "@/components/toast";
 import { useAuth } from "@/hooks/use-auth";
 
+export const dynamic = "force-dynamic";
+
 export default function VerifyPendingPage() {
   const router = useRouter();
   const { user, resendVerification, logout } = useAuth();
