@@ -11,6 +11,7 @@ export type AuthContextValue = {
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  resendVerification: () => Promise<void>;
 };
 
 // Export the context so it can be used by the provider
