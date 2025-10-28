@@ -24,13 +24,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("[AuthProvider] Fetching user and session...");
 
-      // Check if we have any cookies at all
-      const allCookies = document.cookie;
-      console.log(
-        "[AuthProvider] All cookies:",
-        allCookies.substring(0, 200) + (allCookies.length > 200 ? "..." : "")
-      );
-
       const { account } = createBrowserClient();
 
       // Get current user
@@ -48,10 +41,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(currentSession || null);
 
       return { user: currentUser, session: currentSession || null };
-    } catch (error) {
-      // User is not authenticated or session expired
-      console.log("[AuthProvider] Session expired or invalid:", error);
-      console.log("[AuthProvider] Error details:", error);
+    } catch (error: any) {
+      // Check if this is a guest user (not logged in) - this is expected
+      if (error?.code === 401 || error?.message?.includes("guests")) {
+        console.log("[AuthProvider] No active session (guest user)");
+        setUser(null);
+        setSession(null);
+        return { user: null, session: null };
+      }
+
+      // For other errors, log them
+      console.log("[AuthProvider] Session error:", error);
 
       // Clear any invalid session cookies
       try {
@@ -62,8 +62,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // Ignore errors
       }
-
-      // Note: We don't manipulate Appwrite cookies client-side; Browser SDK handles cleanup best-effort.
 
       setUser(null);
       setSession(null);
