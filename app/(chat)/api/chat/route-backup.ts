@@ -17,16 +17,14 @@ import type { ModelCatalog } from "tokenlens/core";
 import { fetchModels } from "tokenlens/fetch";
 import { getUsage } from "tokenlens/helpers";
 import type { VisibilityType } from "@/components/visibility-selector";
-import { detectQueryComplexity } from "@/lib/ai/complexity-detector";
+import { defaultEntitlements } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
-import { tavilyAdvancedSearch } from "@/lib/ai/tools/tavily-advanced-search";
 import { tavilyExtract } from "@/lib/ai/tools/tavily-extract";
-import { tavilyQna } from "@/lib/ai/tools/tavily-qna";
 import { tavilySearch } from "@/lib/ai/tools/tavily-search";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { auth } from "@/lib/appwrite/server-auth";
@@ -35,8 +33,10 @@ import {
   createStreamId,
   deleteChatById,
   getChatById,
+  getMessageCountByUserId,
   getMessagesByChatId,
   getUserByAppwriteId,
+  getUserById,
   saveChat,
   saveMessages,
   updateChatLastContextById,
@@ -94,7 +94,7 @@ export function getStreamContext() {
 
 export async function POST(request: Request) {
   console.log("=".repeat(80));
-  console.log("🔵 INTELLIGENT ROUTING CHAT ROUTE");
+  console.log("🔵 MAIN CHAT ROUTE INVOKED");
   console.log("=".repeat(80));
 
   let requestBody: PostRequestBody;
@@ -119,22 +119,15 @@ export async function POST(request: Request) {
       selectedVisibilityType: VisibilityType;
     } = requestBody;
 
-    // Extract user message text for complexity detection
-    const userMessageText =
-      typeof message.parts[0] === "object" && "text" in message.parts[0]
-        ? message.parts[0].text
-        : "";
-
-    // Detect query complexity
-    const complexityAnalysis = detectQueryComplexity(userMessageText);
-
-    console.log(`[Routing] 💬 Chat ID: ${id}`);
-    console.log(`[Routing] 🤖 Selected Model: ${selectedChatModel}`);
+    console.log(`[Main Chat] 💬 Chat ID: ${id}`);
+    console.log(`[Main Chat] 🤖 Selected Model: ${selectedChatModel}`);
     console.log(
-      `[Routing] 📝 Query: "${userMessageText.substring(0, 100)}..."`
+      `[Main Chat] 📝 Message: ${
+        typeof message.parts[0] === "object" && "text" in message.parts[0]
+          ? message.parts[0].text.substring(0, 100)
+          : "N/A"
+      }...`
     );
-    console.log(`[Routing] 🎯 Complexity: ${complexityAnalysis.complexity}`);
-    console.log(`[Routing] 💡 Reasoning: ${complexityAnalysis.reasoning}`);
 
     const session = await auth();
 
@@ -228,97 +221,50 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
 
-    // Select tools based on complexity
-    let activeTools: string[];
-    let toolsConfig: any;
-
-    if (complexityAnalysis.complexity === "simple") {
-      // Simple Q&A - use QNA search
-      console.log("[Routing] 🔵 Using AI SDK with QNA search (simple)");
-      activeTools = ["tavilyQna", "createDocument", "updateDocument"];
-      toolsConfig = {
-        tavilyQna,
-        createDocument,
-        updateDocument,
-      };
-    } else if (complexityAnalysis.complexity === "light") {
-      // Light research - use advanced search
-      console.log("[Routing] 🔵 Using AI SDK with advanced search (light)");
-      activeTools = [
-        "tavilyAdvancedSearch",
-        "createDocument",
-        "updateDocument",
-        "requestSuggestions",
-      ];
-      toolsConfig = {
-        tavilyAdvancedSearch,
-        createDocument,
-        updateDocument,
-        requestSuggestions,
-      };
-    } else {
-      // Medium/Deep/Workflow - use standard tools (Mastra disabled for now)
-      console.log(
-        `[Routing] 🔵 Using AI SDK with standard tools (${complexityAnalysis.complexity})`
-      );
-      activeTools = [
-        "getWeather",
-        "createDocument",
-        "updateDocument",
-        "requestSuggestions",
-        "tavilySearch",
-        "tavilyExtract",
-      ];
-      toolsConfig = {
-        getWeather,
-        tavilySearch,
-        tavilyExtract,
-        createDocument,
-        updateDocument,
-        requestSuggestions,
-      };
-    }
-
     console.log(
-      `[Routing] 🚀 Starting stream with model: ${selectedChatModel}`
+      `[Main Chat] 🚀 Starting stream with model: ${selectedChatModel}`
     );
-    console.log(`[Routing] 🛠️  Active tools: ${activeTools.join(", ")}`);
-    console.log(`[Routing] 📊 Message count: ${uiMessages.length}`);
+    console.log(`[Main Chat] 📊 Message count: ${uiMessages.length}`);
 
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
-        // Update tools with dataStream
-        const updatedTools = {
-          ...(toolsConfig.tavilyQna && { tavilyQna }),
-          ...(toolsConfig.tavilyAdvancedSearch && { tavilyAdvancedSearch }),
-          ...(toolsConfig.tavilySearch && {
-            tavilySearch: tavilySearch({ dataStream }),
-          }),
-          ...(toolsConfig.tavilyExtract && {
-            tavilyExtract: tavilyExtract({ dataStream }),
-          }),
-          ...(toolsConfig.createDocument && {
-            createDocument: createDocument({ session, dataStream }),
-          }),
-          ...(toolsConfig.updateDocument && {
-            updateDocument: updateDocument({ session, dataStream }),
-          }),
-          ...(toolsConfig.requestSuggestions && {
-            requestSuggestions: requestSuggestions({ session, dataStream }),
-          }),
-          ...(toolsConfig.getWeather && { getWeather }),
-        };
+        console.log(
+          `[Main Chat] Executing streamText with provider: ${
+            myProvider.languageModel(selectedChatModel).modelId
+          }`
+        );
 
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
-          stopWhen: stepCountIs(15), // Increased to allow text generation after tools
-          maxRetries: 5,
+          stopWhen: stepCountIs(10), // Increased from 5 to allow text generation after tools
+          maxRetries: 5, // Try all 5 keys before failing
+          // With proper key rotation, this should be fast (each key tried once)
+          // Previous slow performance was due to broken error detection, now fixed
           experimental_activeTools:
-            selectedChatModel === "chat-model-reasoning" ? [] : activeTools,
+            selectedChatModel === "chat-model-reasoning"
+              ? []
+              : [
+                  "getWeather",
+                  "createDocument",
+                  "updateDocument",
+                  "requestSuggestions",
+                  "tavilySearch",
+                  "tavilyExtract",
+                ],
           experimental_transform: smoothStream({ chunking: "word" }),
-          tools: updatedTools,
+          tools: {
+            getWeather,
+            tavilySearch: tavilySearch({ dataStream }),
+            tavilyExtract: tavilyExtract({ dataStream }),
+            createDocument: createDocument({ session, dataStream }),
+            updateDocument: updateDocument({ session, dataStream }),
+            requestSuggestions: requestSuggestions({
+              session,
+              dataStream,
+            }),
+          },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: "stream-text",
