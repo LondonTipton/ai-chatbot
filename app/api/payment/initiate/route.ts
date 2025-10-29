@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/appwrite/auth";
+import { auth } from "@/lib/appwrite/server-auth";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
 import { pesepayService } from "@/lib/payment/pesepay-service";
@@ -22,19 +22,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await getCurrentUser();
+    const session = await auth();
 
-    if (!user) {
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Verify user exists in database using Appwrite ID
     const existingUser = await db.query.user.findFirst({
-      where: (users: any, { eq }: any) => eq(users.appwriteId, user.$id),
+      where: (users: any, { eq }: any) => eq(users.appwriteId, session.user.id),
     });
 
     if (!existingUser) {
-      console.error("User not found in database:", user.$id);
+      console.error("User not found in database:", session.user.id);
       return NextResponse.json(
         {
           error: "User session invalid. Please refresh the page and try again.",
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
     const redirectUrl =
       transactionResponse.redirectUrl || transactionResponse.pollUrl;
 
-    // Update payment with Pesepay response
+    // Update payment with Pesepay response (includes their reference number)
     await db
       .update(payment)
       .set({

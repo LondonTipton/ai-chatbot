@@ -2,7 +2,7 @@
 
 import { CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -12,38 +12,78 @@ type PaymentStatus = "pending" | "completed" | "failed";
 
 export default function PaymentStatusPage() {
   const router = useRouter();
-  const [referenceNumber, setReferenceNumber] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const referenceNumber = searchParams.get("ref");
   const [status, setStatus] = useState<PaymentStatus>("pending");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      setReferenceNumber(params.get("ref"));
-    }
-  }, []);
+  console.log("[Payment Status Page] Reference from URL:", referenceNumber);
 
   useEffect(() => {
     if (!referenceNumber) {
+      console.error("[Payment Status Page] No reference number in URL");
       setError("Invalid payment reference");
       setLoading(false);
       return;
     }
 
+    console.log(
+      "[Payment Status Page] Starting status check for:",
+      referenceNumber
+    );
+
     let pollInterval: NodeJS.Timeout;
+    let timeoutTimer: NodeJS.Timeout;
+    const startTime = Date.now();
+    const TIMEOUT_DURATION = 3 * 60 * 1000; // 3 minutes
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 3;
 
     const checkStatus = async () => {
       try {
+        // Check if we've exceeded the timeout
+        const elapsed = Date.now() - startTime;
+        if (elapsed > TIMEOUT_DURATION) {
+          console.warn("[Payment Status Page] Payment timeout reached");
+          clearInterval(pollInterval);
+          setStatus("failed");
+          setError(
+            "Payment timeout. The payment was not completed within 3 minutes. Please try again or contact support if you were charged."
+          );
+          setLoading(false);
+          return;
+        }
+
         const response = await fetch(
           `/api/payment/status?ref=${referenceNumber}`
         );
         const data = await response.json();
 
         if (!response.ok) {
+          // Check if it's a transient error (401, 500, network issues)
+          if (response.status === 401 || response.status >= 500) {
+            consecutiveErrors++;
+            console.warn(
+              `[Payment Status Page] Transient error (${response.status}), retry ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}`
+            );
+
+            // Only fail after multiple consecutive errors
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              throw new Error(
+                data.error || "Failed to check status after multiple retries"
+              );
+            }
+            // Don't throw, just continue polling
+            return;
+          }
+
           throw new Error(data.error || "Failed to check status");
         }
+
+        // Reset error counter on success
+        consecutiveErrors = 0;
 
         setPaymentDetails(data);
         setStatus(data.status);
@@ -51,15 +91,28 @@ export default function PaymentStatusPage() {
         // Stop polling if payment is completed or failed
         if (data.status === "completed" || data.status === "failed") {
           clearInterval(pollInterval);
+          clearTimeout(timeoutTimer);
           setLoading(false);
         }
       } catch (err) {
-        console.error("Status check error:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to check payment status"
+        consecutiveErrors++;
+        console.error(
+          `Status check error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`,
+          err
         );
-        setLoading(false);
-        clearInterval(pollInterval);
+
+        // Only show error and stop polling after multiple consecutive failures
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to check payment status"
+          );
+          setLoading(false);
+          clearInterval(pollInterval);
+          clearTimeout(timeoutTimer);
+        }
+        // Otherwise, continue polling - it might be a transient error
       }
     };
 
@@ -69,10 +122,24 @@ export default function PaymentStatusPage() {
     // Poll every 5 seconds
     pollInterval = setInterval(checkStatus, 5000);
 
+    // Set timeout to stop polling after 3 minutes
+    timeoutTimer = setTimeout(() => {
+      console.warn("[Payment Status Page] Payment timeout reached (timer)");
+      clearInterval(pollInterval);
+      setStatus("failed");
+      setError(
+        "Payment timeout. The payment was not completed within 3 minutes. Please try again or contact support if you were charged."
+      );
+      setLoading(false);
+    }, TIMEOUT_DURATION);
+
     // Cleanup
     return () => {
       if (pollInterval) {
         clearInterval(pollInterval);
+      }
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
       }
     };
   }, [referenceNumber]);
