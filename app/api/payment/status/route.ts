@@ -9,13 +9,14 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth();
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get local user from database using Appwrite ID
     const localUser = await db.query.user.findFirst({
-      where: (users: any, { eq }: any) => eq(users.appwriteId, session.user.id),
+      where: (users: any, { eq }: any) =>
+        eq(users.appwriteId, session.user!.id),
     });
 
     if (!localUser) {
