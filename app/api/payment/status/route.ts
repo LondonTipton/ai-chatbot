@@ -1,21 +1,21 @@
 import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/appwrite/auth";
+import { auth } from "@/lib/appwrite/server-auth";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
 import { pesepayService } from "@/lib/payment/pesepay-service";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const session = await auth();
 
-    if (!user) {
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get local user from database using Appwrite ID
     const localUser = await db.query.user.findFirst({
-      where: (users: any, { eq }: any) => eq(users.appwriteId, user.$id),
+      where: (users: any, { eq }: any) => eq(users.appwriteId, session.user.id),
     });
 
     if (!localUser) {
@@ -42,17 +42,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     }
 
-    // Check status with Pesepay
-    const statusResponse =
-      await pesepayService.checkTransactionStatus(referenceNumber);
+    // Extract Pesepay's reference number from the stored response
+    const pesepayResponse = paymentRecord.pesepayResponse as any;
+    const pesepayReferenceNumber = pesepayResponse?.referenceNumber;
+
+    if (!pesepayReferenceNumber) {
+      console.error("No Pesepay reference number found in payment record");
+      return NextResponse.json(
+        { error: "Invalid payment record" },
+        { status: 500 }
+      );
+    }
+
+    console.log(
+      `[Payment Status] Checking Pesepay status with reference: ${pesepayReferenceNumber}`
+    );
+
+    // Check status with Pesepay using their reference number
+    const statusResponse = await pesepayService.checkTransactionStatus(
+      pesepayReferenceNumber
+    );
 
     // Update payment status in database
     const newStatus =
       statusResponse.transactionStatus === "SUCCESS"
         ? "completed"
         : statusResponse.transactionStatus === "FAILED"
-          ? "failed"
-          : "pending";
+        ? "failed"
+        : "pending";
 
     await db
       .update(payment)
@@ -89,10 +106,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       status: newStatus,
       transactionStatus: statusResponse.transactionStatus,
-      amount: statusResponse.amount,
-      currency: statusResponse.currency,
-      paymentMethod: statusResponse.paymentMethod,
-      referenceNumber: statusResponse.referenceNumber,
+      // Use amount from our payment record if Pesepay doesn't return it
+      amount: statusResponse.amount || paymentRecord.amount,
+      currency: statusResponse.currency || paymentRecord.currency,
+      paymentMethod:
+        statusResponse.paymentMethod || paymentRecord.paymentMethod,
+      referenceNumber: statusResponse.referenceNumber || referenceNumber,
     });
   } catch (error) {
     console.error("Status check error:", error);
