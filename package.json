@@ -18,7 +18,8 @@
     "migrate:users": "npx tsx scripts/migrate-users-to-appwrite.ts",
     "migrate:send-reset": "npx tsx scripts/send-password-reset-notifications.ts",
     "migrate:test": "npx tsx scripts/test-migration.ts",
-    "test": "export PLAYWRIGHT=True && pnpm exec playwright test"
+    "test": "export PLAYWRIGHT=True && pnpm exec playwright test",
+    "test:routing": "npx tsx scripts/test-routing.ts"
   },
   "dependencies": {
     "@ai-sdk/cerebras": "^1.0.25",
