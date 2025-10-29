@@ -174,15 +174,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public routes that don't require authentication
-  const publicRoutes = [
-    "/login",
-    "/register",
-    "/reset-password",
-    "/verify",
-    "/verify-pending",
-  ];
+  const publicRoutes = ["/login", "/register", "/reset-password", "/verify"];
   const isWellKnown = pathname.startsWith("/.well-known");
   const isPublicRoute = publicRoutes.includes(pathname);
+
+  // verify-pending is semi-protected - requires a session but not verification
+  const isVerifyPending = pathname === "/verify-pending";
 
   // Extract session cookie (primary: Appwrite cookie; fallback: our cookie)
   const sessionToken = getSessionCookie(request);
@@ -390,7 +387,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // If no valid session and trying to access protected route, redirect to login
-  if (!validationResult && !isPublicRoute && !isWellKnown) {
+  if (!validationResult && !isPublicRoute && !isWellKnown && !isVerifyPending) {
     console.log(
       "[middleware] No valid session, redirecting to login from",
       pathname
@@ -426,8 +423,16 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // If valid session exists and user is on auth pages (except verify-pending), redirect appropriately
-  if (validationResult && (isPublicRoute || isWellKnown)) {
+  // Special handling for verify-pending: if no session, redirect to login
+  if (!validationResult && isVerifyPending) {
+    console.log(
+      "[middleware] No session on verify-pending page, redirecting to login"
+    );
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // If valid session exists and user is on auth pages, redirect appropriately
+  if (validationResult && (isPublicRoute || isWellKnown || isVerifyPending)) {
     const { user: authUser } = validationResult;
 
     // If user is not verified and not on verify/verify-pending pages, redirect to verify-pending
@@ -459,6 +464,11 @@ export async function middleware(request: NextRequest) {
         "[middleware] Verified user on auth page, redirecting to home"
       );
       return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    // If user is on verify-pending with valid session, allow through
+    if (pathname === "/verify-pending") {
+      return NextResponse.next();
     }
   }
 
@@ -498,6 +508,8 @@ export const config = {
     "/chat/:id",
     "/login",
     "/register",
+    "/verify-pending",
+    "/verify",
 
     /*
      * Match all request paths except for the ones starting with:

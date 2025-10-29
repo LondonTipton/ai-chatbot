@@ -1,18 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "@/components/toast";
 import { useAuth } from "@/hooks/use-auth";
 
 function VerifyPendingContent() {
-  const router = useRouter();
   const { user, resendVerification, logout } = useAuth();
   const [isResending, setIsResending] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("");
+
+  // Store email in localStorage and state to persist across page reloads
+  useEffect(() => {
+    if (user?.email) {
+      setUserEmail(user.email);
+      localStorage.setItem("pending-verification-email", user.email);
+    } else {
+      // Try to restore from localStorage if user is not loaded yet
+      const storedEmail = localStorage.getItem("pending-verification-email");
+      if (storedEmail) {
+        setUserEmail(storedEmail);
+      }
+    }
+  }, [user]);
 
   const handleResend = async () => {
+    if (!user && !userEmail) {
+      toast({
+        type: "error",
+        description:
+          "Unable to resend verification email. Please try logging in again.",
+      });
+      return;
+    }
+
     setIsResending(true);
     try {
       await resendVerification();
@@ -21,6 +44,7 @@ function VerifyPendingContent() {
         description: "Verification email sent! Please check your inbox.",
       });
     } catch (error: any) {
+      console.error("Resend verification error:", error);
       toast({
         type: "error",
         description: error?.message || "Failed to send verification email.",
@@ -31,12 +55,28 @@ function VerifyPendingContent() {
   };
 
   const handleLogout = async () => {
+    setIsLoggingOut(true);
     try {
+      // Clear stored email
+      localStorage.removeItem("pending-verification-email");
+
+      // Call logout from auth context
       await logout();
-      router.push("/login");
-      router.refresh();
+
+      // Call server-side logout to ensure cookies are cleared
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      // Force redirect to login
+      window.location.href = "/login";
     } catch (error) {
       console.error("Logout error:", error);
+
+      // Even if logout fails, clear local state and redirect
+      localStorage.removeItem("pending-verification-email");
+      window.location.href = "/login";
     }
   };
 
@@ -86,7 +126,7 @@ function VerifyPendingContent() {
               We've sent a verification email to:
             </p>
             <p className="font-medium text-gray-900 text-sm dark:text-zinc-50">
-              {user?.email || "your email address"}
+              {userEmail || user?.email || "your email address"}
             </p>
             <p className="text-gray-500 text-sm dark:text-zinc-400">
               Please check your inbox and click the verification link to access
@@ -97,7 +137,7 @@ function VerifyPendingContent() {
           <div className="mt-4 w-full space-y-3">
             <button
               className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-              disabled={isResending}
+              disabled={isResending || isLoggingOut}
               onClick={handleResend}
               type="button"
             >
@@ -105,11 +145,12 @@ function VerifyPendingContent() {
             </button>
 
             <button
-              className="w-full rounded-md border border-gray-300 px-4 py-2 text-gray-700 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="w-full rounded-md border border-gray-300 px-4 py-2 text-gray-700 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              disabled={isLoggingOut}
               onClick={handleLogout}
               type="button"
             >
-              Sign Out
+              {isLoggingOut ? "Signing Out..." : "Sign Out"}
             </button>
           </div>
 
