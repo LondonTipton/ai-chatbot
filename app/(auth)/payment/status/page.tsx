@@ -3,14 +3,14 @@
 import { CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type PaymentStatus = "pending" | "completed" | "failed";
 
-export default function PaymentStatusPage() {
+function PaymentStatusContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const referenceNumber = searchParams.get("ref");
@@ -300,5 +300,19 @@ export default function PaymentStatusPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function PaymentStatusPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="size-8 animate-spin" />
+        </div>
+      }
+    >
+      <PaymentStatusContent />
+    </Suspense>
   );
 }
