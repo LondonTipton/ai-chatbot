@@ -24,13 +24,14 @@ export async function POST(request: NextRequest) {
 
     const session = await auth();
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Verify user exists in database using Appwrite ID
     const existingUser = await db.query.user.findFirst({
-      where: (users: any, { eq }: any) => eq(users.appwriteId, session.user.id),
+      where: (users: any, { eq }: any) =>
+        eq(users.appwriteId, session.user!.id),
     });
 
     if (!existingUser) {
