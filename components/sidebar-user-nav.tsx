@@ -3,7 +3,6 @@
 import { ChevronUp } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +30,6 @@ type SidebarUserNavProps = {
 export function SidebarUserNav({ user }: SidebarUserNavProps) {
   const router = useRouter();
   const { user: authUser, isLoading, logout: authLogout } = useAuth();
-  const { setTheme, resolvedTheme } = useTheme();
 
   const handleLogout = async () => {
     try {
@@ -131,16 +129,6 @@ export function SidebarUserNav({ user }: SidebarUserNavProps) {
             data-testid="user-nav-menu"
             side="top"
           >
-            <DropdownMenuItem
-              className="cursor-pointer"
-              data-testid="user-nav-item-theme"
-              onSelect={() =>
-                setTheme(resolvedTheme === "dark" ? "light" : "dark")
-              }
-            >
-              {`Toggle ${resolvedTheme === "light" ? "dark" : "light"} mode`}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem
               className="cursor-pointer"
               data-testid="user-nav-item-pricing"

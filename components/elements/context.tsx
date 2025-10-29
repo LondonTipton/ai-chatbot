@@ -71,30 +71,13 @@ export const ContextIcon = ({ percent }: ContextIconProps) => {
   );
 };
 
-function InfoRow({
-  label,
-  tokens,
-  costText,
-}: {
-  label: string;
-  tokens?: number;
-  costText?: string;
-}) {
+function InfoRow({ label, tokens }: { label: string; tokens?: number }) {
   return (
     <div className="flex items-center justify-between text-xs">
       <span className="text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-2 font-mono">
-        <span className="min-w-[4ch] text-right">
-          {tokens === undefined ? "—" : tokens.toLocaleString()}
-        </span>
-        {costText !== undefined &&
-          costText !== null &&
-          !Number.isNaN(Number.parseFloat(costText)) && (
-            <span className="text-muted-foreground">
-              ${Number.parseFloat(costText).toFixed(6)}
-            </span>
-          )}
-      </div>
+      <span className="font-mono">
+        {tokens === undefined ? "—" : tokens.toLocaleString()}
+      </span>
     </div>
   );
 }
@@ -138,24 +121,11 @@ export const Context = ({ className, usage, ...props }: ContextProps) => {
           </div>
           <div className="mt-1 space-y-1">
             {usage?.cachedInputTokens && usage.cachedInputTokens > 0 && (
-              <InfoRow
-                costText={usage?.costUSD?.cacheReadUSD?.toString()}
-                label="Cache Hits"
-                tokens={usage?.cachedInputTokens}
-              />
+              <InfoRow label="Cache Hits" tokens={usage?.cachedInputTokens} />
             )}
+            <InfoRow label="Input" tokens={usage?.inputTokens} />
+            <InfoRow label="Output" tokens={usage?.outputTokens} />
             <InfoRow
-              costText={usage?.costUSD?.inputUSD?.toString()}
-              label="Input"
-              tokens={usage?.inputTokens}
-            />
-            <InfoRow
-              costText={usage?.costUSD?.outputUSD?.toString()}
-              label="Output"
-              tokens={usage?.outputTokens}
-            />
-            <InfoRow
-              costText={usage?.costUSD?.reasoningUSD?.toString()}
               label="Reasoning"
               tokens={
                 usage?.reasoningTokens && usage.reasoningTokens > 0
@@ -163,24 +133,6 @@ export const Context = ({ className, usage, ...props }: ContextProps) => {
                   : undefined
               }
             />
-            {usage?.costUSD?.totalUSD !== undefined && (
-              <>
-                <Separator className="mt-1" />
-                <div className="flex items-center justify-between pt-1 text-xs">
-                  <span className="text-muted-foreground">Total cost</span>
-                  <div className="flex items-center gap-2 font-mono">
-                    <span className="min-w-[4ch] text-right" />
-                    <span>
-                      {Number.isNaN(
-                        Number.parseFloat(usage.costUSD.totalUSD.toString())
-                      )
-                        ? "—"
-                        : `$${Number.parseFloat(usage.costUSD.totalUSD.toString()).toFixed(6)}`}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
         </div>
       </DropdownMenuContent>

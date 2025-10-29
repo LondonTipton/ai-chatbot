@@ -10,7 +10,7 @@ export function ThemeToggle({
 }: {
   className?: string;
 } & React.ComponentProps<typeof Button>) {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -28,10 +28,10 @@ export function ThemeToggle({
         className
       )}
       data-testid="theme-toggle"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       variant="outline"
     >
-      {theme === "dark" ? (
+      {resolvedTheme === "dark" ? (
         <svg
           height="16"
           strokeLinejoin="round"
@@ -61,7 +61,9 @@ export function ThemeToggle({
         </svg>
       )}
       <span className="sr-only">
-        {theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        {resolvedTheme === "dark"
+          ? "Switch to light mode"
+          : "Switch to dark mode"}
       </span>
     </Button>
   );

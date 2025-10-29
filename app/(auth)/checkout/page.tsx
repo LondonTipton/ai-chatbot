@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CheckoutForm } from "@/components/checkout-form";
 import { CheckCircleFillIcon } from "@/components/icons";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const planDetails = {
@@ -56,8 +59,9 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const planParam = params.get("plan") as keyof typeof planDetails;
-      setPlan(planParam);
+      const planParam = params.get("plan");
+      // URLSearchParams automatically decodes the parameter
+      setPlan(planParam as keyof typeof planDetails);
     }
   }, []);
 
@@ -78,11 +82,24 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header with Theme Toggle and DeepCounsel Button */}
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <ThemeToggle />
+          <Button
+            asChild
+            className="bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          >
+            <Link href="/">DeepCounsel</Link>
+          </Button>
+        </div>
+      </header>
+
       <div className="container mx-auto px-4 py-16">
         <div className="mb-8 text-center">
           <h1 className="mb-2 font-bold text-3xl">Complete Your Purchase</h1>
           <p className="text-muted-foreground">
-            Subscribe to {plan} plan - ${selectedPlan.price}/month
+            Get {plan} plan - ${selectedPlan.price} for 30 days
           </p>
         </div>
 
@@ -96,7 +113,7 @@ export default function CheckoutPage() {
               <div>
                 <h3 className="mb-2 font-semibold text-lg">{plan} Plan</h3>
                 <p className="text-muted-foreground text-sm">
-                  Billed monthly, renews automatically
+                  30 days of access
                 </p>
               </div>
 
@@ -120,7 +137,7 @@ export default function CheckoutPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-muted-foreground text-xs">
-                  Recurring payment every 30 days
+                  One-time payment for 30 days
                 </p>
               </div>
             </CardContent>

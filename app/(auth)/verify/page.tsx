@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "@/components/toast";
 import { createBrowserClient } from "@/lib/appwrite/config";
 
@@ -65,7 +67,24 @@ function VerifyContent() {
   }, [searchParams, router, errorMessage]);
 
   return (
-    <div className="flex h-dvh w-screen items-start justify-center bg-background pt-12 md:items-center md:pt-0">
+    <div className="relative flex h-dvh w-screen flex-col items-center justify-start bg-background pt-8 md:pt-16">
+      {/* Theme Toggle - Top Right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      {/* Large Logo at Top */}
+      <Link
+        className="mb-12 transition-opacity hover:opacity-80 md:mb-16"
+        href="https://deep-counsel.org"
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        <span className="font-bold text-4xl tracking-tight md:text-5xl dark:text-zinc-50">
+          DeepCounsel
+        </span>
+      </Link>
+
       <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8">
         <div className="flex flex-col items-center justify-center gap-4 text-center">
           {status === "verifying" && (
@@ -149,7 +168,20 @@ export default function VerifyPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-dvh w-screen items-start justify-center bg-background pt-12 md:items-center md:pt-0">
+        <div className="relative flex h-dvh w-screen flex-col items-center justify-start bg-background pt-8 md:pt-16">
+          <div className="absolute top-4 right-4">
+            <ThemeToggle />
+          </div>
+          <Link
+            className="mb-12 transition-opacity hover:opacity-80 md:mb-16"
+            href="https://deep-counsel.org"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <span className="font-bold text-4xl tracking-tight md:text-5xl dark:text-zinc-50">
+              DeepCounsel
+            </span>
+          </Link>
           <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8">
             <div className="flex flex-col items-center justify-center gap-4 text-center">
               <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900 dark:border-zinc-700 dark:border-t-zinc-50" />

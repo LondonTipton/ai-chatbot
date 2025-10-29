@@ -2,7 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/use-auth";
 
 interface CheckoutFormProps {
   plan: string;
@@ -22,12 +23,24 @@ interface CheckoutFormProps {
 
 export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
   });
+
+  // Prefill email when user is logged in
+  useEffect(() => {
+    if (user?.email) {
+      setFormData((prev) => ({
+        ...prev,
+        email: user.email,
+        name: user.name || "",
+      }));
+    }
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,7 +191,7 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
                   <li>Click "Pay with Ecocash" below</li>
                   <li>You'll receive a prompt on your phone</li>
                   <li>Enter your Ecocash PIN to complete payment</li>
-                  <li>Your subscription activates immediately</li>
+                  <li>Your plan activates immediately</li>
                 </ol>
               </div>
             </div>
@@ -196,8 +209,8 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
           </Button>
 
           <p className="text-center text-muted-foreground text-xs">
-            By completing this purchase, you agree to our terms of service. Your
-            subscription will automatically renew every 30 days.
+            By completing this purchase, you agree to our terms of service. This
+            is a one-time payment for 30 days of access.
           </p>
         </form>
       </CardContent>

@@ -1,8 +1,10 @@
 "use client";
 
 import { CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -98,6 +100,19 @@ export default function PaymentStatusPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header with Theme Toggle and DeepCounsel Button */}
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <ThemeToggle />
+          <Button
+            asChild
+            className="bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          >
+            <Link href="/">DeepCounsel</Link>
+          </Button>
+        </div>
+      </header>
+
       <div className="container mx-auto px-4 py-16">
         <Card className="mx-auto max-w-md">
           <CardHeader>
@@ -124,7 +139,7 @@ export default function PaymentStatusPage() {
                   <div className="text-center">
                     <p className="font-medium text-lg">Payment Successful!</p>
                     <p className="text-muted-foreground text-sm">
-                      Your subscription is now active
+                      Your plan is now active
                     </p>
                   </div>
                 </div>
