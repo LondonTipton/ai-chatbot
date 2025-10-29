@@ -401,20 +401,77 @@ function PureAttachmentsButton({
   selectedModelId: string;
 }) {
   const isReasoningModel = selectedModelId === "chat-model-reasoning";
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const [userPlan, setUserPlan] = useState<string | null>(null);
+  const [isCheckingPlan, setIsCheckingPlan] = useState(false);
+
+  // Check user's plan on mount
+  useEffect(() => {
+    const checkUserPlan = async () => {
+      try {
+        const response = await fetch("/api/usage/current");
+        if (response.ok) {
+          const data = await response.json();
+          setUserPlan(data.plan);
+        }
+      } catch (error) {
+        console.error("Failed to check user plan:", error);
+      }
+    };
+    checkUserPlan();
+  }, []);
+
+  const handleClick = async (event: React.MouseEvent) => {
+    event.preventDefault();
+
+    // If we haven't checked the plan yet, check it now
+    if (userPlan === null && !isCheckingPlan) {
+      setIsCheckingPlan(true);
+      try {
+        const response = await fetch("/api/usage/current");
+        if (response.ok) {
+          const data = await response.json();
+          setUserPlan(data.plan);
+
+          // Check if free user
+          if (data.plan === "Free") {
+            setShowUpgradeDialog(true);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check user plan:", error);
+      } finally {
+        setIsCheckingPlan(false);
+      }
+    }
+
+    // Check if user is on free plan
+    if (userPlan === "Free") {
+      setShowUpgradeDialog(true);
+      return;
+    }
+
+    // Allow file upload for paid users
+    fileInputRef.current?.click();
+  };
 
   return (
-    <Button
-      className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
-      data-testid="attachments-button"
-      disabled={status !== "ready" || isReasoningModel}
-      onClick={(event) => {
-        event.preventDefault();
-        fileInputRef.current?.click();
-      }}
-      variant="ghost"
-    >
-      <PaperclipIcon size={14} style={{ width: 14, height: 14 }} />
-    </Button>
+    <>
+      <UpgradeDialog
+        onOpenChange={setShowUpgradeDialog}
+        open={showUpgradeDialog}
+      />
+      <Button
+        className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
+        data-testid="attachments-button"
+        disabled={status !== "ready" || isReasoningModel}
+        onClick={handleClick}
+        variant="ghost"
+      >
+        <PaperclipIcon size={14} style={{ width: 14, height: 14 }} />
+      </Button>
+    </>
   );
 }
 

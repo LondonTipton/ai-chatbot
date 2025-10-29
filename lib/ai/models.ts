@@ -18,9 +18,4 @@ export const chatModels: ChatModel[] = [
     description:
       "More powerful model with greater reasoning for complex legal analysis",
   },
-  {
-    id: "chat-model-image",
-    name: "NanoBanana",
-    description: "Image generation powered by Google Gemini Imagen 3.0",
-  },
 ];

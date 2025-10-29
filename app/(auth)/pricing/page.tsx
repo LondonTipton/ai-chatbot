@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { CheckCircleFillIcon } from "@/components/icons";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useAuth } from "@/hooks/use-auth";
 
 const plans = [
   {
@@ -89,11 +93,44 @@ const plans = [
     highlighted: false,
     isFree: false,
   },
+  {
+    name: "Enterprise",
+    price: null,
+    description: "Custom solutions for large organizations",
+    features: [
+      "Unlimited AI requests",
+      "All Ultra features",
+      "Custom integrations",
+      "On-premise deployment option",
+      "SLA guarantees",
+      "Dedicated account manager",
+      "Custom training & onboarding",
+    ],
+    cta: "Contact Sales",
+    highlighted: false,
+    isFree: false,
+    isEnterprise: true,
+  },
 ];
 
 export default function PricingPage() {
+  const { user } = useAuth();
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative min-h-screen bg-background">
+      {/* Header with Logo and Theme Toggle */}
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <ThemeToggle />
+          <Button
+            asChild
+            className="bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          >
+            <Link href="/">DeepCounsel</Link>
+          </Button>
+        </div>
+      </header>
+
       <div className="container mx-auto px-4 py-16">
         <div className="mb-12 text-center">
           <h1 className="mb-4 font-bold text-4xl">Choose Your Plan</h1>
@@ -102,7 +139,7 @@ export default function PricingPage() {
           </p>
         </div>
 
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => (
             <Card
               className={`flex flex-col ${
@@ -123,8 +160,14 @@ export default function PricingPage() {
                 </CardTitle>
                 <CardDescription>{plan.description}</CardDescription>
                 <div className="mt-4">
-                  <span className="font-bold text-4xl">${plan.price}</span>
-                  <span className="text-muted-foreground">/month</span>
+                  {plan.price !== null ? (
+                    <>
+                      <span className="font-bold text-4xl">${plan.price}</span>
+                      <span className="text-muted-foreground">/month</span>
+                    </>
+                  ) : (
+                    <span className="font-bold text-4xl">Custom</span>
+                  )}
                 </div>
               </CardHeader>
 
@@ -147,7 +190,11 @@ export default function PricingPage() {
                 >
                   <Link
                     href={
-                      plan.isFree ? "/register" : `/checkout?plan=${plan.name}`
+                      plan.isFree
+                        ? "/register"
+                        : plan.isEnterprise
+                          ? "mailto:info@deep-counsel.org?subject=Enterprise Plan Inquiry"
+                          : `/checkout?plan=${encodeURIComponent(plan.name)}`
                     }
                   >
                     {plan.cta}
@@ -158,14 +205,16 @@ export default function PricingPage() {
           ))}
         </div>
 
-        <div className="mt-12 text-center">
-          <p className="mb-4 text-muted-foreground">
-            Already have an account?{" "}
-            <Link className="text-primary hover:underline" href="/login">
-              Sign in
-            </Link>
-          </p>
-        </div>
+        {!user && (
+          <div className="mt-12 text-center">
+            <p className="mb-4 text-muted-foreground">
+              Already have an account?{" "}
+              <Link className="text-primary hover:underline" href="/login">
+                Sign in to upgrade your plan
+              </Link>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
