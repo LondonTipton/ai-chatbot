@@ -32,15 +32,40 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
       return notFound();
     }
 
+    // Debug logging for live server
+    console.log(`[Chat ${id}] Session user:`, {
+      id: session.user.id,
+      email: session.user.email,
+    });
+    console.log(`[Chat ${id}] Chat owner:`, chat.userId);
+
     // Check if the chat belongs to the current user
     // Try to find the database user by Appwrite ID
     const dbUser = await getUserByAppwriteId(session.user.id);
+
+    console.log(
+      `[Chat ${id}] Database user lookup:`,
+      dbUser
+        ? {
+            id: dbUser.id,
+            email: dbUser.email,
+            appwriteId: dbUser.appwriteId,
+          }
+        : "null"
+    );
 
     // If we can't find the user by Appwrite ID, check if the session user ID
     // directly matches the chat's user ID (for backward compatibility)
     const isOwner = dbUser
       ? dbUser.id === chat.userId
       : session.user.id === chat.userId;
+
+    console.log(`[Chat ${id}] Ownership check:`, {
+      dbUserExists: !!dbUser,
+      dbUserIdMatches: dbUser?.id === chat.userId,
+      sessionIdMatches: session.user.id === chat.userId,
+      finalIsOwner: isOwner,
+    });
 
     if (!isOwner) {
       // Show a more helpful error message
