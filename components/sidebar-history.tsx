@@ -106,14 +106,33 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
   const { id } = useParams();
 
+  // Debug logging
+  console.log("[SidebarHistory] User prop:", user ? user.email : "undefined");
+  console.log("[SidebarHistory] About to initialize SWR...");
+
   const {
     data: paginatedChatHistories,
     setSize,
     isValidating,
     isLoading,
     mutate,
+    error,
   } = useSWRInfinite<ChatHistory>(getChatHistoryPaginationKey, fetcher, {
     fallbackData: [],
+    onError: (error) => {
+      console.error("[SidebarHistory] SWR Error:", error);
+    },
+    onSuccess: (data) => {
+      console.log("[SidebarHistory] SWR Success:", data);
+    },
+  });
+
+  console.log("[SidebarHistory] SWR State:", {
+    isLoading,
+    isValidating,
+    hasData: !!paginatedChatHistories,
+    dataLength: paginatedChatHistories?.length,
+    error: error?.message,
   });
 
   const router = useRouter();
