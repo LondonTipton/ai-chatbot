@@ -73,12 +73,9 @@ async function migrateToAppwriteIds() {
         .where(eq(document.userId, oldId));
       console.log("      ✓ Updated documents");
 
-      // Update votes
-      const votesResult = await db
-        .update(vote)
-        .set({ userId: newId })
-        .where(eq(vote.userId, oldId));
-      console.log("      ✓ Updated votes");
+      // Votes don't have userId - they're linked via chatId and messageId
+      // No need to update votes directly
+      console.log("      ✓ Votes linked via chats (no direct userId)");
 
       // Update suggestions
       const suggestionsResult = await db
