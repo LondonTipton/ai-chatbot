@@ -1,13 +1,14 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "@/components/toast";
 import { useAuth } from "@/hooks/use-auth";
+import { logout } from "../actions";
 
 function VerifyPendingContent() {
-  const { user, resendVerification, logout } = useAuth();
+  const { user } = useAuth();
   const [isResending, setIsResending] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [userEmail, setUserEmail] = useState<string>("");
@@ -26,7 +27,7 @@ function VerifyPendingContent() {
     }
   }, [user]);
 
-  const handleResend = async () => {
+  const handleResend = () => {
     if (!user && !userEmail) {
       toast({
         type: "error",
@@ -38,10 +39,11 @@ function VerifyPendingContent() {
 
     setIsResending(true);
     try {
-      await resendVerification();
+      // TODO: Implement resendVerification server action
       toast({
-        type: "success",
-        description: "Verification email sent! Please check your inbox.",
+        type: "error",
+        description:
+          "Resend verification is temporarily unavailable. Please contact support.",
       });
     } catch (error: any) {
       console.error("Resend verification error:", error);
@@ -60,14 +62,8 @@ function VerifyPendingContent() {
       // Clear stored email
       localStorage.removeItem("pending-verification-email");
 
-      // Call logout from auth context
+      // Call server-side logout
       await logout();
-
-      // Call server-side logout to ensure cookies are cleared
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
 
       // Force redirect to login
       window.location.href = "/login";
