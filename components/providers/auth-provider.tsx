@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       return { user: null, session: null };
     }
-  }, []);
+  }, []); // Empty dependency array to prevent infinite loops
 
   // Public function to refresh user (matches interface)
   const refreshUser = useCallback(async () => {
@@ -373,8 +373,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchUserAndSession]); // run once on mount; fetchUserAndSession is memoized
+  }, []); // Empty dependency array - run only once on mount
 
   // Set up session refresh interval when session changes
   useEffect(() => {

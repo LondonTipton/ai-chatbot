@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMemo, useRef } from "react";
 import { PlusIcon } from "@/components/icons";
 import { SidebarHistory } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
@@ -31,24 +32,45 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const isMainChatPage = useIsMainChatPage();
 
   // Use server-side user prop if available, otherwise fall back to client-side auth user
-  const currentUser =
-    user ||
-    (authUser
-      ? {
-          id: authUser.$id,
-          email: authUser.email,
-          name: authUser.name,
-        }
-      : undefined);
+  const currentUser = useMemo(() => {
+    return (
+      user ||
+      (authUser
+        ? {
+            id: authUser.$id,
+            email: authUser.email,
+            name: authUser.name,
+          }
+        : undefined)
+    );
+  }, [user, authUser]);
 
-  // Debug logging
-  console.log("[AppSidebar] Server user:", user ? user.email : "None");
-  console.log("[AppSidebar] Client user:", authUser ? authUser.email : "None");
-  console.log(
-    "[AppSidebar] Final currentUser:",
-    currentUser ? currentUser.email : "None"
-  );
-  console.log("[AppSidebar] Auth loading:", isLoading);
+  // Debug logging (only when values change)
+  const prevUserRef = useRef<string | undefined>();
+  const prevAuthUserRef = useRef<string | undefined>();
+  const prevCurrentUserRef = useRef<string | undefined>();
+  const prevLoadingRef = useRef<boolean>();
+
+  const userEmail = user?.email;
+  const authUserEmail = authUser?.email;
+  const currentUserEmail = currentUser?.email;
+
+  if (
+    prevUserRef.current !== userEmail ||
+    prevAuthUserRef.current !== authUserEmail ||
+    prevCurrentUserRef.current !== currentUserEmail ||
+    prevLoadingRef.current !== isLoading
+  ) {
+    console.log("[AppSidebar] Server user:", userEmail || "None");
+    console.log("[AppSidebar] Client user:", authUserEmail || "None");
+    console.log("[AppSidebar] Final currentUser:", currentUserEmail || "None");
+    console.log("[AppSidebar] Auth loading:", isLoading);
+
+    prevUserRef.current = userEmail;
+    prevAuthUserRef.current = authUserEmail;
+    prevCurrentUserRef.current = currentUserEmail;
+    prevLoadingRef.current = isLoading;
+  }
 
   return (
     <Sidebar className="group-data-[side=left]:border-r-0">
