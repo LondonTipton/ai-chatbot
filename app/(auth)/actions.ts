@@ -47,6 +47,21 @@ export const login = async (
     console.log("[LOGIN] Session created:", session.$id);
     console.log("[LOGIN] Session secret available:", !!session.secret);
 
+    // Check if user exists in local database and sync Appwrite ID if needed
+    const [dbUser] = await getUser(validatedData.email);
+    if (dbUser && !dbUser.appwriteId) {
+      console.log(
+        "[LOGIN] User exists but missing Appwrite ID, syncing:",
+        session.userId
+      );
+      const { updateUserAppwriteId } = await import("@/lib/db/queries");
+      await updateUserAppwriteId(dbUser.id, session.userId);
+    } else if (!dbUser) {
+      // User doesn't exist in database yet, create them
+      console.log("[LOGIN] User not in database, creating:", session.userId);
+      await createUserWithAppwriteId(validatedData.email, session.userId);
+    }
+
     // Set session cookie with the session secret (not the ID!)
     // The secret is the actual session token that Appwrite uses for authentication
     await setSessionCookie(session.$id, session.secret, session.userId);

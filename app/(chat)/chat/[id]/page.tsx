@@ -33,17 +33,20 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     }
 
     // Check if the chat belongs to the current user
-    // The session.user.id is the Appwrite ID, but chat.userId is the database UUID
-    // We need to look up the database user by Appwrite ID to get the database UUID
+    // Try to find the database user by Appwrite ID
     const dbUser = await getUserByAppwriteId(session.user.id);
 
-    if (!dbUser) {
-      // User doesn't exist in database yet - they can't own this chat
-      return notFound();
-    }
+    // If we can't find the user by Appwrite ID, check if the session user ID
+    // directly matches the chat's user ID (for backward compatibility)
+    const isOwner = dbUser
+      ? dbUser.id === chat.userId
+      : session.user.id === chat.userId;
 
-    // Check if the database user ID matches the chat's user ID
-    if (dbUser.id !== chat.userId) {
+    if (!isOwner) {
+      // Show a more helpful error message
+      console.error(
+        `[Chat Access Denied] User ${session.user.id} (email: ${session.user.email}) attempted to access chat ${id} owned by ${chat.userId}`
+      );
       return notFound();
     }
   }
@@ -62,7 +65,13 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const dbUser = session?.user?.id
     ? await getUserByAppwriteId(session.user.id)
     : null;
-  const isReadonly = !dbUser || dbUser.id !== chat.userId;
+
+  // Check ownership: either database user ID matches, or session user ID matches directly
+  const isOwner = dbUser
+    ? dbUser.id === chat.userId
+    : session?.user?.id === chat.userId;
+
+  const isReadonly = !isOwner;
 
   if (!chatModelFromCookie) {
     return (
