@@ -37,6 +37,24 @@ To verify the fix works:
 3. The chat should now load successfully instead of showing a 404 error
 4. You should be able to view and interact with your old conversations
 
+## Additional Fix: Guest Auth Redirect Issue
+
+On the live server, when accessing chat links without a session, the app was redirecting to `/api/auth/guest`, which doesn't exist (the directory is empty). This caused users to see a broken page.
+
+**Solution**: Changed the redirect to go to the login page instead, with a return URL parameter so users can return to the chat after logging in:
+
+```typescript
+if (!session) {
+  redirect(`/login?returnUrl=/chat/${id}`);
+}
+```
+
+This ensures that:
+
+- Users without a session are properly redirected to login
+- After logging in, they're returned to the chat they were trying to access
+- No broken guest auth route is called
+
 ## Related Files
 
 - `app/(chat)/chat/[id]/page.tsx` - Main fix location
