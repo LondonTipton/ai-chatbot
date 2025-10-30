@@ -261,3 +261,25 @@ export async function validateSession(sessionId: string): Promise<{
     return null;
   }
 }
+
+/**
+ * Create a verification email for the current user
+ * This requires an active session
+ */
+export function createVerification(
+  sessionId: string,
+  verificationUrl: string
+): Promise<Models.Token> {
+  return retryWithBackoff(async () => {
+    const { account } = createSessionClient(sessionId);
+
+    try {
+      const token = await account.createVerification(verificationUrl);
+      console.log("[AUTH] Verification email sent successfully");
+      return token;
+    } catch (error) {
+      console.error("[AUTH] Failed to send verification email:", error);
+      throw handleAppwriteError(error);
+    }
+  }, "createVerification");
+}
