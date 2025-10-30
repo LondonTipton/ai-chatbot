@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import { PlusIcon } from "@/components/icons";
 import { SidebarHistory } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
@@ -25,7 +25,7 @@ type User = {
   name?: string;
 };
 
-export function AppSidebar({ user }: { user: User | undefined }) {
+function AppSidebarComponent({ user }: { user: User | undefined }) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
   const { user: authUser, isLoading } = useAuth();
@@ -136,3 +136,13 @@ export function AppSidebar({ user }: { user: User | undefined }) {
     </Sidebar>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const AppSidebar = memo(AppSidebarComponent, (prevProps, nextProps) => {
+  // Only re-render if user prop actually changes
+  return (
+    prevProps.user?.id === nextProps.user?.id &&
+    prevProps.user?.email === nextProps.user?.email &&
+    prevProps.user?.name === nextProps.user?.name
+  );
+});

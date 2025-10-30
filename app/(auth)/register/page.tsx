@@ -7,11 +7,10 @@ import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "@/components/toast";
-import { useAuth } from "@/hooks/use-auth";
+import { register } from "../actions";
 
 export default function Page() {
   const router = useRouter();
-  const { register } = useAuth();
 
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
@@ -20,11 +19,12 @@ export default function Page() {
   const handleSubmit = useCallback(
     async (formData: FormData) => {
       const emailVal = String(formData.get("email") || "").trim();
-      const password = String(formData.get("password") || "");
       setEmail(emailVal);
       setSubmitting(true);
-      try {
-        await register(emailVal, password);
+
+      const result = await register({ status: "idle" }, formData);
+
+      if (result.status === "success") {
         setIsSuccessful(true);
         toast({
           type: "success",
@@ -32,15 +32,15 @@ export default function Page() {
         });
         router.push("/verify-pending");
         router.refresh();
-      } catch (e: any) {
-        const msg = e?.message || "Failed to create account!";
+      } else {
+        const msg = result.error || "Failed to create account!";
         toast({ type: "error", description: msg });
         setIsSuccessful(false);
-      } finally {
-        setSubmitting(false);
       }
+
+      setSubmitting(false);
     },
-    [register, router]
+    [router]
   );
 
   return (
