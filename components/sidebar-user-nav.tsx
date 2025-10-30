@@ -29,11 +29,11 @@ type SidebarUserNavProps = {
 
 export function SidebarUserNav({ user }: SidebarUserNavProps) {
   const router = useRouter();
-  const { user: authUser, isLoading, logout: authLogout } = useAuth();
+  const { user: authUser, isLoading } = useAuth();
 
   const handleLogout = async () => {
     try {
-      // Always use server-side logout for reliability
+      // Use server-side logout API
       const response = await fetch("/api/auth/logout", {
         method: "POST",
         headers: {
@@ -49,29 +49,10 @@ export function SidebarUserNav({ user }: SidebarUserNavProps) {
 
       // Clear any local storage
       localStorage.removeItem("appwrite-temp-session");
-      localStorage.clear(); // Clear all localStorage
+      localStorage.removeItem("pending-verification-email");
 
-      // Clear all cookies client-side as well
-      const cookies = document.cookie.split(";");
-      for (const cookie of cookies) {
-        const eqPos = cookie.indexOf("=");
-        const name =
-          eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
-        // Clear cookie for current domain and all parent domains
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname}`;
-      }
-
-      // Try client-side cleanup (but don't fail if it errors)
-      try {
-        await authLogout();
-      } catch (clientError) {
-        // Expected to fail due to guest user session
-      }
-
-      // Wait a moment for all cookie operations to complete
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait a moment for cookie operations to complete
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Force a hard redirect to ensure cookies are cleared
       window.location.href = "/login";
