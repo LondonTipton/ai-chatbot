@@ -5,13 +5,8 @@ import { createContext, useContext } from "react";
 
 export type AuthContextValue = {
   user: Models.User<Models.Preferences> | null;
-  session: Models.Session | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name?: string) => Promise<void>;
-  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  resendVerification: () => Promise<void>;
 };
 
 // Export the context so it can be used by the provider

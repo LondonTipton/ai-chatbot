@@ -1,9 +1,22 @@
-﻿"use client";
+"use client";
 
 import type { Models } from "appwrite";
-import { useCallback, useEffect, useState } from "react";
-import { AuthContext, type AuthContextValue } from "@/hooks/use-auth";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { createBrowserClient } from "@/lib/appwrite/config";
+
+type AuthContextType = {
+  user: Models.User<Models.Preferences> | null;
+  isLoading: boolean;
+  refreshUser: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(
@@ -41,11 +54,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, [fetchUser]);
 
-  const value: AuthContextValue = {
+  const value = {
     user,
     isLoading,
     refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
