@@ -192,3 +192,63 @@ export const logout = async (): Promise<void> => {
     await clearSessionCookie();
   }
 };
+
+export type ResendVerificationActionState = {
+  status: "idle" | "in_progress" | "success" | "failed";
+  error?: string;
+};
+
+export const resendVerification =
+  async (): Promise<ResendVerificationActionState> => {
+    try {
+      console.log("[RESEND_VERIFICATION] Starting resend verification process");
+
+      // Get the current session
+      const sessionId = await getSessionCookie();
+
+      if (!sessionId) {
+        return {
+          status: "failed",
+          error: "No active session. Please log in again.",
+        };
+      }
+
+      // Import the createVerification function
+      const { createVerification } = await import("@/lib/appwrite/auth");
+
+      // Create verification email
+      const verificationUrl = `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/verify`;
+      await createVerification(sessionId, verificationUrl);
+
+      console.log("[RESEND_VERIFICATION] Verification email sent successfully");
+
+      return { status: "success" };
+    } catch (error) {
+      console.error("[RESEND_VERIFICATION] Error:", error);
+
+      const authError = error as AuthError;
+
+      if (authError.code === AuthErrorCode.SESSION_EXPIRED) {
+        return {
+          status: "failed",
+          error: "Your session has expired. Please log in again.",
+        };
+      }
+
+      if (authError.code === AuthErrorCode.RATE_LIMITED) {
+        return {
+          status: "failed",
+          error: "Too many requests. Please wait a few minutes and try again.",
+        };
+      }
+
+      return {
+        status: "failed",
+        error:
+          authError.message ||
+          "Failed to send verification email. Please try again.",
+      };
+    }
+  };

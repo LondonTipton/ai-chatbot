@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "@/components/toast";
 import { useAuth } from "@/hooks/use-auth";
-import { logout } from "../actions";
+import { logout, resendVerification } from "../actions";
 
 function VerifyPendingContent() {
   const { user } = useAuth();
@@ -27,7 +27,7 @@ function VerifyPendingContent() {
     }
   }, [user]);
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!user && !userEmail) {
       toast({
         type: "error",
@@ -38,22 +38,22 @@ function VerifyPendingContent() {
     }
 
     setIsResending(true);
-    try {
-      // TODO: Implement resendVerification server action
+
+    const result = await resendVerification();
+
+    if (result.status === "success") {
+      toast({
+        type: "success",
+        description: "Verification email sent! Please check your inbox.",
+      });
+    } else {
       toast({
         type: "error",
-        description:
-          "Resend verification is temporarily unavailable. Please contact support.",
+        description: result.error || "Failed to send verification email.",
       });
-    } catch (error: any) {
-      console.error("Resend verification error:", error);
-      toast({
-        type: "error",
-        description: error?.message || "Failed to send verification email.",
-      });
-    } finally {
-      setIsResending(false);
     }
+
+    setIsResending(false);
   };
 
   const handleLogout = async () => {
