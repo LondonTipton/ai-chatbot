@@ -23,7 +23,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const session = await auth();
 
   if (!session) {
-    redirect("/api/auth/guest");
+    // Redirect to login with return URL to come back to this chat
+    redirect(`/login?returnUrl=/chat/${id}`);
   }
 
   if (chat.visibility === "private") {
