@@ -62,12 +62,9 @@ async function migrateToAppwriteIds() {
         .where(eq(chat.userId, oldId));
       console.log("      ✓ Updated chats");
 
-      // Update messages
-      const messagesResult = await db
-        .update(message)
-        .set({ userId: newId })
-        .where(eq(message.userId, oldId));
-      console.log("      ✓ Updated messages");
+      // Messages don't have userId - they're linked via chatId
+      // No need to update messages directly
+      console.log("      ✓ Messages linked via chats (no direct userId)");
 
       // Update documents
       const documentsResult = await db
