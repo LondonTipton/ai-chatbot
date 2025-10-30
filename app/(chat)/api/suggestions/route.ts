@@ -29,7 +29,11 @@ export async function GET(request: Request) {
     return Response.json([], { status: 200 });
   }
 
-  if (suggestion.userId !== session.user.id) {
+  // Convert Appwrite ID to database UUID for ownership check
+  const { getUserByAppwriteId } = await import("@/lib/db/queries");
+  const dbUser = await getUserByAppwriteId(session.user.id);
+
+  if (!dbUser || suggestion.userId !== dbUser.id) {
     return new ChatSDKError("forbidden:api").toResponse();
   }
 

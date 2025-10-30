@@ -32,7 +32,11 @@ export async function GET(request: Request) {
     return new ChatSDKError("not_found:document").toResponse();
   }
 
-  if (document.userId !== session.user.id) {
+  // Convert Appwrite ID to database UUID for ownership check
+  const { getUserByAppwriteId } = await import("@/lib/db/queries");
+  const dbUser = await getUserByAppwriteId(session.user.id);
+
+  if (!dbUser || document.userId !== dbUser.id) {
     return new ChatSDKError("forbidden:document").toResponse();
   }
 
@@ -68,17 +72,22 @@ export async function POST(request: Request) {
   if (documents.length > 0) {
     const [doc] = documents;
 
-    if (doc.userId !== session.user.id) {
+    // Convert Appwrite ID to database UUID for ownership check
+    const { getUserByAppwriteId } = await import("@/lib/db/queries");
+    const dbUser = await getUserByAppwriteId(session.user.id);
+
+    if (!dbUser || doc.userId !== dbUser.id) {
       return new ChatSDKError("forbidden:document").toResponse();
     }
   }
 
+  // Use database UUID for saving the document
   const document = await saveDocument({
     id,
     content,
     title,
     kind,
-    userId: session.user.id,
+    userId: dbUser.id,
   });
 
   return Response.json(document, { status: 200 });
@@ -113,7 +122,11 @@ export async function DELETE(request: Request) {
 
   const [document] = documents;
 
-  if (document.userId !== session.user.id) {
+  // Convert Appwrite ID to database UUID for ownership check
+  const { getUserByAppwriteId } = await import("@/lib/db/queries");
+  const dbUser = await getUserByAppwriteId(session.user.id);
+
+  if (!dbUser || document.userId !== dbUser.id) {
     return new ChatSDKError("forbidden:document").toResponse();
   }
 
