@@ -67,16 +67,20 @@ export async function POST(request: Request) {
   }: { content: string; title: string; kind: ArtifactKind } =
     await request.json();
 
+  // Convert Appwrite ID to database UUID
+  const { getUserByAppwriteId } = await import("@/lib/db/queries");
+  const dbUser = await getUserByAppwriteId(session.user.id);
+
+  if (!dbUser) {
+    return new ChatSDKError("unauthorized:document").toResponse();
+  }
+
   const documents = await getDocumentsById({ id });
 
   if (documents.length > 0) {
     const [doc] = documents;
 
-    // Convert Appwrite ID to database UUID for ownership check
-    const { getUserByAppwriteId } = await import("@/lib/db/queries");
-    const dbUser = await getUserByAppwriteId(session.user.id);
-
-    if (!dbUser || doc.userId !== dbUser.id) {
+    if (doc.userId !== dbUser.id) {
       return new ChatSDKError("forbidden:document").toResponse();
     }
   }
