@@ -25,7 +25,11 @@ export async function GET(request: Request) {
     return new ChatSDKError("not_found:chat").toResponse();
   }
 
-  if (chat.userId !== session.user.id) {
+  // Convert Appwrite ID to database UUID for ownership check
+  const { getUserByAppwriteId } = await import("@/lib/db/queries");
+  const dbUser = await getUserByAppwriteId(session.user.id);
+
+  if (!dbUser || chat.userId !== dbUser.id) {
     return new ChatSDKError("forbidden:vote").toResponse();
   }
 
@@ -61,7 +65,11 @@ export async function PATCH(request: Request) {
     return new ChatSDKError("not_found:vote").toResponse();
   }
 
-  if (chat.userId !== session.user.id) {
+  // Convert Appwrite ID to database UUID for ownership check
+  const { getUserByAppwriteId } = await import("@/lib/db/queries");
+  const dbUser = await getUserByAppwriteId(session.user.id);
+
+  if (!dbUser || chat.userId !== dbUser.id) {
     return new ChatSDKError("forbidden:vote").toResponse();
   }
 

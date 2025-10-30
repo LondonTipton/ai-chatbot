@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { useWindowSize } from "usehooks-ts";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { Button } from "@/components/ui/button";
 import { UsageIndicator } from "@/components/usage-indicator";
 import { useIsMainChatPage } from "@/hooks/use-is-main-chat-page";
+import { useUsage } from "@/hooks/use-usage";
 import { PlusIcon } from "./icons";
 import { ThemeToggle } from "./theme-toggle";
 import { useSidebar } from "./ui/sidebar";
@@ -16,33 +17,9 @@ function PureChatHeader() {
   const router = useRouter();
   const { open } = useSidebar();
   const isMainChatPage = useIsMainChatPage();
+  const { usage } = useUsage();
 
   const { width: windowWidth } = useWindowSize();
-
-  const [usage, setUsage] = useState<{
-    requestsToday: number;
-    dailyLimit: number;
-    plan: string;
-  } | null>(null);
-
-  useEffect(() => {
-    const fetchUsage = async () => {
-      try {
-        const response = await fetch("/api/usage/current");
-        if (response.ok) {
-          const data = await response.json();
-          setUsage(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch usage:", error);
-      }
-    };
-
-    fetchUsage();
-    // Refresh usage every 30 seconds
-    const interval = setInterval(fetchUsage, 30_000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <header className="sticky top-0 flex items-center gap-2 bg-background px-2 py-1.5 md:px-2">

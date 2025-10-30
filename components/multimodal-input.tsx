@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import { saveChatModelAsCookie } from "@/app/(chat)/actions";
 import { SelectItem } from "@/components/ui/select";
+import { useUsage } from "@/hooks/use-usage";
 import { chatModels } from "@/lib/ai/models";
 import { myProvider } from "@/lib/ai/providers";
 import type { Attachment, ChatMessage } from "@/lib/types";
@@ -402,52 +403,15 @@ function PureAttachmentsButton({
 }) {
   const isReasoningModel = selectedModelId === "chat-model-reasoning";
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
-  const [userPlan, setUserPlan] = useState<string | null>(null);
-  const [isCheckingPlan, setIsCheckingPlan] = useState(false);
+  const { usage } = useUsage();
 
-  // Check user's plan on mount
-  useEffect(() => {
-    const checkUserPlan = async () => {
-      try {
-        const response = await fetch("/api/usage/current");
-        if (response.ok) {
-          const data = await response.json();
-          setUserPlan(data.plan);
-        }
-      } catch (error) {
-        console.error("Failed to check user plan:", error);
-      }
-    };
-    checkUserPlan();
-  }, []);
+  // User plan is now available from the usage hook
 
-  const handleClick = async (event: React.MouseEvent) => {
+  const handleClick = (event: React.MouseEvent) => {
     event.preventDefault();
 
-    // If we haven't checked the plan yet, check it now
-    if (userPlan === null && !isCheckingPlan) {
-      setIsCheckingPlan(true);
-      try {
-        const response = await fetch("/api/usage/current");
-        if (response.ok) {
-          const data = await response.json();
-          setUserPlan(data.plan);
-
-          // Check if free user
-          if (data.plan === "Free") {
-            setShowUpgradeDialog(true);
-            return;
-          }
-        }
-      } catch (error) {
-        console.error("Failed to check user plan:", error);
-      } finally {
-        setIsCheckingPlan(false);
-      }
-    }
-
-    // Check if user is on free plan
-    if (userPlan === "Free") {
+    // Check if user is on free plan using the usage hook
+    if (usage?.plan === "Free") {
       setShowUpgradeDialog(true);
       return;
     }
