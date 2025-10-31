@@ -70,12 +70,11 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         : "null"
     );
 
-    // Ownership rules:
-    // - Preferred: dbUser.id (UUID) must match chat.userId
-    // - Legacy fallback: session.user.id (Appwrite ID) equals chat.userId
-    const isOwner = dbUser
-      ? dbUser.id === chat.userId
-      : session.user.id === chat.userId;
+    // Ownership rules (accept both modern and legacy):
+    // - Modern: dbUser.id (UUID) matches chat.userId
+    // - Legacy: session.user.id (Appwrite ID) matches chat.userId
+    const isOwner = (dbUser ? dbUser.id === chat.userId : false) ||
+      session.user.id === chat.userId;
 
     console.log(`[Chat ${id}] Ownership check:`, {
       dbUserExists: !!dbUser,
@@ -117,9 +116,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   }
 
   // Check ownership: either database user ID matches, or session user ID matches directly
-  const isOwner = dbUser
-    ? dbUser.id === chat.userId
-    : session?.user?.id === chat.userId;
+  const isOwner = (dbUser ? dbUser.id === chat.userId : false) ||
+    (session?.user?.id === chat.userId);
 
   const isReadonly = !isOwner;
 

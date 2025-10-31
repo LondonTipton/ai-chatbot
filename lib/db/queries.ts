@@ -194,53 +194,70 @@ export async function getChatsByUserId({
   limit,
   startingAfter,
   endingBefore,
+  email,
 }: {
-  id: string;
+  id: string; // Appwrite ID or DB UUID
   limit: number;
   startingAfter: string | null;
   endingBefore: string | null;
+  email?: string;
 }) {
-  // Resolve the Appwrite ID to the database UUID and also include legacy fallbacks
-  // Some older records may have stored chat.userId as the Appwrite ID instead of the DB UUID
-  let actualUserId: string = id;
-  let idCandidates: string[] = [];
+  // Resolve the user to a database UUID
+  let actualUserId: string | null = null;
 
   try {
     // Check if the id is already a valid UUID (36 chars with dashes)
-    if (id.length === 36 && id.includes("-")) {
+    const isUuid = id.length === 36 && id.includes("-");
+    if (isUuid) {
       actualUserId = id;
-      idCandidates = [actualUserId];
     } else {
       // It's an Appwrite ID, look up the corresponding database user
-      const [userRecord] = await db
+      const [userByAppwrite] = await db
         .select({ id: user.id })
         .from(user)
         .where(eq(user.appwriteId, id))
         .limit(1);
 
-      if (userRecord) {
-        actualUserId = userRecord.id;
-        idCandidates = [actualUserId, id];
+      if (userByAppwrite) {
+        actualUserId = userByAppwrite.id;
         console.log(
-          `[getChatsByUserId] Resolved appwriteId ${id} to UUID ${actualUserId} (including legacy fallback)`
+          `[getChatsByUserId] Resolved appwriteId ${id} to UUID ${actualUserId}`
         );
-      } else {
-        console.log(`[getChatsByUserId] No user found with appwriteId: ${id}`);
-        // Fallback: search for chats created under the Appwrite ID directly (legacy data)
-        idCandidates = [id];
+      } else if (email) {
+        // Fallback: resolve by email if available
+        const [userByEmail] = await db
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.email, email))
+          .limit(1);
+        if (userByEmail) {
+          actualUserId = userByEmail.id;
+          console.log(
+            `[getChatsByUserId] Resolved email ${email} to UUID ${actualUserId}`
+          );
+        }
       }
+    }
+
+    if (!actualUserId) {
+      console.log(
+        `[getChatsByUserId] Could not resolve user to UUID (appwriteId=${id}, email=${email ?? "n/a"})`
+      );
+      return { chats: [], hasMore: false };
     }
 
     const extendedLimit = limit + 1;
 
+    // At this point actualUserId is guaranteed
+    const resolvedUserId = actualUserId;
     const query = (whereCondition?: SQL<any>) =>
       db
         .select()
         .from(chat)
         .where(
           whereCondition
-            ? and(whereCondition, inArray(chat.userId, idCandidates))
-            : inArray(chat.userId, idCandidates)
+            ? and(whereCondition, eq(chat.userId, resolvedUserId))
+            : eq(chat.userId, resolvedUserId)
         )
         .orderBy(desc(chat.createdAt))
         .limit(extendedLimit);
@@ -294,7 +311,7 @@ export async function getChatsByUserId({
       stack: error instanceof Error ? error.stack : undefined,
       originalId: id,
       actualUserId: actualUserId || "unknown",
-      idCandidates,
+      email: email ?? "n/a",
     });
     throw new ChatSDKError(
       "bad_request:database",
