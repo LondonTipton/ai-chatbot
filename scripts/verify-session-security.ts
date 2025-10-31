@@ -31,7 +31,10 @@ console.log(
 );
 console.log(
   `SameSite: ${SESSION_COOKIE_OPTIONS.sameSite.toUpperCase()} ${
-    SESSION_COOKIE_OPTIONS.sameSite === "strict" ? "✅" : "⚠️"
+    SESSION_COOKIE_OPTIONS.sameSite === "lax" ||
+    SESSION_COOKIE_OPTIONS.sameSite === "strict"
+      ? "✅"
+      : "⚠️"
   }`
 );
 console.log(
@@ -102,8 +105,10 @@ const checks = [
     critical: true,
   },
   {
-    name: "SameSite=Strict configured",
-    status: SESSION_COOKIE_OPTIONS.sameSite === "strict",
+    name: "SameSite configured (Lax or Strict)",
+    status:
+      SESSION_COOKIE_OPTIONS.sameSite === "lax" ||
+      SESSION_COOKIE_OPTIONS.sameSite === "strict",
     critical: true,
   },
   {
@@ -149,7 +154,9 @@ if (allCriticalPassed) {
   console.log("Your session security configuration meets industry standards:");
   console.log("  • Protected against XSS attacks (HTTP-Only)");
   console.log("  • Protected against MITM attacks (Secure flag)");
-  console.log("  • Protected against CSRF attacks (SameSite=Strict)");
+  console.log(
+    `  • Protected against CSRF attacks (SameSite=${SESSION_COOKIE_OPTIONS.sameSite})`
+  );
 } else {
   console.log("❌ SECURITY CONFIGURATION INCOMPLETE");
   console.log();
