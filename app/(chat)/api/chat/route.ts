@@ -33,16 +33,16 @@ import { auth } from "@/lib/appwrite/server-auth";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
+  createUserWithAppwriteId,
   deleteChatById,
   getChatById,
   getMessagesByChatId,
-  getUserByAppwriteId,
   getUser,
-  createUserWithAppwriteId,
-  updateUserAppwriteId,
+  getUserByAppwriteId,
   saveChat,
   saveMessages,
   updateChatLastContextById,
+  updateUserAppwriteId,
 } from "@/lib/db/queries";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
@@ -176,7 +176,10 @@ export async function POST(request: Request) {
             );
           }
         } catch (e) {
-          console.error("[Auth Repair] Failed to resolve DB user via email:", e);
+          console.error(
+            "[Auth Repair] Failed to resolve DB user via email:",
+            e
+          );
         }
       }
       if (!dbUser) {

@@ -51,23 +51,91 @@ export async function GET(_: NextRequest) {
 
       // Get user from Appwrite using the session secret
       const user = await getCurrentUser(appwriteSessionCookie);
-      if (!user) {
-        console.log("[session] No user found for Appwrite session secret");
-        return NextResponse.json({ user: null }, { status: 200 });
+      if (user) {
+        console.log("[session] User found via secret:", user.email);
+        return NextResponse.json(
+          {
+            user: {
+              $id: user.$id,
+              email: user.email,
+              name: user.name,
+              emailVerification: user.emailVerification,
+            },
+          },
+          { status: 200 }
+        );
       }
 
-      console.log("[session] User found via secret:", user.email);
-      return NextResponse.json(
-        {
-          user: {
-            $id: user.$id,
-            email: user.email,
-            name: user.name,
-            emailVerification: user.emailVerification,
-          },
-        },
-        { status: 200 }
+      // Secret exists but is invalid/expired; fall back to admin lookup using our cookies
+      console.log(
+        "[session] Secret invalid; attempting fallback via userId/sessionId cookies"
       );
+
+      if (fallbackSessionId && fallbackUserId) {
+        try {
+          const { users } = createAdminClient();
+          const fbUser = await users.get(fallbackUserId);
+          const response = NextResponse.json(
+            {
+              user: {
+                $id: fbUser.$id,
+                email: fbUser.email,
+                name: fbUser.name,
+                emailVerification: fbUser.emailVerification,
+              },
+            },
+            { status: 200 }
+          );
+
+          // Clean up bad Appwrite secret cookie and upgrade our cookies
+          if (projectId) {
+            response.cookies.delete(`a_session_${projectId}`);
+          }
+          const isProduction = process.env.NODE_ENV === "production";
+          const cookieOptions = {
+            httpOnly: true,
+            sameSite: "lax" as const,
+            secure: isProduction,
+            path: "/",
+            maxAge: 60 * 60 * 24 * 30,
+            ...(isProduction && process.env.COOKIE_DOMAIN
+              ? { domain: process.env.COOKIE_DOMAIN }
+              : {}),
+          };
+          response.cookies.set(
+            "appwrite-session",
+            fallbackSessionId,
+            cookieOptions
+          );
+          response.cookies.set(
+            "appwrite_user_id",
+            fallbackUserId,
+            cookieOptions
+          );
+          console.log(
+            "[session] Fallback user found via admin after secret failure:",
+            fbUser.email
+          );
+          return response;
+        } catch (e) {
+          console.error(
+            "[session] Fallback via admin after secret failure also failed:",
+            e
+          );
+          // Delete the bad secret to avoid flapping
+          const resp = NextResponse.json({ user: null }, { status: 200 });
+          if (projectId) {
+            resp.cookies.delete(`a_session_${projectId}`);
+          }
+          return resp;
+        }
+      }
+      // No fallback available; delete bad secret and return null
+      const resp = NextResponse.json({ user: null }, { status: 200 });
+      if (projectId) {
+        resp.cookies.delete(`a_session_${projectId}`);
+      }
+      return resp;
     }
 
     // Fallback path: we only have our custom cookies (sessionId + userId)
