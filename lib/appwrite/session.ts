@@ -14,7 +14,7 @@ export const SESSION_COOKIE_NAME = "appwrite-session";
 export const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "strict" as const,
+  sameSite: "lax" as const, // Changed from "strict" to "lax" for cross-domain Appwrite setup
   maxAge: 60 * 60 * 24 * 30, // 30 days
   path: "/",
 } as const;
@@ -69,7 +69,7 @@ export async function setSessionCookie(
         ...SESSION_COOKIE_OPTIONS,
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax", // Changed from "strict" to "lax" for cross-domain Appwrite setup
         path: "/",
       });
     }
