@@ -19,8 +19,12 @@ export const fetcher = async (url: string) => {
   const response = await fetch(url);
 
   if (!response.ok) {
-    const { code, cause } = await response.json();
-    throw new ChatSDKError(code as ErrorCode, cause);
+    const data = await response.json();
+    const { code, cause, ...meta } = data ?? {};
+    const err = new ChatSDKError((code as ErrorCode) || ("bad_request:api" as ErrorCode), cause);
+    // Attach any extra fields (e.g., dailyLimit, requestsToday, plan) for richer UI handling
+    (err as any).meta = meta;
+    throw err;
   }
 
   return response.json();
@@ -34,8 +38,11 @@ export async function fetchWithErrorHandlers(
     const response = await fetch(input, init);
 
     if (!response.ok) {
-      const { code, cause } = await response.json();
-      throw new ChatSDKError(code as ErrorCode, cause);
+      const data = await response.json();
+      const { code, cause, ...meta } = data ?? {};
+      const err = new ChatSDKError((code as ErrorCode) || ("bad_request:api" as ErrorCode), cause);
+      (err as any).meta = meta;
+      throw err;
     }
 
     return response;

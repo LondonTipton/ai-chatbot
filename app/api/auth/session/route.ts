@@ -64,7 +64,10 @@ export async function GET(_: NextRequest) {
           },
           { status: 200 }
         );
-        resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+        resp.headers.set(
+          "Cache-Control",
+          "no-store, no-cache, must-revalidate"
+        );
         return resp;
       }
 
@@ -88,7 +91,10 @@ export async function GET(_: NextRequest) {
             },
             { status: 200 }
           );
-          response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+          response.headers.set(
+            "Cache-Control",
+            "no-store, no-cache, must-revalidate"
+          );
 
           // Clean up bad Appwrite secret cookie and upgrade our cookies
           if (projectId) {
@@ -127,7 +133,10 @@ export async function GET(_: NextRequest) {
           );
           // Delete the bad secret to avoid flapping
           const resp = NextResponse.json({ user: null }, { status: 200 });
-          resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+          resp.headers.set(
+            "Cache-Control",
+            "no-store, no-cache, must-revalidate"
+          );
           if (projectId) {
             resp.cookies.delete(`a_session_${projectId}`);
           }
@@ -169,7 +178,10 @@ export async function GET(_: NextRequest) {
           },
           { status: 200 }
         );
-        response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+        response.headers.set(
+          "Cache-Control",
+          "no-store, no-cache, must-revalidate"
+        );
 
         const isProduction = process.env.NODE_ENV === "production";
         const cookieOptions = {
@@ -194,21 +206,24 @@ export async function GET(_: NextRequest) {
         console.log("[session] Fallback user found:", user.email);
         return response;
       } catch (e) {
-  console.error("[session] Fallback validation failed:", e);
-  const resp = NextResponse.json({ user: null }, { status: 200 });
-  resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  return resp;
+        console.error("[session] Fallback validation failed:", e);
+        const resp = NextResponse.json({ user: null }, { status: 200 });
+        resp.headers.set(
+          "Cache-Control",
+          "no-store, no-cache, must-revalidate"
+        );
+        return resp;
       }
     }
 
-  console.log("[session] No session cookies found");
-  const resp = NextResponse.json({ user: null }, { status: 200 });
-  resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  return resp;
+    console.log("[session] No session cookies found");
+    const resp = NextResponse.json({ user: null }, { status: 200 });
+    resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    return resp;
   } catch (error) {
-  console.error("[session] Error getting session:", error);
-  const resp = NextResponse.json({ user: null }, { status: 200 });
-  resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-  return resp;
+    console.error("[session] Error getting session:", error);
+    const resp = NextResponse.json({ user: null }, { status: 200 });
+    resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    return resp;
   }
 }

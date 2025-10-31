@@ -198,18 +198,18 @@ export async function POST(request: Request) {
       console.log(
         `[Usage] User ${dbUser.id} exceeded daily limit: ${usageCheck.requestsToday}/${usageCheck.dailyLimit}`
       );
-      return new Response(
-        JSON.stringify({
-          error: "daily_limit_reached",
+      // Return a standardized error payload expected by the client
+      return Response.json(
+        {
+          code: "rate_limit:chat",
           message: `You've reached your daily limit of ${usageCheck.dailyLimit} requests. Upgrade to continue.`,
+          cause: "daily_limit_reached",
+          // Optional metadata for UI (not required by error handler)
           requestsToday: usageCheck.requestsToday,
           dailyLimit: usageCheck.dailyLimit,
           plan: usageCheck.plan,
-        }),
-        {
-          status: 429,
-          headers: { "Content-Type": "application/json" },
-        }
+        },
+        { status: 429 }
       );
     }
 
