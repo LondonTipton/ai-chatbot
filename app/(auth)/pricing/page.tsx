@@ -193,8 +193,8 @@ export default function PricingPage() {
                       plan.isFree
                         ? "/register"
                         : plan.isEnterprise
-                          ? "mailto:info@deep-counsel.org?subject=Enterprise Plan Inquiry"
-                          : `/checkout?plan=${encodeURIComponent(plan.name)}`
+                        ? "mailto:info@deep-counsel.org?subject=Enterprise Plan Inquiry"
+                        : `/checkout?plan=${encodeURIComponent(plan.name)}`
                     }
                   >
                     {plan.cta}

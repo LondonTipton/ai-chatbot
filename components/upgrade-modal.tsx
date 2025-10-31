@@ -130,11 +130,17 @@ export function UpgradeModal({
 
         <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
           <AlertDialogAction asChild className="w-full">
-            <Link href={`/checkout?plan=${encodeURIComponent(recommended.name)}`}>
+            <Link
+              href={`/checkout?plan=${encodeURIComponent(recommended.name)}`}
+            >
               Upgrade to {recommended.name}
             </Link>
           </AlertDialogAction>
-          <AlertDialogAction asChild className="w-full" data-variant="secondary">
+          <AlertDialogAction
+            asChild
+            className="w-full"
+            data-variant="secondary"
+          >
             <Link href="/pricing">View All Plans</Link>
           </AlertDialogAction>
           <AlertDialogCancel className="w-full">Maybe Later</AlertDialogCancel>
