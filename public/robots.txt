@@ -1,0 +1,39 @@
+# robots.txt for DeepCounsel
+# https://www.robotstxt.org/
+
+User-agent: *
+Allow: /
+
+# Disallow admin and API routes
+Disallow: /api/
+Disallow: /admin/
+
+# Disallow auth pages from indexing
+Disallow: /login
+Disallow: /register
+Disallow: /verify-pending
+
+# Allow specific important pages
+Allow: /
+Allow: /features
+Allow: /about
+Allow: /contact
+
+# Sitemap location
+Sitemap: https://deep-counsel.org/sitemap.xml
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1
+
+# Specific bot instructions
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Slurp
+Allow: /
+Crawl-delay: 1

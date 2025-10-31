@@ -3,19 +3,11 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { rootMetadata, structuredData } from "@/lib/metadata";
 
 import "./globals.css";
 
-export const metadata: Metadata = {
-  metadataBase: new URL("https://chat.vercel.ai"),
-  title: "DeepCounsel - AI Legal Assistant",
-  description:
-    "DeepCounsel is an AI-powered legal assistant chatbot built with Next.js and the AI SDK.",
-  icons: {
-    icon: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
-  },
-};
+export const metadata: Metadata = rootMetadata;
 
 export const viewport = {
   maximumScale: 1, // Disable auto-zoom on mobile Safari
@@ -70,10 +62,17 @@ export default function RootLayout({
     >
       <head>
         <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: "Required"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: Required
           dangerouslySetInnerHTML={{
             __html: THEME_COLOR_SCRIPT,
           }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData),
+          }}
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: Required for structured data
+          type="application/ld+json"
         />
       </head>
       <body className="antialiased">

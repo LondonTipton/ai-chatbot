@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Script from "next/script";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -7,6 +8,11 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { validateSession } from "@/lib/appwrite/auth";
 
 export const experimental_ppr = true;
+
+export const metadata: Metadata = {
+  title: { template: "%s | DeepCounsel", default: "DeepCounsel" },
+  robots: { index: false, follow: false },
+};
 
 export default async function Layout({
   children,
@@ -21,12 +27,11 @@ export default async function Layout({
     : null;
 
   // Fallback to custom session cookies if Appwrite cookie not available
-  const fallbackSessionId = cookieStore.get("appwrite-session")?.value;
   const fallbackUserId = cookieStore.get("appwrite_user_id")?.value;
 
   // Try Appwrite session first, then fallback to user validation
-  let validation = null;
-  let appwriteUser = null;
+  let validation: Awaited<ReturnType<typeof validateSession>> | null = null;
+  let appwriteUser: { $id: string; email: string; name?: string } | null = null;
 
   if (appwriteSessionCookie) {
     validation = await validateSession(appwriteSessionCookie);

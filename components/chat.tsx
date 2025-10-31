@@ -116,7 +116,10 @@ export function Chat({
       // Prefer structured ChatSDKError
       if (error instanceof ChatSDKError) {
         // Specific handling: rate limit
-        if ((error as any).type === "rate_limit" || (error as any).message?.toLowerCase()?.includes("rate limit")) {
+        if (
+          (error as any).type === "rate_limit" ||
+          (error as any).message?.toLowerCase()?.includes("rate limit")
+        ) {
           const meta = (error as any).meta || {};
           const requestsToday = Number(meta.requestsToday) || 0;
           const dailyLimit = Number(meta.dailyLimit) || 0;
@@ -129,7 +132,9 @@ export function Chat({
         }
 
         // Gateway credit card case
-        if (error.message?.includes("AI Gateway requires a valid credit card")) {
+        if (
+          error.message?.includes("AI Gateway requires a valid credit card")
+        ) {
           setShowCreditCardAlert(true);
           return;
         }
