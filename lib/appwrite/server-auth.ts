@@ -20,8 +20,16 @@ export async function auth(): Promise<Session | null> {
     // Use same cookie checking logic as middleware
     const sessionCookieName = `a_session_${projectId}`;
     const sessionToken = cookieStore.get(sessionCookieName)?.value;
-    const fallbackSession = cookieStore.get("appwrite-session")?.value;
-    const userIdCookie = cookieStore.get("appwrite_user_id")?.value;
+    const fallbackSession =
+      cookieStore.get("appwrite-session")?.value ||
+      cookieStore.get("appwrite-session-backup")?.value ||
+      cookieStore.get("appwrite-session-js")?.value ||
+      null;
+    const userIdCookie =
+      cookieStore.get("appwrite_user_id")?.value ||
+      cookieStore.get("appwrite_user_id_backup")?.value ||
+      cookieStore.get("appwrite_user_id_js")?.value ||
+      null;
 
     console.log(
       `[server-auth] Checking cookies - appwrite session: ${!!sessionToken}, fallback session: ${!!fallbackSession}, userId: ${!!userIdCookie}`
@@ -51,15 +59,12 @@ export async function auth(): Promise<Session | null> {
       }
     }
 
-    // Fallback method: If we have session tokens but no userId cookie,
-    // try to extract from session (this should rarely happen if sync is working)
+    // Fallback method: if we have a fallback session but no userId, we can't validate session without secret.
+    // Prefer returning null to trigger client-side fetch/bridge to upgrade cookies.
     if (sessionToken || fallbackSession) {
       console.log(
-        "[server-auth] No userId cookie, but have session tokens - this indicates sync may have failed"
+        "[server-auth] Session tokens present but no userId cookie; returning null to let client bridge upgrade cookies"
       );
-
-      // In this case, we can't reliably get the user without the validation endpoint
-      // This should be rare if the auth flow is working properly
       return null;
     }
 
