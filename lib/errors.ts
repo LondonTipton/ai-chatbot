@@ -44,12 +44,16 @@ export class ChatSDKError extends Error {
   constructor(errorCode: ErrorCode, cause?: string) {
     super();
 
-    const [type, surface] = errorCode.split(":");
+    // Guard against undefined or malformed error codes
+    const safeCode = (errorCode || "bad_request:api") as ErrorCode;
+    const parts = safeCode.split(":");
+    const type = (parts[0] as ErrorType) || ("bad_request" as ErrorType);
+    const surface = (parts[1] as Surface) || ("api" as Surface);
 
     this.type = type as ErrorType;
     this.cause = cause;
     this.surface = surface as Surface;
-    this.message = getMessageByErrorCode(errorCode);
+    this.message = getMessageByErrorCode(safeCode);
     this.statusCode = getStatusCodeByType(this.type);
   }
 

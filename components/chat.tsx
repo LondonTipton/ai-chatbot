@@ -113,54 +113,37 @@ export function Chat({
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
+      // Prefer structured ChatSDKError
       if (error instanceof ChatSDKError) {
-        // Check if it's a credit card error
-        if (
-          error.message?.includes("AI Gateway requires a valid credit card")
-        ) {
+        // Specific handling: rate limit
+        if ((error as any).type === "rate_limit" || (error as any).message?.toLowerCase()?.includes("rate limit")) {
+          const meta = (error as any).meta || {};
+          const requestsToday = Number(meta.requestsToday) || 0;
+          const dailyLimit = Number(meta.dailyLimit) || 0;
+          const currentPlan = String(meta.plan || "Free");
+          setUpgradeModalData({ requestsToday, dailyLimit, currentPlan });
+          setShowUpgradeModal(true);
+          // Ensure UI leaves 'submitted' state after error
+          stop();
+          return;
+        }
+
+        // Gateway credit card case
+        if (error.message?.includes("AI Gateway requires a valid credit card")) {
           setShowCreditCardAlert(true);
-        } else {
-          toast({
-            type: "error",
-            description: error.message,
-          });
+          return;
         }
-      } else if (error instanceof Error) {
-        // Check if it's a rate limit error
-        try {
-          const errorMessage = error.message;
-          if (errorMessage.includes("daily_limit_reached")) {
-            // Parse the error to get usage info
-            const usageLimitRegex = /(\d+)\/(\d+)/;
-            const match = errorMessage.match(usageLimitRegex);
-            if (match) {
-              const requestsToday = Number.parseInt(match[1], 10);
-              const dailyLimit = Number.parseInt(match[2], 10);
-              setShowUpgradeModal(true);
-              setUpgradeModalData({
-                requestsToday,
-                dailyLimit,
-                currentPlan: "Free",
-              });
-            } else {
-              toast({
-                type: "error",
-                description:
-                  "You've reached your daily limit. Please upgrade to continue.",
-              });
-            }
-          } else {
-            toast({
-              type: "error",
-              description: error.message,
-            });
-          }
-        } catch {
-          toast({
-            type: "error",
-            description: error.message,
-          });
-        }
+
+        // Default toast
+        toast({ type: "error", description: error.message });
+        stop();
+        return;
+      }
+
+      // Fallback generic Error
+      if (error instanceof Error) {
+        toast({ type: "error", description: error.message });
+        stop();
       }
     },
   });

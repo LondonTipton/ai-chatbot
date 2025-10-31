@@ -24,15 +24,14 @@ type UpgradeModalProps = {
 
 const recommendedPlans = {
   Free: {
-    name: "Pro",
-    price: 30,
-    dailyLimit: 200,
+    name: "Basic",
+    price: 10,
+    dailyLimit: 50,
     features: [
-      "200 AI requests per day",
-      "Advanced model access",
-      "Agentic research",
-      "Legal template library",
-      "Priority support",
+      "50 AI requests per day",
+      "Basic model access",
+      "Artifact generation",
+      "Email support",
     ],
   },
   Basic: {
@@ -131,6 +130,11 @@ export function UpgradeModal({
 
         <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
           <AlertDialogAction asChild className="w-full">
+            <Link href={`/checkout?plan=${encodeURIComponent(recommended.name)}`}>
+              Upgrade to {recommended.name}
+            </Link>
+          </AlertDialogAction>
+          <AlertDialogAction asChild className="w-full" data-variant="secondary">
             <Link href="/pricing">View All Plans</Link>
           </AlertDialogAction>
           <AlertDialogCancel className="w-full">Maybe Later</AlertDialogCancel>
