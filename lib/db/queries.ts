@@ -200,13 +200,16 @@ export async function getChatsByUserId({
   startingAfter: string | null;
   endingBefore: string | null;
 }) {
-  // First, resolve the Appwrite ID to the database UUID
+  // Resolve the Appwrite ID to the database UUID and also include legacy fallbacks
+  // Some older records may have stored chat.userId as the Appwrite ID instead of the DB UUID
   let actualUserId: string = id;
+  let idCandidates: string[] = [];
 
   try {
     // Check if the id is already a valid UUID (36 chars with dashes)
     if (id.length === 36 && id.includes("-")) {
       actualUserId = id;
+      idCandidates = [actualUserId];
     } else {
       // It's an Appwrite ID, look up the corresponding database user
       const [userRecord] = await db
@@ -215,15 +218,17 @@ export async function getChatsByUserId({
         .where(eq(user.appwriteId, id))
         .limit(1);
 
-      if (!userRecord) {
+      if (userRecord) {
+        actualUserId = userRecord.id;
+        idCandidates = [actualUserId, id];
+        console.log(
+          `[getChatsByUserId] Resolved appwriteId ${id} to UUID ${actualUserId} (including legacy fallback)`
+        );
+      } else {
         console.log(`[getChatsByUserId] No user found with appwriteId: ${id}`);
-        return { chats: [], hasMore: false };
+        // Fallback: search for chats created under the Appwrite ID directly (legacy data)
+        idCandidates = [id];
       }
-
-      actualUserId = userRecord.id;
-      console.log(
-        `[getChatsByUserId] Resolved appwriteId ${id} to UUID ${actualUserId}`
-      );
     }
 
     const extendedLimit = limit + 1;
@@ -234,8 +239,8 @@ export async function getChatsByUserId({
         .from(chat)
         .where(
           whereCondition
-            ? and(whereCondition, eq(chat.userId, actualUserId))
-            : eq(chat.userId, actualUserId)
+            ? and(whereCondition, inArray(chat.userId, idCandidates))
+            : inArray(chat.userId, idCandidates)
         )
         .orderBy(desc(chat.createdAt))
         .limit(extendedLimit);
@@ -289,6 +294,7 @@ export async function getChatsByUserId({
       stack: error instanceof Error ? error.stack : undefined,
       originalId: id,
       actualUserId: actualUserId || "unknown",
+      idCandidates,
     });
     throw new ChatSDKError(
       "bad_request:database",
