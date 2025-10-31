@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
@@ -23,16 +23,9 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
 
   const session = await auth();
 
-  if (!session) {
-    // Redirect to login with return URL to come back to this chat
-    redirect(`/login?returnUrl=/chat/${id}`);
-  }
-
-  if (chat.visibility === "private") {
-    if (!session.user) {
-      return notFound();
-    }
-
+  // Determine ownership when we have a session; if no session, treat as not owner for now
+  let isOwner = false;
+  if (chat.visibility === "private" && session?.user) {
     // Debug logging for live server
     console.log(`[Chat ${id}] Session user:`, {
       id: session.user.id,
@@ -73,17 +66,16 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     // Ownership rules (accept both modern and legacy):
     // - Modern: dbUser.id (UUID) matches chat.userId
     // - Legacy: session.user.id (Appwrite ID) matches chat.userId
-    const isOwner =
-      (dbUser ? dbUser.id === chat.userId : false) ||
-      session.user.id === chat.userId;
+    isOwner = (dbUser ? dbUser.id === chat.userId : false) || session.user.id === chat.userId;
 
     console.log(`[Chat ${id}] Ownership check:`, {
-      dbUserExists: !!dbUser,
+      dbUserExists: typeof isOwner === "boolean" ? !!dbUser : false,
       dbUserIdMatches: dbUser?.id === chat.userId,
       sessionIdMatches: session.user.id === chat.userId,
       finalIsOwner: isOwner,
     });
 
+    // If we definitively have a session and ownership is false, deny access
     if (!isOwner) {
       console.error(
         `[Chat Access Denied] User ${session.user.id} (email: ${session.user.email}) attempted to access chat ${id} owned by ${chat.userId}`
@@ -92,36 +84,21 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     }
   }
 
-  const messagesFromDb = await getMessagesByChatId({
-    id,
-  });
+  // Only fetch messages for private chats when ownership is confirmed.
+  // For public chats, always fetch. When session is null on a private chat,
+  // render readonly with no messages to avoid redirect and data leak; client auth will settle.
+  const messagesFromDb =
+    chat.visibility === "private" && !isOwner
+      ? []
+      : await getMessagesByChatId({ id });
 
   const uiMessages = convertToUIMessages(messagesFromDb);
 
   const cookieStore = await cookies();
   const chatModelFromCookie = cookieStore.get("chat-model");
 
-  // Determine if the chat is readonly
-  // Get the database user to compare with chat.userId
-  // Resolve dbUser again for readonly flag (use same fallbacks)
-  let dbUser = session?.user?.id
-    ? await getUserByAppwriteId(session.user.id)
-    : null;
-  if (!dbUser && session?.user?.email) {
-    try {
-      const usersByEmail = await getUser(session.user.email);
-      dbUser = usersByEmail?.[0] || null;
-    } catch (e) {
-      console.warn(`[Chat ${id}] Email fallback lookup (readonly) failed:`, e);
-    }
-  }
-
-  // Check ownership: either database user ID matches, or session user ID matches directly
-  const isOwner =
-    (dbUser ? dbUser.id === chat.userId : false) ||
-    session?.user?.id === chat.userId;
-
-  const isReadonly = !isOwner;
+  // Determine readonly state: private chats are readonly unless owner confirmed; public are editable.
+  const isReadonly = chat.visibility === "private" ? !isOwner : false;
 
   if (!chatModelFromCookie) {
     return (

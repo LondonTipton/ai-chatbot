@@ -13,12 +13,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Simple function to get current user from server
   const fetchUser = useCallback(async () => {
     try {
-      // Call server-side API that reads httpOnly cookies
-      const response = await fetch("/api/auth/session", {
-        method: "GET",
-        credentials: "include",
-      });
+      // Helper to fetch with no-store to avoid any caching flicker
+      const doFetch = async () =>
+        fetch("/api/auth/session", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          // Bust any intermediate caches just in case
+          headers: { "x-request-ts": Date.now().toString() },
+        });
 
+      // First attempt
+      let response = await doFetch();
       if (response.ok) {
         const data = await response.json();
         if (data.user) {
@@ -28,7 +34,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // No valid session
+      // If first attempt returned null, retry once after a short tick to smooth over transient states
+      await new Promise((r) => setTimeout(r, 75));
+      response = await doFetch();
+      if (response.ok) {
+        const data = await response.json();
+        if (data.user) {
+          setUser(data.user);
+          console.log("[Auth] User authenticated (retry):", data.user.email);
+          return;
+        }
+      }
+
+      // No valid session after retry
       setUser(null);
       console.log("[Auth] No authenticated user");
     } catch (error) {
