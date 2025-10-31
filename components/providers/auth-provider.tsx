@@ -13,44 +13,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Simple function to get current user from server
   const fetchUser = useCallback(async () => {
     try {
-      // Get session info from cookies
-      const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
-      const cookies = document.cookie.split(";").reduce((acc, cookie) => {
-        const [key, val] = cookie.trim().split("=");
-        acc[key] = val;
-        return acc;
-      }, {} as Record<string, string>);
-
-      // Try Appwrite session cookie first
-      const appwriteSessionCookie = projectId
-        ? cookies[`a_session_${projectId}`]
-        : null;
-
-      // Fallback to custom session cookies
-      const fallbackSessionId = cookies["appwrite-session"];
-      const fallbackUserId = cookies.appwrite_user_id;
-
-      const sessionId = appwriteSessionCookie || fallbackSessionId;
-      const userId = fallbackUserId;
-
-      if (!sessionId || !userId) {
-        console.log("[Auth] No session cookies found");
-        setUser(null);
-        return;
-      }
-
-      // Use server-side validation API with session info
-      const response = await fetch(
-        `/api/auth/quick-validate?sessionId=${sessionId}&userId=${userId}`,
-        {
-          method: "GET",
-          credentials: "include",
-        }
-      );
+      // Call server-side API that reads httpOnly cookies
+      const response = await fetch("/api/auth/session", {
+        method: "GET",
+        credentials: "include",
+      });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.valid && data.user) {
+        if (data.user) {
           setUser(data.user);
           console.log("[Auth] User authenticated:", data.user.email);
           return;
