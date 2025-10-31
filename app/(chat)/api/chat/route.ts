@@ -37,6 +37,9 @@ import {
   getChatById,
   getMessagesByChatId,
   getUserByAppwriteId,
+  getUser,
+  createUserWithAppwriteId,
+  updateUserAppwriteId,
   saveChat,
   saveMessages,
   updateChatLastContextById,
@@ -142,13 +145,46 @@ export async function POST(request: Request) {
       return new ChatSDKError("unauthorized:chat").toResponse();
     }
 
-    // Verify user exists in database using Appwrite ID
-    const dbUser = await getUserByAppwriteId(session.user.id);
+    // Verify user exists in database; if not, repair mapping via email
+    let dbUser = await getUserByAppwriteId(session.user.id);
     if (!dbUser) {
-      console.error(
-        `[Auth Error] User with Appwrite ID ${session.user.id} not found in database`
+      console.warn(
+        `[Auth Repair] No DB user for appwriteId=${session.user.id}, attempting email fallback...`
       );
-      return new ChatSDKError("unauthorized:chat").toResponse();
+      if (session.user.email) {
+        try {
+          const usersByEmail = await getUser(session.user.email);
+          if (usersByEmail?.[0]) {
+            // Backfill missing appwriteId on existing DB user
+            const updated = await updateUserAppwriteId(
+              usersByEmail[0].id,
+              session.user.id
+            );
+            dbUser = updated?.[0] || usersByEmail[0];
+            console.log(
+              `[Auth Repair] Linked existing user ${dbUser.id} to appwriteId=${session.user.id}`
+            );
+          } else {
+            // Create a new DB user with appwriteId mapping
+            const created = await createUserWithAppwriteId(
+              session.user.email,
+              session.user.id
+            );
+            dbUser = created?.[0];
+            console.log(
+              `[Auth Repair] Created DB user ${dbUser?.id} for appwriteId=${session.user.id}`
+            );
+          }
+        } catch (e) {
+          console.error("[Auth Repair] Failed to resolve DB user via email:", e);
+        }
+      }
+      if (!dbUser) {
+        console.error(
+          `[Auth Error] Could not resolve DB user for appwriteId=${session.user.id}`
+        );
+        return new ChatSDKError("unauthorized:chat").toResponse();
+      }
     }
 
     // Check daily usage limit based on user's plan
