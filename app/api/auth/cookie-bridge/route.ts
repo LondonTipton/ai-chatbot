@@ -62,11 +62,28 @@ export function GET(request: NextRequest) {
     </html>
     `;
 
-    return new NextResponse(html, {
+    const isProduction = process.env.NODE_ENV === "production";
+    const cookieOptions = {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: isProduction,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+      ...(isProduction && process.env.COOKIE_DOMAIN
+        ? { domain: process.env.COOKIE_DOMAIN }
+        : {}),
+    };
+
+    // Set httpOnly cookies on the response to ensure server-side visibility immediately
+    const response = new NextResponse(html, {
       headers: {
         "Content-Type": "text/html",
       },
     });
+    response.cookies.set("appwrite-session", sessionId, cookieOptions);
+    response.cookies.set("appwrite_user_id", userId, cookieOptions);
+
+    return response;
   } catch (error) {
     console.error("[cookie-bridge] Error:", error);
     return NextResponse.json(
