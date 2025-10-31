@@ -8,6 +8,7 @@ import {
   getChatById,
   getMessagesByChatId,
   getUserByAppwriteId,
+  getUser,
 } from "@/lib/db/queries";
 import { convertToUIMessages } from "@/lib/utils";
 
@@ -39,9 +40,24 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     });
     console.log(`[Chat ${id}] Chat owner:`, chat.userId);
 
-    // Check if the chat belongs to the current user
-    // Try to find the database user by Appwrite ID
-    const dbUser = await getUserByAppwriteId(session.user.id);
+    // Resolve ownership
+    // 1) Try DB user by Appwrite ID
+    let dbUser = await getUserByAppwriteId(session.user.id);
+
+    // 2) Fallback: if missing, try by email (handles users without appwriteId mapped)
+    if (!dbUser && session.user.email) {
+      try {
+        const usersByEmail = await getUser(session.user.email);
+        dbUser = usersByEmail?.[0] || null;
+        if (dbUser) {
+          console.log(
+            `[Chat ${id}] Resolved user via email fallback: ${dbUser.id}`
+          );
+        }
+      } catch (e) {
+        console.warn(`[Chat ${id}] Email fallback lookup failed:`, e);
+      }
+    }
 
     console.log(
       `[Chat ${id}] Database user lookup:`,
@@ -54,8 +70,9 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         : "null"
     );
 
-    // If we can't find the user by Appwrite ID, check if the session user ID
-    // directly matches the chat's user ID (for backward compatibility)
+    // Ownership rules:
+    // - Preferred: dbUser.id (UUID) must match chat.userId
+    // - Legacy fallback: session.user.id (Appwrite ID) equals chat.userId
     const isOwner = dbUser
       ? dbUser.id === chat.userId
       : session.user.id === chat.userId;
@@ -68,7 +85,6 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     });
 
     if (!isOwner) {
-      // Show a more helpful error message
       console.error(
         `[Chat Access Denied] User ${session.user.id} (email: ${session.user.email}) attempted to access chat ${id} owned by ${chat.userId}`
       );
@@ -87,9 +103,18 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
 
   // Determine if the chat is readonly
   // Get the database user to compare with chat.userId
-  const dbUser = session?.user?.id
+  // Resolve dbUser again for readonly flag (use same fallbacks)
+  let dbUser = session?.user?.id
     ? await getUserByAppwriteId(session.user.id)
     : null;
+  if (!dbUser && session?.user?.email) {
+    try {
+      const usersByEmail = await getUser(session.user.email);
+      dbUser = usersByEmail?.[0] || null;
+    } catch (e) {
+      console.warn(`[Chat ${id}] Email fallback lookup (readonly) failed:`, e);
+    }
+  }
 
   // Check ownership: either database user ID matches, or session user ID matches directly
   const isOwner = dbUser
