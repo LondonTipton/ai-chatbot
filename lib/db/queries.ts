@@ -241,7 +241,9 @@ export async function getChatsByUserId({
 
     if (!actualUserId) {
       console.log(
-        `[getChatsByUserId] Could not resolve user to UUID (appwriteId=${id}, email=${email ?? "n/a"})`
+        `[getChatsByUserId] Could not resolve user to UUID (appwriteId=${id}, email=${
+          email ?? "n/a"
+        })`
       );
       return { chats: [], hasMore: false };
     }

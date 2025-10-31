@@ -7,8 +7,8 @@ import { auth } from "@/lib/appwrite/server-auth";
 import {
   getChatById,
   getMessagesByChatId,
-  getUserByAppwriteId,
   getUser,
+  getUserByAppwriteId,
 } from "@/lib/db/queries";
 import { convertToUIMessages } from "@/lib/utils";
 
@@ -73,7 +73,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     // Ownership rules (accept both modern and legacy):
     // - Modern: dbUser.id (UUID) matches chat.userId
     // - Legacy: session.user.id (Appwrite ID) matches chat.userId
-    const isOwner = (dbUser ? dbUser.id === chat.userId : false) ||
+    const isOwner =
+      (dbUser ? dbUser.id === chat.userId : false) ||
       session.user.id === chat.userId;
 
     console.log(`[Chat ${id}] Ownership check:`, {
@@ -116,8 +117,9 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   }
 
   // Check ownership: either database user ID matches, or session user ID matches directly
-  const isOwner = (dbUser ? dbUser.id === chat.userId : false) ||
-    (session?.user?.id === chat.userId);
+  const isOwner =
+    (dbUser ? dbUser.id === chat.userId : false) ||
+    session?.user?.id === chat.userId;
 
   const isReadonly = !isOwner;
 
