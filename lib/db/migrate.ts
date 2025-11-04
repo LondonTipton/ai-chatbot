@@ -6,9 +6,9 @@ import { createLogger } from "@/lib/logger";
 
 const logger = createLogger("db/migrate");
 
-config({
-  path: ".env.local",
-});
+// Load environment variables from .env.local first, then .env as fallback
+config({ path: ".env.local" });
+config({ path: ".env" });
 
 const runMigrate = async () => {
   if (!process.env.POSTGRES_URL) {

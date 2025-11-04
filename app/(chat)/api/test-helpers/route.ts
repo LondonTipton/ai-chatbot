@@ -20,12 +20,14 @@ import {
   rollbackTransaction,
 } from "@/lib/db/usage-transaction";
 
-// Only allow in non-production environments
-if (process.env.NODE_ENV === "production") {
-  throw new Error("Test helpers are not available in production");
-}
-
 export async function POST(request: Request) {
+  // Only allow in non-production environments
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Test helpers are not available in production" },
+      { status: 403 }
+    );
+  }
   try {
     const body = await request.json();
     const { action, ...params } = body;
