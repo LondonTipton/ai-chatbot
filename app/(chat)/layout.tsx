@@ -6,6 +6,9 @@ import { DataStreamProvider } from "@/components/data-stream-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { validateSession } from "@/lib/appwrite/auth";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("(chat)/layout");
 
 export const experimental_ppr = true;
 
@@ -50,7 +53,7 @@ export default async function Layout({
         } as any;
       }
     } catch (error) {
-      console.error("[layout] Fallback user validation failed:", error);
+      logger.error("[layout] Fallback user validation failed:", error);
     }
   }
 

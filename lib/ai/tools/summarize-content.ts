@@ -1,5 +1,8 @@
 import { generateText } from "ai";
 import { myProvider } from "@/lib/ai/providers";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("tools/summarize-content");
 
 /**
  * Estimate token count (rough approximation: 1 token ≈ 4 characters)
@@ -22,7 +25,7 @@ export async function summarizeContent(
     return content;
   }
 
-  console.log(
+  logger.log(
     `[Summarize] Content too long (${content.length} chars), summarizing to ~${maxLength} chars`
   );
 
@@ -35,7 +38,7 @@ export async function summarizeContent(
     // If content is extremely long, chunk it first
     let processedContent = content;
     if (content.length > maxInputChars) {
-      console.log(
+      logger.log(
         `[Summarize] Content exceeds safe limit, chunking from ${content.length} to ${maxInputChars} chars`
       );
 
@@ -61,12 +64,12 @@ Provide a concise summary (max ${Math.floor(
     )} words) that preserves all critical legal information:`;
 
     const estimatedTokens = estimateTokens(promptText);
-    console.log(
+    logger.log(
       `[Summarize] Estimated tokens: ${estimatedTokens} (limit: 128K)`
     );
 
     if (estimatedTokens > 120_000) {
-      console.warn(
+      logger.warn(
         `[Summarize] Still too long after chunking (${estimatedTokens} tokens), using simple truncation`
       );
       return (
@@ -76,17 +79,20 @@ Provide a concise summary (max ${Math.floor(
     }
 
     // Use a powerful model for summarization (title-model uses llama-3.3-70b with 128K context)
+    logger.log(
+      "[Summarize] 🧠 Using Cerebras title-model for content summarization (reasoning enabled)"
+    );
     const { text } = await generateText({
       model: myProvider.languageModel("title-model"),
       prompt: promptText,
     });
 
-    console.log(
+    logger.log(
       `[Summarize] Reduced from ${content.length} to ${text.length} chars`
     );
     return text;
   } catch (error) {
-    console.error("[Summarize] Failed to summarize content:", error);
+    logger.error("[Summarize] Failed to summarize content:", error);
 
     // Check if it's a context length error
     if (
@@ -94,7 +100,7 @@ Provide a concise summary (max ${Math.floor(
       (error.message.includes("context_length_exceeded") ||
         error.message.includes("reduce the length"))
     ) {
-      console.log(
+      logger.log(
         "[Summarize] Context length exceeded, using simple truncation"
       );
     }

@@ -1,4 +1,8 @@
 import { Account, Client, ID, type Models } from "node-appwrite";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("appwrite/auth");
+
 import {
   createAdminClient,
   createSessionClient,
@@ -54,7 +58,7 @@ async function retryWithBackoff<T>(
         RETRY_CONFIG.maxDelay
       );
 
-      console.warn(
+      logger.warn(
         `[AUTH] Retry attempt ${attempt + 1}/${
           RETRY_CONFIG.maxRetries
         } for ${operation} after ${delay}ms`
@@ -99,13 +103,13 @@ export function createEmailSession(
 ): Promise<Models.Session> {
   return retryWithBackoff(async () => {
     try {
-      console.log("[AUTH] Creating email session for:", email);
+      logger.log("[AUTH] Creating email session for:", email);
 
       // Create a fresh client without any session or API key
       // This allows email/password authentication
       const config = getAppwriteConfig();
 
-      console.log("[AUTH] Config loaded, endpoint:", config.endpoint);
+      logger.log("[AUTH] Config loaded, endpoint:", config.endpoint);
 
       const client = new Client()
         .setEndpoint(config.endpoint)
@@ -113,24 +117,24 @@ export function createEmailSession(
 
       const account = new Account(client);
 
-      console.log("[AUTH] Calling Appwrite createEmailPasswordSession...");
+      logger.log("[AUTH] Calling Appwrite createEmailPasswordSession...");
 
       // This will verify the password and create a session
       const session = await account.createEmailPasswordSession(email, password);
 
-      console.log("[AUTH] Session created successfully:", session.$id);
-      console.log("[AUTH] Session object keys:", Object.keys(session));
-      console.log("[AUTH] Session secret:", session.secret);
-      console.log("[AUTH] Session provider:", session.provider);
-      console.log("[AUTH] Session userId:", session.userId);
-      console.log(
+      logger.log("[AUTH] Session created successfully:", session.$id);
+      logger.log("[AUTH] Session object keys:", Object.keys(session));
+      logger.log("[AUTH] Session secret:", session.secret);
+      logger.log("[AUTH] Session provider:", session.provider);
+      logger.log("[AUTH] Session userId:", session.userId);
+      logger.log(
         "[AUTH] Full session object:",
         JSON.stringify(session, null, 2)
       );
 
       return session;
     } catch (error) {
-      console.error("[AUTH] Error creating session:", error);
+      logger.error("[AUTH] Error creating session:", error);
       throw handleAppwriteError(error);
     }
   }, "createEmailSession");
@@ -222,7 +226,7 @@ export function refreshSession(sessionId: string): Promise<Models.Session> {
       // Getting the session is sufficient to refresh it
       const session = await account.getSession("current");
 
-      console.log(
+      logger.log(
         `[auth] Session refreshed successfully. New expiration: ${session.expire}`
       );
 
@@ -275,10 +279,10 @@ export function createVerification(
 
     try {
       const token = await account.createVerification(verificationUrl);
-      console.log("[AUTH] Verification email sent successfully");
+      logger.log("[AUTH] Verification email sent successfully");
       return token;
     } catch (error) {
-      console.error("[AUTH] Failed to send verification email:", error);
+      logger.error("[AUTH] Failed to send verification email:", error);
       throw handleAppwriteError(error);
     }
   }, "createVerification");

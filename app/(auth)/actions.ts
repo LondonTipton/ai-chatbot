@@ -13,6 +13,9 @@ import {
   setSessionCookie,
 } from "@/lib/appwrite/session";
 import { createUserWithAppwriteId, getUser } from "@/lib/db/queries";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("(auth)/actions");
 
 const authFormSchema = z.object({
   email: z.string().email(),
@@ -29,14 +32,14 @@ export const login = async (
   formData: FormData
 ): Promise<LoginActionState> => {
   try {
-    console.log("[LOGIN] Starting login process");
+    logger.log("[LOGIN] Starting login process");
 
     const validatedData = authFormSchema.parse({
       email: formData.get("email"),
       password: formData.get("password"),
     });
 
-    console.log("[LOGIN] Validation passed, creating session");
+    logger.log("[LOGIN] Validation passed, creating session");
 
     // Create Appwrite session
     const session = await createEmailSession(
@@ -44,13 +47,13 @@ export const login = async (
       validatedData.password
     );
 
-    console.log("[LOGIN] Session created:", session.$id);
-    console.log("[LOGIN] Session secret available:", !!session.secret);
+    logger.log("[LOGIN] Session created:", session.$id);
+    logger.log("[LOGIN] Session secret available:", !!session.secret);
 
     // Check if user exists in local database and sync Appwrite ID if needed
     const [dbUser] = await getUser(validatedData.email);
     if (dbUser && !dbUser.appwriteId) {
-      console.log(
+      logger.log(
         "[LOGIN] User exists but missing Appwrite ID, syncing:",
         session.userId
       );
@@ -58,7 +61,7 @@ export const login = async (
       await updateUserAppwriteId(dbUser.id, session.userId);
     } else if (!dbUser) {
       // User doesn't exist in database yet, create them
-      console.log("[LOGIN] User not in database, creating:", session.userId);
+      logger.log("[LOGIN] User not in database, creating:", session.userId);
       await createUserWithAppwriteId(validatedData.email, session.userId);
     }
 
@@ -66,11 +69,11 @@ export const login = async (
     // The secret is the actual session token that Appwrite uses for authentication
     await setSessionCookie(session.$id, session.secret, session.userId);
 
-    console.log("[LOGIN] Session cookie set, login successful");
+    logger.log("[LOGIN] Session cookie set, login successful");
 
     return { status: "success" };
   } catch (error) {
-    console.error("[LOGIN] Error during login:", error);
+    logger.error("[LOGIN] Error during login:", error);
     if (error instanceof z.ZodError) {
       return { status: "invalid_data", error: "Invalid email or password" };
     }
@@ -187,7 +190,7 @@ export const logout = async (): Promise<void> => {
     // Clear session cookie
     await clearSessionCookie();
   } catch (error) {
-    console.error("[logout] Error during logout:", error);
+    logger.error("[logout] Error during logout:", error);
     // Always clear the cookie even if Appwrite deletion fails
     await clearSessionCookie();
   }
@@ -201,7 +204,7 @@ export type ResendVerificationActionState = {
 export const resendVerification =
   async (): Promise<ResendVerificationActionState> => {
     try {
-      console.log("[RESEND_VERIFICATION] Starting resend verification process");
+      logger.log("[RESEND_VERIFICATION] Starting resend verification process");
 
       // Get the current session
       const sessionId = await getSessionCookie();
@@ -222,11 +225,11 @@ export const resendVerification =
       }/verify`;
       await createVerification(sessionId, verificationUrl);
 
-      console.log("[RESEND_VERIFICATION] Verification email sent successfully");
+      logger.log("[RESEND_VERIFICATION] Verification email sent successfully");
 
       return { status: "success" };
     } catch (error) {
-      console.error("[RESEND_VERIFICATION] Error:", error);
+      logger.error("[RESEND_VERIFICATION] Error:", error);
 
       const authError = error as AuthError;
 

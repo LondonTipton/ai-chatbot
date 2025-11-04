@@ -3,6 +3,12 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
 import { tavilyExtractTool } from "../tools/tavily-extract";
 
 /**
+ * Initialize the Cerebras provider ONCE at module load time
+ * This prevents multiple provider instances during streaming
+ */
+const cerebrasProvider = getBalancedCerebrasProvider();
+
+/**
  * Extract Agent - Step 2 of Deep Research Workflow
  * Extracts full content from sources (max 4 extractions)
  */
@@ -30,10 +36,7 @@ For each source, provide:
 
 Do NOT analyze - just extract. The analysis agent will handle that.`,
 
-  model: () => {
-    const provider = getBalancedCerebrasProvider();
-    return provider("gpt-oss-120b");
-  },
+  model: () => cerebrasProvider("gpt-oss-120b"),
 
   tools: {
     tavilyExtractTool,

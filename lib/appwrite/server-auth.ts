@@ -1,6 +1,9 @@
 import { cookies } from "next/headers";
+import { createLogger } from "@/lib/logger";
 import type { Session } from "@/lib/types";
 import { createAdminClient } from "./config";
+
+const logger = createLogger("appwrite/server-auth");
 
 /**
  * Get the current authenticated user session on the server
@@ -13,7 +16,7 @@ export async function auth(): Promise<Session | null> {
     const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 
     if (!projectId) {
-      console.error("[server-auth] Missing NEXT_PUBLIC_APPWRITE_PROJECT_ID");
+      logger.error("[server-auth] Missing NEXT_PUBLIC_APPWRITE_PROJECT_ID");
       return null;
     }
 
@@ -31,7 +34,7 @@ export async function auth(): Promise<Session | null> {
       cookieStore.get("appwrite_user_id_js")?.value ||
       null;
 
-    console.log(
+    logger.log(
       `[server-auth] Checking cookies - appwrite session: ${!!sessionToken}, fallback session: ${!!fallbackSession}, userId: ${!!userIdCookie}`
     );
 
@@ -41,7 +44,7 @@ export async function auth(): Promise<Session | null> {
         const { users } = createAdminClient();
         const user = await users.get(userIdCookie);
 
-        console.log(
+        logger.log(
           `[server-auth] Successfully validated user via userId: ${user.email}`
         );
         return {
@@ -52,7 +55,7 @@ export async function auth(): Promise<Session | null> {
           },
         };
       } catch (userError) {
-        console.error(
+        logger.error(
           "[server-auth] Error validating user with userId cookie:",
           userError
         );
@@ -62,16 +65,16 @@ export async function auth(): Promise<Session | null> {
     // Fallback method: if we have a fallback session but no userId, we can't validate session without secret.
     // Prefer returning null to trigger client-side fetch/bridge to upgrade cookies.
     if (sessionToken || fallbackSession) {
-      console.log(
+      logger.log(
         "[server-auth] Session tokens present but no userId cookie; returning null to let client bridge upgrade cookies"
       );
       return null;
     }
 
-    console.log("[server-auth] No authentication cookies found");
+    logger.log("[server-auth] No authentication cookies found");
     return null;
   } catch (error) {
-    console.error("[server-auth] Unexpected error getting session:", error);
+    logger.error("[server-auth] Unexpected error getting session:", error);
     return null;
   }
 }

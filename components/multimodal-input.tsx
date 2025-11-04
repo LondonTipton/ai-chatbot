@@ -23,6 +23,7 @@ import { SelectItem } from "@/components/ui/select";
 import { useUsage } from "@/hooks/use-usage";
 import { chatModels } from "@/lib/ai/models";
 import { myProvider } from "@/lib/ai/providers";
+import { createLogger } from "@/lib/logger";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,8 @@ import { SuggestedActions } from "./suggested-actions";
 import { Button } from "./ui/button";
 import { UpgradeDialog } from "./upgrade-dialog";
 import type { VisibilityType } from "./visibility-selector";
+
+const logger = createLogger("multimodal-input");
 
 function PureMultimodalInput({
   chatId,
@@ -241,7 +244,7 @@ function PureMultimodalInput({
           ...successfullyUploadedAttachments,
         ]);
       } catch (error) {
-        console.error("Error uploading files!", error);
+        logger.error("Error uploading files!", error);
       } finally {
         setUploadQueue([]);
       }

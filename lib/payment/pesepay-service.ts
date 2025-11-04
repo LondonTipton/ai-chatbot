@@ -1,3 +1,7 @@
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("payment/pesepay-service");
+
 const { Pesepay } = require("pesepay");
 
 export type SeamlessTransactionData = {
@@ -33,7 +37,7 @@ export class PesepayService {
       );
     }
 
-    console.log("[PesepayService] Initializing with official package");
+    logger.log("[PesepayService] Initializing with official package");
     this.pesepay = new Pesepay(integrationKey, encryptionKey);
     this.pesepay.resultUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/callback`;
     this.pesepay.returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/payment/status`;
@@ -54,7 +58,7 @@ export class PesepayService {
       );
       return response.data;
     } catch (error: any) {
-      console.error(
+      logger.error(
         "[PesepayService] Error fetching currencies:",
         error.message
       );
@@ -77,7 +81,7 @@ export class PesepayService {
       );
       return response.data;
     } catch (error: any) {
-      console.error(
+      logger.error(
         "[PesepayService] Error fetching payment methods:",
         error.message
       );
@@ -96,7 +100,7 @@ export class PesepayService {
         data.customerName
       );
 
-      console.log("[PesepayService] Payment object created:", {
+      logger.log("[PesepayService] Payment object created:", {
         currencyCode: payment.currencyCode,
         paymentMethodCode: payment.paymentMethodCode,
         customer: payment.customer,
@@ -104,7 +108,7 @@ export class PesepayService {
         resultUrl: this.pesepay.resultUrl,
       });
 
-      console.log(
+      logger.log(
         "[PesepayService] Initiating seamless payment:",
         data.referenceNumber
       );
@@ -117,7 +121,7 @@ export class PesepayService {
         requiredFields.customerPhoneNumber = data.customerPhone;
       }
 
-      console.log("[PesepayService] Payment details:", {
+      logger.log("[PesepayService] Payment details:", {
         amount: data.amount,
         description: data.description,
         referenceNumber: data.referenceNumber,
@@ -132,7 +136,7 @@ export class PesepayService {
         requiredFields
       );
 
-      console.log("[PesepayService] Seamless payment response:", {
+      logger.log("[PesepayService] Seamless payment response:", {
         success: response.success,
         referenceNumber: response.referenceNumber,
         pollUrl: response.pollUrl,
@@ -156,11 +160,11 @@ export class PesepayService {
         message: response.message,
       };
     } catch (error: any) {
-      console.error(
+      logger.error(
         "[PesepayService] Error initiating transaction:",
         error.message
       );
-      console.error("[PesepayService] Full error:", error);
+      logger.error("[PesepayService] Full error:", error);
       throw error;
     }
   }
@@ -174,7 +178,7 @@ export class PesepayService {
         data.description
       );
 
-      console.log(
+      logger.log(
         "[PesepayService] Initiating redirect payment:",
         data.referenceNumber
       );
@@ -188,7 +192,7 @@ export class PesepayService {
         message: response.message,
       };
     } catch (error: any) {
-      console.error(
+      logger.error(
         "[PesepayService] Error initiating redirect transaction:",
         error.message
       );
@@ -202,7 +206,7 @@ export class PesepayService {
     try {
       const response = await this.pesepay.checkPayment(referenceNumber);
 
-      console.log("[PesepayService] Payment status response:", response);
+      logger.log("[PesepayService] Payment status response:", response);
 
       return {
         transactionStatus: response.paid ? "PAID" : "PENDING",
@@ -213,7 +217,7 @@ export class PesepayService {
         pollUrl: response.pollUrl,
       };
     } catch (error: any) {
-      console.error("[PesepayService] Error checking status:", error.message);
+      logger.error("[PesepayService] Error checking status:", error.message);
       throw new Error("Failed to check transaction status");
     }
   }
@@ -222,7 +226,7 @@ export class PesepayService {
     try {
       return this.pesepay.payloadDecrypt(encryptedData);
     } catch (error: any) {
-      console.error(
+      logger.error(
         "[PesepayService] Error processing callback:",
         error.message
       );

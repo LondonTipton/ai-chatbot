@@ -3,6 +3,9 @@
 import type { Models } from "appwrite";
 import { useCallback, useEffect, useState } from "react";
 import { AuthContext, type AuthContextValue } from "@/hooks/use-auth";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("providers/auth-provider");
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(
@@ -29,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         if (data.user) {
           setUser(data.user);
-          console.log("[Auth] User authenticated:", data.user.email);
+          logger.log("[Auth] User authenticated:", data.user.email);
           return;
         }
       }
@@ -41,18 +44,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         if (data.user) {
           setUser(data.user);
-          console.log("[Auth] User authenticated (retry):", data.user.email);
+          logger.log("[Auth] User authenticated (retry):", data.user.email);
           return;
         }
       }
 
       // No valid session after retry
       setUser(null);
-      console.log("[Auth] No authenticated user");
+      logger.log("[Auth] No authenticated user");
     } catch (error) {
       // Error fetching user - treat as not authenticated
       setUser(null);
-      console.log("[Auth] Error fetching user:", error);
+      logger.log("[Auth] Error fetching user:", error);
     }
   }, []);
 
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
-      console.log("[Auth] Initializing...");
+      logger.log("[Auth] Initializing...");
       await fetchUser();
       setIsLoading(false);
     };

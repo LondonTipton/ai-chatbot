@@ -2,6 +2,9 @@ import { eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("callback/route");
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Webhook error:", error);
+    logger.error("Webhook error:", error);
     return NextResponse.json(
       {
         error:
@@ -142,7 +145,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Webhook error:", error);
+    logger.error("Webhook error:", error);
     return NextResponse.json(
       {
         error:

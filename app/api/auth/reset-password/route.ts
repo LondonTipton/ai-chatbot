@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/appwrite/config";
 import { handleAppwriteError } from "@/lib/appwrite/errors";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("reset-password/route");
 
 export async function POST(request: Request) {
   try {
@@ -32,7 +35,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const authError = handleAppwriteError(error);
-    console.error("[RESET_PASSWORD] Error:", authError);
+    logger.error("[RESET_PASSWORD] Error:", authError);
 
     return NextResponse.json(
       {

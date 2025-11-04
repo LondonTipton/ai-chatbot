@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/appwrite/auth";
 import { createAdminClient } from "@/lib/appwrite/config";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("session/route");
 
 /**
  * Get current session user
@@ -12,7 +15,7 @@ export async function GET(_: NextRequest) {
     const cookieStore = await cookies();
     const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 
-    console.log("[session] Project ID:", projectId);
+    logger.log("[session] Project ID:", projectId);
 
     // Try Appwrite session cookie (secret) first
     const appwriteSessionCookie = projectId
@@ -31,15 +34,15 @@ export async function GET(_: NextRequest) {
       cookieStore.get("appwrite_user_id_js")?.value ||
       null;
 
-    console.log(
+    logger.log(
       "[session] Appwrite session cookie:",
       appwriteSessionCookie ? "found" : "not found"
     );
-    console.log(
+    logger.log(
       "[session] Fallback session ID:",
       fallbackSessionId ? "found" : "not found"
     );
-    console.log(
+    logger.log(
       "[session] Fallback user ID:",
       fallbackUserId ? "found" : "not found"
     );
@@ -47,12 +50,12 @@ export async function GET(_: NextRequest) {
     // Primary path: we have the Appwrite session secret cookie
     if (appwriteSessionCookie) {
       const secretPreview = `${appwriteSessionCookie.substring(0, 8)}...`;
-      console.log("[session] Using Appwrite session secret:", secretPreview);
+      logger.log("[session] Using Appwrite session secret:", secretPreview);
 
       // Get user from Appwrite using the session secret
       const user = await getCurrentUser(appwriteSessionCookie);
       if (user) {
-        console.log("[session] User found via secret:", user.email);
+        logger.log("[session] User found via secret:", user.email);
         const resp = NextResponse.json(
           {
             user: {
@@ -72,7 +75,7 @@ export async function GET(_: NextRequest) {
       }
 
       // Secret exists but is invalid/expired; fall back to admin lookup using our cookies
-      console.log(
+      logger.log(
         "[session] Secret invalid; attempting fallback via userId/sessionId cookies"
       );
 
@@ -121,13 +124,13 @@ export async function GET(_: NextRequest) {
             fallbackUserId,
             cookieOptions
           );
-          console.log(
+          logger.log(
             "[session] Fallback user found via admin after secret failure:",
             fbUser.email
           );
           return response;
         } catch (e) {
-          console.error(
+          logger.error(
             "[session] Fallback via admin after secret failure also failed:",
             e
           );
@@ -154,7 +157,7 @@ export async function GET(_: NextRequest) {
 
     // Fallback path: we only have our custom cookies (sessionId + userId)
     if (fallbackSessionId && fallbackUserId) {
-      console.log(
+      logger.log(
         "[session] Using fallback cookies - sessionId:",
         `${fallbackSessionId.substring(0, 8)}...`,
         "userId:",
@@ -203,10 +206,10 @@ export async function GET(_: NextRequest) {
         );
         response.cookies.set("appwrite_user_id", fallbackUserId, cookieOptions);
 
-        console.log("[session] Fallback user found:", user.email);
+        logger.log("[session] Fallback user found:", user.email);
         return response;
       } catch (e) {
-        console.error("[session] Fallback validation failed:", e);
+        logger.error("[session] Fallback validation failed:", e);
         const resp = NextResponse.json({ user: null }, { status: 200 });
         resp.headers.set(
           "Cache-Control",
@@ -216,12 +219,12 @@ export async function GET(_: NextRequest) {
       }
     }
 
-    console.log("[session] No session cookies found");
+    logger.log("[session] No session cookies found");
     const resp = NextResponse.json({ user: null }, { status: 200 });
     resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
     return resp;
   } catch (error) {
-    console.error("[session] Error getting session:", error);
+    logger.error("[session] Error getting session:", error);
     const resp = NextResponse.json({ user: null }, { status: 200 });
     resp.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
     return resp;

@@ -17,7 +17,10 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsMainChatPage } from "@/hooks/use-is-main-chat-page";
+import { createLogger } from "@/lib/logger";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+
+const logger = createLogger("app-sidebar");
 
 type User = {
   id: string;
@@ -61,10 +64,10 @@ function AppSidebarComponent({ user }: { user: User | undefined }) {
     prevCurrentUserRef.current !== currentUserEmail ||
     prevLoadingRef.current !== isLoading
   ) {
-    console.log("[AppSidebar] Server user:", userEmail || "None");
-    console.log("[AppSidebar] Client user:", authUserEmail || "None");
-    console.log("[AppSidebar] Final currentUser:", currentUserEmail || "None");
-    console.log("[AppSidebar] Auth loading:", isLoading);
+    logger.log("[AppSidebar] Server user:", userEmail || "None");
+    logger.log("[AppSidebar] Client user:", authUserEmail || "None");
+    logger.log("[AppSidebar] Final currentUser:", currentUserEmail || "None");
+    logger.log("[AppSidebar] Auth loading:", isLoading);
 
     prevUserRef.current = userEmail;
     prevAuthUserRef.current = authUserEmail;

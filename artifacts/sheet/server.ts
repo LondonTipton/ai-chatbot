@@ -9,6 +9,9 @@ export const sheetDocumentHandler = createDocumentHandler<"sheet">({
   onCreateDocument: async ({ title, dataStream }) => {
     let draftContent = "";
 
+    console.log(
+      "[Artifact] 🧠 Creating sheet document with Cerebras artifact-model (reasoning enabled)"
+    );
     const { fullStream } = streamObject({
       model: myProvider.languageModel("artifact-model"),
       system: sheetPrompt,
@@ -48,6 +51,9 @@ export const sheetDocumentHandler = createDocumentHandler<"sheet">({
   onUpdateDocument: async ({ document, description, dataStream }) => {
     let draftContent = "";
 
+    console.log(
+      "[Artifact] 🧠 Updating sheet document with Cerebras artifact-model (reasoning enabled)"
+    );
     const { fullStream } = streamObject({
       model: myProvider.languageModel("artifact-model"),
       system: updateDocumentPrompt(document.content, "sheet"),

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/appwrite/config";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("sync/route");
 
 export async function POST(request: Request) {
   try {
@@ -11,7 +14,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log(
+    logger.log(
       `[sync] Validating session for userId=${userId.substring(0, 8)}...`
     );
 
@@ -20,11 +23,11 @@ export async function POST(request: Request) {
 
     // First ensure user exists
     const user = await users.get(userId);
-    console.log(`[sync] User found: ${user.email}`);
+    logger.log(`[sync] User found: ${user.email}`);
 
     // For now, we'll trust that if the user exists and we got valid sessionId/userId from the client,
     // the session is valid. In production, you might want to add additional validation.
-    console.log("[sync] Session validation passed (user exists)");
+    logger.log("[sync] Session validation passed (user exists)");
 
     const response = NextResponse.json({ valid: true }, { status: 200 });
 
@@ -53,23 +56,23 @@ export async function POST(request: Request) {
       httpOnly: false,
     });
 
-    console.log(
+    logger.log(
       `[sync] Set cookies for sessionId=${sessionId.substring(
         0,
         8
       )}..., userId=${userId.substring(0, 8)}...`
     );
-    console.log("[sync] HttpOnly cookies: appwrite-session, appwrite_user_id");
-    console.log(
+    logger.log("[sync] HttpOnly cookies: appwrite-session, appwrite_user_id");
+    logger.log(
       "[sync] Backup cookies: appwrite-session-backup, appwrite_user_id_backup"
     );
-    console.log(
+    logger.log(
       `[sync] Cookie settings - secure: ${cookieOptions.secure}, sameSite: ${cookieOptions.sameSite}, path: ${cookieOptions.path}`
     );
 
     return response;
   } catch {
-    console.log("[sync] Error during sync");
+    logger.log("[sync] Error during sync");
     return NextResponse.json({ error: "sync failed" }, { status: 500 });
   }
 }

@@ -1,7 +1,10 @@
 import { tool, type UIMessageStreamWriter } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
+
+const logger = createLogger("tools/tavily-search");
 
 type TavilySearchResult = {
   title: string;
@@ -150,7 +153,7 @@ export const tavilySearch = ({ dataStream }: TavilySearchProps = {}) =>
 
         return result;
       } catch (error) {
-        console.error("Tavily search error:", error);
+        logger.error("Tavily search error:", error);
 
         // Provide more helpful error context
         let errorResult: any;

@@ -4,14 +4,24 @@ import {
   artifactKinds,
   documentHandlersByArtifactKind,
 } from "@/lib/artifacts/server";
+import { createLogger } from "@/lib/logger";
 import type { ChatMessage, Session } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
+
+const logger = createLogger("tools/create-document");
 
 type CreateDocumentProps = {
   session: Session;
   dataStream: UIMessageStreamWriter<ChatMessage>;
 };
 
+/**
+ * AI SDK Tool: Create Document
+ *
+ * This tool wraps the document creation service with UI streaming capabilities.
+ * It handles real-time updates to the UI via dataStream while delegating
+ * the core business logic to the service layer.
+ */
 export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
   tool({
     description:
@@ -21,8 +31,17 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
       kind: z.enum(artifactKinds),
     }),
     execute: async ({ title, kind }) => {
+      logger.log(
+        `[createDocument] Tool called with title: "${title}", kind: ${kind}`
+      );
+
+      if (!session?.user?.id) {
+        throw new Error("User session required to create document");
+      }
+
       const id = generateUUID();
 
+      // Stream metadata to UI
       dataStream.write({
         type: "data-kind",
         data: kind,
@@ -47,6 +66,8 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
         transient: true,
       });
 
+      // Use the document handler to generate and save the document
+      // This maintains the streaming behavior for the UI
       const documentHandler = documentHandlersByArtifactKind.find(
         (documentHandlerByArtifactKind) =>
           documentHandlerByArtifactKind.kind === kind

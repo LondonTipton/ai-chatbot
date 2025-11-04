@@ -15,6 +15,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("checkout-form");
 
 interface CheckoutFormProps {
   plan: string;
@@ -76,7 +79,7 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        console.error("Non-JSON response:", text);
+        logger.error("Non-JSON response:", text);
         throw new Error(
           "Server error. Please check the setup at /payment/setup"
         );
@@ -91,7 +94,7 @@ export function CheckoutForm({ plan, amount }: CheckoutFormProps) {
       // Redirect to payment status page
       router.push(`/payment/status?ref=${data.referenceNumber}`);
     } catch (error) {
-      console.error("Payment error:", error);
+      logger.error("Payment error:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Failed to process payment";
 

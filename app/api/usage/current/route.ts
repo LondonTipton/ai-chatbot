@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/appwrite/server-auth";
 import { getUserByAppwriteId } from "@/lib/db/queries";
 import { getUserUsage } from "@/lib/db/usage";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("current/route");
 
 export async function GET() {
   try {
@@ -26,7 +29,7 @@ export async function GET() {
       percentage: (usage.requestsToday / usage.dailyLimit) * 100,
     });
   } catch (error) {
-    console.error("[Usage API] Error:", error);
+    logger.error("[Usage API] Error:", error);
     return NextResponse.json({ error: "Failed to get usage" }, { status: 500 });
   }
 }

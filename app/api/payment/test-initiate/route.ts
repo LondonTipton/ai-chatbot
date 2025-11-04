@@ -1,5 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { createLogger } from "@/lib/logger";
 import { pesepayService } from "@/lib/payment/pesepay-service";
+
+const logger = createLogger("test-initiate/route");
 
 /**
  * Test endpoint for Pesepay payment initiation (v1 API)
@@ -7,7 +10,7 @@ import { pesepayService } from "@/lib/payment/pesepay-service";
  */
 export async function GET(request: NextRequest) {
   try {
-    console.log("\n=== PESEPAY V1 API TEST ===\n");
+    logger.log("\n=== PESEPAY V1 API TEST ===\n");
 
     // Check credentials
     if (
@@ -24,16 +27,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log("✓ Credentials configured");
+    logger.log("✓ Credentials configured");
 
     // Step 1: Get active currencies
-    console.log("\n1. Fetching active currencies...");
+    logger.log("\n1. Fetching active currencies...");
     let currencies;
     try {
       currencies = await pesepayService.getActiveCurrencies();
-      console.log("✓ Currencies:", currencies);
+      logger.log("✓ Currencies:", currencies);
     } catch (error) {
-      console.error("✗ Failed to fetch currencies:", error);
+      logger.error("✗ Failed to fetch currencies:", error);
       return NextResponse.json(
         {
           error: "Failed to fetch currencies",
@@ -44,13 +47,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Step 2: Get payment methods for USD
-    console.log("\n2. Fetching payment methods for USD...");
+    logger.log("\n2. Fetching payment methods for USD...");
     let paymentMethods;
     try {
       paymentMethods = await pesepayService.getPaymentMethodsByCurrency("USD");
-      console.log("✓ Payment methods:", paymentMethods);
+      logger.log("✓ Payment methods:", paymentMethods);
     } catch (error) {
-      console.error("✗ Failed to fetch payment methods:", error);
+      logger.error("✗ Failed to fetch payment methods:", error);
       return NextResponse.json(
         {
           error: "Failed to fetch payment methods",
@@ -75,10 +78,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log("✓ Found Ecocash method:", ecocashMethod);
+    logger.log("✓ Found Ecocash method:", ecocashMethod);
 
     // Step 3: Initiate test transaction
-    console.log("\n3. Initiating test transaction...");
+    logger.log("\n3. Initiating test transaction...");
     const referenceNumber = `TEST-${Date.now()}`;
     const testData = {
       customerName: "Test User",
@@ -91,15 +94,15 @@ export async function GET(request: NextRequest) {
       paymentMethodCode: ecocashMethod.code,
     };
 
-    console.log("Test data:", testData);
+    logger.log("Test data:", testData);
 
     let transactionResponse;
     try {
       transactionResponse =
         await pesepayService.initiateSeamlessTransaction(testData);
-      console.log("✓ Transaction initiated:", transactionResponse);
+      logger.log("✓ Transaction initiated:", transactionResponse);
     } catch (error) {
-      console.error("✗ Failed to initiate transaction:", error);
+      logger.error("✗ Failed to initiate transaction:", error);
       return NextResponse.json(
         {
           error: "Failed to initiate transaction",
@@ -110,21 +113,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Step 4: Check transaction status
-    console.log("\n4. Checking transaction status...");
+    logger.log("\n4. Checking transaction status...");
     let statusResponse;
     try {
       statusResponse =
         await pesepayService.checkTransactionStatus(referenceNumber);
-      console.log("✓ Status check:", statusResponse);
+      logger.log("✓ Status check:", statusResponse);
     } catch (error) {
-      console.error("✗ Failed to check status:", error);
+      logger.error("✗ Failed to check status:", error);
       // Don't fail the test if status check fails
       statusResponse = {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
 
-    console.log("\n=== TEST COMPLETE ===\n");
+    logger.log("\n=== TEST COMPLETE ===\n");
 
     return NextResponse.json({
       success: true,
@@ -150,7 +153,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("\n✗ TEST FAILED:", error);
+    logger.error("\n✗ TEST FAILED:", error);
     return NextResponse.json(
       {
         error: "Test failed",

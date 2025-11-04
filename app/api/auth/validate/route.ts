@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/appwrite/config";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("validate/route");
 
 export async function POST(request: Request) {
   try {
     const { sessionId, userId } = await request.json();
 
-    console.log(
+    logger.log(
       `[validate] Validating session for userId=${userId?.substring(0, 8)}...`
     );
 
     if (!sessionId || !userId) {
-      console.log("[validate] Missing sessionId or userId");
+      logger.log("[validate] Missing sessionId or userId");
       return NextResponse.json(
         { error: "Missing sessionId or userId" },
         { status: 400 }
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
     const { users } = createAdminClient();
     // Ensure user exists
     const user = await users.get(userId);
-    console.log(`[validate] User found: ${user.email}`);
+    logger.log(`[validate] User found: ${user.email}`);
 
     // Create a minimal session object for middleware compatibility
     const session = {
@@ -30,10 +33,10 @@ export async function POST(request: Request) {
       current: true,
     };
 
-    console.log(`[validate] Session validation passed for user: ${user.email}`);
+    logger.log(`[validate] Session validation passed for user: ${user.email}`);
     return NextResponse.json({ valid: true, user, session }, { status: 200 });
   } catch (error) {
-    console.error("[validate] Session validation failed:", error);
+    logger.error("[validate] Session validation failed:", error);
     return NextResponse.json({ valid: false }, { status: 200 });
   }
 }

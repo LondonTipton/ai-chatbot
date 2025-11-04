@@ -4,6 +4,9 @@ import { AlertCircle, CheckCircle, Loader2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("setup/page");
 
 interface SetupStatus {
   status: string;
@@ -30,7 +33,7 @@ export default function PaymentSetupPage() {
       const data = await response.json();
       setStatus(data);
     } catch (error) {
-      console.error("Error checking setup:", error);
+      logger.error("Error checking setup:", error);
     } finally {
       setLoading(false);
     }

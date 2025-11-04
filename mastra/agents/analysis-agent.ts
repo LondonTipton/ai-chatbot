@@ -2,6 +2,12 @@ import { Agent } from "@mastra/core/agent";
 import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
 
 /**
+ * Initialize the Cerebras provider ONCE at module load time
+ * This prevents multiple provider instances during streaming
+ */
+const cerebrasProvider = getBalancedCerebrasProvider();
+
+/**
  * Analysis Agent - Step 3 of Deep Research Workflow
  * Analyzes extracted content and provides comprehensive legal analysis
  * No tools - pure reasoning on provided content
@@ -31,10 +37,7 @@ Citation requirements:
 
 Remember: You are analyzing, not providing legal advice. Recommend consulting qualified legal professionals.`,
 
-  model: () => {
-    const provider = getBalancedCerebrasProvider();
-    return provider("gpt-oss-120b");
-  },
+  model: () => cerebrasProvider("gpt-oss-120b"),
 
   tools: {}, // No tools - pure analysis
 });

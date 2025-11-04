@@ -1,5 +1,8 @@
 import { Account, Client, type Models } from "appwrite";
 import { type NextRequest, NextResponse } from "next/server";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("middleware");
 
 // Session cache to improve performance
 const sessionCache = new Map<
@@ -80,7 +83,7 @@ async function validateSession(sessionToken: string): Promise<{
     const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 
     if (!endpoint || !projectId) {
-      console.error("Missing Appwrite configuration in middleware");
+      logger.error("Missing Appwrite configuration in middleware");
       return null;
     }
 
@@ -103,7 +106,7 @@ async function validateSession(sessionToken: string): Promise<{
     // Check if session needs refresh and refresh it
     let sessionToReturn = currentSession;
     if (shouldRefreshSession(currentSession)) {
-      console.log(
+      logger.log(
         `[middleware] Session expires soon (${currentSession.expire}), refreshing...`
       );
 
@@ -117,12 +120,12 @@ async function validateSession(sessionToken: string): Promise<{
 
         if (refreshedSession) {
           sessionToReturn = refreshedSession;
-          console.log(
+          logger.log(
             `[middleware] Session refreshed. New expiration: ${refreshedSession.expire}`
           );
         }
       } catch (error) {
-        console.error("[middleware] Failed to refresh session:", error);
+        logger.error("[middleware] Failed to refresh session:", error);
         // Continue with current session if refresh fails
       }
     }
@@ -146,14 +149,14 @@ async function validateSession(sessionToken: string): Promise<{
         appwriteError.type === "general_unauthorized_scope" &&
         appwriteError.code === 401
       ) {
-        console.log(
+        logger.log(
           "[middleware] Guest session detected (not supported), will clear cookie"
         );
         return null;
       }
     }
 
-    console.log("[middleware] Session validation failed:", error);
+    logger.log("[middleware] Session validation failed:", error);
     return null;
   }
 }
@@ -187,28 +190,28 @@ export async function middleware(request: NextRequest) {
 
   // Debug: Log cookie presence
   if (sessionToken) {
-    console.log(`[middleware] Found session cookie for ${pathname}`);
+    logger.log(`[middleware] Found session cookie for ${pathname}`);
   } else {
-    console.log(`[middleware] No session cookie found for ${pathname}`);
+    logger.log(`[middleware] No session cookie found for ${pathname}`);
   }
 
   // Debug: Log all cookies and fallback cookies
   const allCookies = request.cookies.toString();
-  console.log(
+  logger.log(
     `[middleware] All cookies: ${allCookies.substring(0, 200)}${
       allCookies.length > 200 ? "..." : ""
     }`
   );
 
   if (fallback.sessionId || fallback.userId) {
-    console.log(
+    logger.log(
       `[middleware] Fallback cookies: sessionId=${fallback.sessionId?.substring(
         0,
         8
       )}..., userId=${fallback.userId?.substring(0, 8)}...`
     );
   } else {
-    console.log("[middleware] No fallback cookies found");
+    logger.log("[middleware] No fallback cookies found");
   }
 
   // Validate session if token exists
@@ -218,17 +221,17 @@ export async function middleware(request: NextRequest) {
   } | null = null;
 
   if (sessionToken) {
-    console.log(`[middleware] Validating session token for ${pathname}...`);
+    logger.log(`[middleware] Validating session token for ${pathname}...`);
     validationResult = await validateSession(sessionToken);
     if (validationResult) {
-      console.log(
+      logger.log(
         `[middleware] Session valid for user: ${validationResult.user.$id}`
       );
     } else {
-      console.log(`[middleware] Session validation failed for ${pathname}`);
+      logger.log(`[middleware] Session validation failed for ${pathname}`);
     }
   } else if (fallback.sessionId && fallback.userId) {
-    console.log(
+    logger.log(
       `[middleware] Using fallback cookies for ${pathname}: sessionId present=${!!fallback.sessionId}, userId present=${!!fallback.userId}`
     );
     // Fallback: validate using server API with sessionId and userId stored in our cookies
@@ -245,15 +248,15 @@ export async function middleware(request: NextRequest) {
         const data = (await res.json()) as any;
         if (data?.valid && data?.user && data?.session) {
           validationResult = { user: data.user, session: data.session };
-          console.log(
+          logger.log(
             `[middleware] Fallback validation succeeded for user: ${data.user?.$id}`
           );
         } else {
-          console.log("[middleware] Fallback validation returned invalid");
+          logger.log("[middleware] Fallback validation returned invalid");
         }
       }
     } catch (e) {
-      console.log("[middleware] Fallback validation failed:", e);
+      logger.log("[middleware] Fallback validation failed:", e);
     }
   } else {
     // Last resort: check if there's temporary session data in the request
@@ -263,7 +266,7 @@ export async function middleware(request: NextRequest) {
       try {
         const tempSession = JSON.parse(tempSessionHeader);
         if (tempSession.sessionId && tempSession.userId) {
-          console.log(`[middleware] Using temp session data for ${pathname}`);
+          logger.log(`[middleware] Using temp session data for ${pathname}`);
 
           // Quick validate using the temp session data
           const res = await fetch(
@@ -276,14 +279,14 @@ export async function middleware(request: NextRequest) {
             const data = (await res.json()) as any;
             if (data?.valid && data?.user && data?.session) {
               validationResult = { user: data.user, session: data.session };
-              console.log(
+              logger.log(
                 `[middleware] Temp session validation succeeded for user: ${data.user?.$id}`
               );
             }
           }
         }
       } catch (e) {
-        console.log("[middleware] Temp session validation failed:", e);
+        logger.log("[middleware] Temp session validation failed:", e);
       }
     }
   }
@@ -303,7 +306,7 @@ export async function middleware(request: NextRequest) {
         const tokenAge = now - payload.timestamp;
 
         if (tokenAge < 60 * 60 * 1000 && payload.userId && payload.sessionId) {
-          console.log(
+          logger.log(
             `[middleware] Using development auth bypass for ${pathname}`
           );
 
@@ -361,7 +364,7 @@ export async function middleware(request: NextRequest) {
           };
         }
       } catch (e) {
-        console.log("[middleware] Failed to parse temp auth header:", e);
+        logger.log("[middleware] Failed to parse temp auth header:", e);
       }
     }
   }
@@ -378,7 +381,7 @@ export async function middleware(request: NextRequest) {
     const hasCookies = request.cookies.toString().length > 0;
 
     if (!hasCookies) {
-      console.log(
+      logger.log(
         `[middleware] DEVELOPMENT: No cookies detected, bypassing auth for ${pathname} - client-side auth will handle`
       );
       // Let the request through - client-side auth will handle authentication
@@ -388,7 +391,7 @@ export async function middleware(request: NextRequest) {
 
   // If no valid session and trying to access protected route, redirect to login
   if (!validationResult && !isPublicRoute && !isWellKnown && !isVerifyPending) {
-    console.log(
+    logger.log(
       "[middleware] No valid session, redirecting to login from",
       pathname
     );
@@ -412,10 +415,10 @@ export async function middleware(request: NextRequest) {
         response.cookies.delete("appwrite-session");
         response.cookies.delete("appwrite_user_id");
 
-        console.log("[middleware] Cleared invalid session cookies");
+        logger.log("[middleware] Cleared invalid session cookies");
       }
     } else {
-      console.log(
+      logger.log(
         "[middleware] No cookies cleared - no session token was present"
       );
     }
@@ -425,7 +428,7 @@ export async function middleware(request: NextRequest) {
 
   // Special handling for verify-pending: if no session, redirect to login
   if (!validationResult && isVerifyPending) {
-    console.log(
+    logger.log(
       "[middleware] No session on verify-pending page, redirecting to login"
     );
     return NextResponse.redirect(new URL("/login", request.url));
@@ -441,7 +444,7 @@ export async function middleware(request: NextRequest) {
       pathname !== "/verify" &&
       pathname !== "/verify-pending"
     ) {
-      console.log(
+      logger.log(
         "[middleware] Unverified user on auth page, redirecting to verify-pending"
       );
       return NextResponse.redirect(new URL("/verify-pending", request.url));
@@ -449,7 +452,7 @@ export async function middleware(request: NextRequest) {
 
     // If user is verified and on verify-pending, redirect to home
     if (authUser.emailVerification && pathname === "/verify-pending") {
-      console.log(
+      logger.log(
         "[middleware] Verified user on verify-pending page, redirecting to home"
       );
       return NextResponse.redirect(new URL("/", request.url));
@@ -460,7 +463,7 @@ export async function middleware(request: NextRequest) {
       authUser.emailVerification &&
       (pathname === "/login" || pathname === "/register")
     ) {
-      console.log(
+      logger.log(
         "[middleware] Verified user on auth page, redirecting to home"
       );
       return NextResponse.redirect(new URL("/", request.url));
@@ -487,7 +490,7 @@ export async function middleware(request: NextRequest) {
 
   // Check if user's email is verified for protected routes
   if (!user.emailVerification && !isPublicRoute && !isWellKnown) {
-    console.log(
+    logger.log(
       "[middleware] Unverified user attempting to access protected route, redirecting to verify-pending"
     );
     return NextResponse.redirect(new URL("/verify-pending", request.url));

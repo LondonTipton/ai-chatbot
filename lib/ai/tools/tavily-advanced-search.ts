@@ -1,5 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("tools/tavily-advanced-search");
 
 /**
  * Tavily Advanced Search Tool
@@ -20,39 +23,69 @@ export const tavilyAdvancedSearch = tool({
       .describe("Maximum number of results (1-10)"),
   }),
   execute: async ({ query, maxResults = 5 }) => {
+    logger.log(
+      `[tavilyAdvancedSearch] 🔍 Tool execute started with query: "${query.substring(
+        0,
+        100
+      )}..."`
+    );
+    logger.log(`[tavilyAdvancedSearch] 📊 maxResults: ${maxResults}`);
+
     try {
       const apiKey = process.env.TAVILY_API_KEY;
 
       if (!apiKey) {
+        logger.error("[tavilyAdvancedSearch] ❌ TAVILY_API_KEY not configured");
         throw new Error(
           "TAVILY_API_KEY is not configured. Please add it to your environment variables."
         );
       }
 
+      logger.log("[tavilyAdvancedSearch] ✅ API key found, making request...");
+
       // Validate maxResults
       const validMaxResults = Math.min(Math.max(maxResults, 1), 10);
+
+      const requestBody = {
+        api_key: apiKey,
+        query,
+        search_depth: "advanced", // Advanced search for comprehensive results
+        include_answer: true, // Include AI-generated answer
+        include_raw_content: false,
+        max_results: validMaxResults,
+      };
+
+      logger.log(
+        `[tavilyAdvancedSearch] 📤 Request: ${JSON.stringify({
+          ...requestBody,
+          api_key: "***",
+        })}`
+      );
 
       const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          api_key: apiKey,
-          query,
-          search_depth: "advanced", // Advanced search for comprehensive results
-          include_answer: true, // Include AI-generated answer
-          include_raw_content: false,
-          max_results: validMaxResults,
-        }),
+        body: JSON.stringify(requestBody),
       });
+
+      logger.log(
+        `[tavilyAdvancedSearch] 📥 Response status: ${response.status}`
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
+        logger.error(
+          `[tavilyAdvancedSearch] ❌ API error: ${response.status} - ${errorText}`
+        );
         throw new Error(`Tavily API error (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
+      logger.log(
+        `[tavilyAdvancedSearch] ✅ Got ${data.results?.length || 0} results`
+      );
 
       // Format results
       const formattedResults =
@@ -65,17 +98,23 @@ export const tavilyAdvancedSearch = tool({
           publishedDate: result.published_date || "Not available",
         })) || [];
 
-      return {
+      const finalResult = {
         query: data.query,
         answer: data.answer || "No comprehensive answer available",
         results: formattedResults,
         totalResults: formattedResults.length,
         searchDepth: "advanced",
       };
-    } catch (error) {
-      console.error("Tavily advanced search error:", error);
 
-      return {
+      logger.log(
+        `[tavilyAdvancedSearch] ✅ Returning result with ${formattedResults.length} formatted results`
+      );
+
+      return finalResult;
+    } catch (error) {
+      logger.error("[tavilyAdvancedSearch] ❌ Error in execute:", error);
+
+      const errorResult = {
         query,
         answer: `Search failed: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -85,6 +124,10 @@ export const tavilyAdvancedSearch = tool({
         searchDepth: "advanced",
         error: true,
       };
+
+      logger.log("[tavilyAdvancedSearch] 📤 Returning error result");
+
+      return errorResult;
     }
   },
 });

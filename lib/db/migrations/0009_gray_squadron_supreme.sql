@@ -1,0 +1,1 @@
+ALTER TABLE "User" ALTER COLUMN "dailyRequestLimit" SET DEFAULT '100';

@@ -9,6 +9,12 @@ type UpdateDocumentProps = {
   dataStream: UIMessageStreamWriter<ChatMessage>;
 };
 
+/**
+ * AI SDK Tool: Update Document
+ *
+ * This tool wraps the document update service with UI streaming capabilities.
+ * It handles real-time updates to the UI via dataStream.
+ */
 export const updateDocument = ({ session, dataStream }: UpdateDocumentProps) =>
   tool({
     description: "Update a document with the given description.",
@@ -19,11 +25,22 @@ export const updateDocument = ({ session, dataStream }: UpdateDocumentProps) =>
         .describe("The description of changes that need to be made"),
     }),
     execute: async ({ id, description }) => {
+      if (!session?.user?.id) {
+        throw new Error("User session required to update document");
+      }
+
       const document = await getDocumentById({ id });
 
       if (!document) {
         return {
           error: "Document not found",
+        };
+      }
+
+      // Verify ownership
+      if (document.userId !== session.user.id) {
+        return {
+          error: "Unauthorized: You don't own this document",
         };
       }
 

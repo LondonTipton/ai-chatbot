@@ -7,6 +7,9 @@ import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("status/page");
 
 type PaymentStatus = "pending" | "completed" | "failed";
 
@@ -19,17 +22,17 @@ function PaymentStatusContent() {
   const [error, setError] = useState<string | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
 
-  console.log("[Payment Status Page] Reference from URL:", referenceNumber);
+  logger.log("[Payment Status Page] Reference from URL:", referenceNumber);
 
   useEffect(() => {
     if (!referenceNumber) {
-      console.error("[Payment Status Page] No reference number in URL");
+      logger.error("[Payment Status Page] No reference number in URL");
       setError("Invalid payment reference");
       setLoading(false);
       return;
     }
 
-    console.log(
+    logger.log(
       "[Payment Status Page] Starting status check for:",
       referenceNumber
     );
@@ -46,7 +49,7 @@ function PaymentStatusContent() {
         // Check if we've exceeded the timeout
         const elapsed = Date.now() - startTime;
         if (elapsed > TIMEOUT_DURATION) {
-          console.warn("[Payment Status Page] Payment timeout reached");
+          logger.warn("[Payment Status Page] Payment timeout reached");
           clearInterval(pollInterval);
           setStatus("failed");
           setError(
@@ -65,7 +68,7 @@ function PaymentStatusContent() {
           // Check if it's a transient error (401, 500, network issues)
           if (response.status === 401 || response.status >= 500) {
             consecutiveErrors++;
-            console.warn(
+            logger.warn(
               `[Payment Status Page] Transient error (${response.status}), retry ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}`
             );
 
@@ -96,7 +99,7 @@ function PaymentStatusContent() {
         }
       } catch (err) {
         consecutiveErrors++;
-        console.error(
+        logger.error(
           `Status check error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`,
           err
         );
@@ -124,7 +127,7 @@ function PaymentStatusContent() {
 
     // Set timeout to stop polling after 3 minutes
     timeoutTimer = setTimeout(() => {
-      console.warn("[Payment Status Page] Payment timeout reached (timer)");
+      logger.warn("[Payment Status Page] Payment timeout reached (timer)");
       clearInterval(pollInterval);
       setStatus("failed");
       setError(

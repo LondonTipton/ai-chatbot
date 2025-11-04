@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { Chat } from "@/components/chat";
-import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { auth } from "@/lib/appwrite/server-auth";
 import {
@@ -10,7 +9,10 @@ import {
   getUser,
   getUserByAppwriteId,
 } from "@/lib/db/queries";
+import { createLogger } from "@/lib/logger";
 import { convertToUIMessages } from "@/lib/utils";
+
+const logger = createLogger("[id]/page");
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -27,11 +29,11 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   let isOwner = false;
   if (chat.visibility === "private" && session?.user) {
     // Debug logging for live server
-    console.log(`[Chat ${id}] Session user:`, {
+    logger.log(`[Chat ${id}] Session user:`, {
       id: session.user.id,
       email: session.user.email,
     });
-    console.log(`[Chat ${id}] Chat owner:`, chat.userId);
+    logger.log(`[Chat ${id}] Chat owner:`, chat.userId);
 
     // Resolve ownership
     // 1) Try DB user by Appwrite ID
@@ -43,16 +45,16 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         const usersByEmail = await getUser(session.user.email);
         dbUser = usersByEmail?.[0] || null;
         if (dbUser) {
-          console.log(
+          logger.log(
             `[Chat ${id}] Resolved user via email fallback: ${dbUser.id}`
           );
         }
       } catch (e) {
-        console.warn(`[Chat ${id}] Email fallback lookup failed:`, e);
+        logger.warn(`[Chat ${id}] Email fallback lookup failed:`, e);
       }
     }
 
-    console.log(
+    logger.log(
       `[Chat ${id}] Database user lookup:`,
       dbUser
         ? {
@@ -70,7 +72,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
       (dbUser ? dbUser.id === chat.userId : false) ||
       session.user.id === chat.userId;
 
-    console.log(`[Chat ${id}] Ownership check:`, {
+    logger.log(`[Chat ${id}] Ownership check:`, {
       dbUserExists: typeof isOwner === "boolean" ? !!dbUser : false,
       dbUserIdMatches: dbUser?.id === chat.userId,
       sessionIdMatches: session.user.id === chat.userId,
@@ -79,7 +81,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
 
     // If we definitively have a session and ownership is false, deny access
     if (!isOwner) {
-      console.error(
+      logger.error(
         `[Chat Access Denied] User ${session.user.id} (email: ${session.user.email}) attempted to access chat ${id} owned by ${chat.userId}`
       );
       return notFound();
@@ -104,33 +106,27 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
 
   if (!chatModelFromCookie) {
     return (
-      <>
-        <Chat
-          autoResume={true}
-          id={chat.id}
-          initialChatModel={DEFAULT_CHAT_MODEL}
-          initialLastContext={chat.lastContext ?? undefined}
-          initialMessages={uiMessages}
-          initialVisibilityType={chat.visibility}
-          isReadonly={isReadonly}
-        />
-        <DataStreamHandler />
-      </>
-    );
-  }
-
-  return (
-    <>
       <Chat
         autoResume={true}
         id={chat.id}
-        initialChatModel={chatModelFromCookie.value}
+        initialChatModel={DEFAULT_CHAT_MODEL}
         initialLastContext={chat.lastContext ?? undefined}
         initialMessages={uiMessages}
         initialVisibilityType={chat.visibility}
         isReadonly={isReadonly}
       />
-      <DataStreamHandler />
-    </>
+    );
+  }
+
+  return (
+    <Chat
+      autoResume={true}
+      id={chat.id}
+      initialChatModel={chatModelFromCookie.value}
+      initialLastContext={chat.lastContext ?? undefined}
+      initialMessages={uiMessages}
+      initialVisibilityType={chat.visibility}
+      isReadonly={isReadonly}
+    />
   );
 }

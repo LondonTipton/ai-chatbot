@@ -5,7 +5,10 @@ import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "@/components/toast";
 import { useAuth } from "@/hooks/use-auth";
+import { createLogger } from "@/lib/logger";
 import { logout, resendVerification } from "../actions";
+
+const logger = createLogger("verify-pending/page");
 
 function VerifyPendingContent() {
   const { user } = useAuth();
@@ -68,7 +71,7 @@ function VerifyPendingContent() {
       // Force redirect to login
       window.location.href = "/login";
     } catch (error) {
-      console.error("Logout error:", error);
+      logger.error("Logout error:", error);
 
       // Even if logout fails, clear local state and redirect
       localStorage.removeItem("pending-verification-email");

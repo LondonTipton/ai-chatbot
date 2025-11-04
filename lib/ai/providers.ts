@@ -1,7 +1,10 @@
 import { createCerebras } from "@ai-sdk/cerebras";
 import { google } from "@ai-sdk/google";
 import { customProvider } from "ai";
+import { createLogger } from "@/lib/logger";
 import { isTestEnvironment } from "../constants";
+
+const logger = createLogger("ai/providers");
 
 // Cerebras provider with load balancing (primary)
 const getCerebrasProvider = () => {
@@ -9,10 +12,10 @@ const getCerebrasProvider = () => {
     try {
       const balancer =
         require("./cerebras-key-balancer").getBalancedCerebrasProvider();
-      console.log("[Providers] Using Cerebras key balancer");
+      logger.log("[Providers] Using Cerebras key balancer");
       return balancer;
     } catch (error) {
-      console.warn(
+      logger.warn(
         "[Providers] Cerebras balancer not available, falling back to direct provider:",
         error
       );
@@ -28,10 +31,10 @@ const getGoogleProvider = () => {
     try {
       const balancer =
         require("./gemini-key-balancer").getBalancedGoogleProvider();
-      console.log("[Providers] Using Gemini key balancer");
+      logger.log("[Providers] Using Gemini key balancer");
       return balancer;
     } catch (error) {
-      console.warn(
+      logger.warn(
         "[Providers] Gemini balancer not available, falling back to direct provider:",
         error
       );
@@ -43,8 +46,8 @@ const getGoogleProvider = () => {
 
 const cerebrasProvider = getCerebrasProvider();
 const googleProvider = getGoogleProvider();
-console.log("[Providers] Cerebras provider initialized:", !!cerebrasProvider);
-console.log("[Providers] Google provider initialized:", !!googleProvider);
+logger.log("[Providers] Cerebras provider initialized:", !!cerebrasProvider);
+logger.log("[Providers] Google provider initialized:", !!googleProvider);
 
 export const myProvider = isTestEnvironment
   ? (() => {
@@ -70,12 +73,12 @@ export const myProvider = isTestEnvironment
         // Main chat model - Cerebras gpt-oss-120b (fast, cost-effective, supports tool calling)
         "chat-model": (() => {
           try {
-            console.log(
+            logger.log(
               "[Providers] Using Cerebras gpt-oss-120b as default chat model"
             );
             return cerebrasProvider("gpt-oss-120b");
           } catch (error) {
-            console.warn(
+            logger.warn(
               "[Providers] Cerebras unavailable for chat, falling back to Gemini:",
               error
             );
@@ -86,12 +89,10 @@ export const myProvider = isTestEnvironment
         // Advanced reasoning - Cerebras gpt-oss-120b (131K context, reasoning capable)
         "chat-model-reasoning": (() => {
           try {
-            console.log(
-              "[Providers] Using Cerebras gpt-oss-120b for reasoning"
-            );
+            logger.log("[Providers] Using Cerebras gpt-oss-120b for reasoning");
             return cerebrasProvider("gpt-oss-120b");
           } catch (error) {
-            console.warn(
+            logger.warn(
               "[Providers] Cerebras unavailable for reasoning, falling back to Gemini Pro:",
               error
             );
@@ -102,15 +103,12 @@ export const myProvider = isTestEnvironment
         // Multimodal - Gemini Flash (Cerebras doesn't support image understanding yet)
         "chat-model-image": (() => {
           try {
-            console.log(
+            logger.log(
               "[Providers] Using Gemini for image understanding (Cerebras doesn't support images)"
             );
             return googleProvider("gemini-2.5-flash");
           } catch (error) {
-            console.error(
-              "[Providers] Error creating chat-model-image:",
-              error
-            );
+            logger.error("[Providers] Error creating chat-model-image:", error);
             return google("gemini-2.5-flash");
           }
         })(),
@@ -120,7 +118,7 @@ export const myProvider = isTestEnvironment
           try {
             return cerebrasProvider("llama-3.3-70b");
           } catch (error) {
-            console.warn(
+            logger.warn(
               "[Providers] Cerebras unavailable for titles, using Gemini"
             );
             return googleProvider("gemini-2.5-flash");
@@ -132,7 +130,7 @@ export const myProvider = isTestEnvironment
           try {
             return cerebrasProvider("llama3.1-8b");
           } catch (error) {
-            console.warn(
+            logger.warn(
               "[Providers] Cerebras unavailable for artifacts, using Gemini"
             );
             return googleProvider("gemini-2.5-flash");

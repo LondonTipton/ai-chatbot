@@ -1,4 +1,7 @@
 import { AppwriteException } from "node-appwrite";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("appwrite/errors");
 
 /**
  * Authentication error codes
@@ -164,9 +167,9 @@ export function logAuthError(error: AuthError, context: ErrorLogContext): void {
     error.code === AuthErrorCode.APPWRITE_ERROR ||
     error.code === AuthErrorCode.UNKNOWN_ERROR
   ) {
-    console.error("[AUTH ERROR]", JSON.stringify(logData, null, 2));
+    logger.error("[AUTH ERROR]", JSON.stringify(logData, null, 2));
   } else {
-    console.warn("[AUTH WARNING]", JSON.stringify(logData, null, 2));
+    logger.warn("[AUTH WARNING]", JSON.stringify(logData, null, 2));
   }
 }
 

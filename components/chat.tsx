@@ -21,8 +21,10 @@ import { UpgradeModal } from "@/components/upgrade-modal";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
+import { useUsage } from "@/hooks/use-usage";
 import type { Vote } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
+import { createLogger } from "@/lib/logger";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
@@ -33,6 +35,8 @@ import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
+
+const logger = createLogger("chat");
 
 export function Chat({
   id,
@@ -57,6 +61,7 @@ export function Chat({
   });
 
   const { mutate } = useSWRConfig();
+  const { mutate: mutateUsage } = useUsage();
   const { setDataStream } = useDataStream();
 
   const [input, setInput] = useState<string>("");
@@ -109,10 +114,72 @@ export function Chat({
         setUsage(dataPart.data);
       }
     },
-    onFinish: () => {
+    onFinish: async ({ message: msg }) => {
+      // Debug: Log received message
+      logger.log("[Client] Message received:", msg);
+      if (msg.role === "assistant") {
+        const textParts = msg.parts.filter((p: any) => p.type === "text");
+        const textContent = textParts.map((p: any) => p.text).join("");
+        logger.log(`[Client] Assistant text length: ${textContent.length}`);
+        if (textContent.length === 0) {
+          logger.warn("[Client] ⚠️  Empty assistant message received!");
+          logger.log("[Client] Message parts:", msg.parts);
+
+          // Strong client-side fallback: fetch the latest messages from the server
+          try {
+            const res = await fetch(`/api/messages?chatId=${id}`, {
+              method: "GET",
+              headers: { "Content-Type": "application/json" },
+            });
+            if (res.ok) {
+              const freshMessages: ChatMessage[] = await res.json();
+              // The server already synthesized from tool results if needed
+              setMessages(freshMessages);
+              const lastAssistant = freshMessages
+                .filter((m) => m.role === "assistant")
+                .at(-1);
+              const lastText = (lastAssistant?.parts || [])
+                .filter((p: any) => p.type === "text")
+                .map((p: any) => p.text)
+                .join("")
+                .trim();
+              logger.log(
+                `[Client] After refresh, last assistant text length: ${lastText.length}`
+              );
+            } else {
+              logger.warn(
+                "[Client] Failed to refresh messages after empty response"
+              );
+            }
+          } catch (e) {
+            logger.warn("[Client] Error refreshing messages:", e);
+          }
+        }
+      }
       mutate(unstable_serialize(getChatHistoryPaginationKey));
+
+      // Immediately refresh usage counter after message is sent
+      mutateUsage();
     },
     onError: (error) => {
+      // Refresh usage counter on error (in case of rollback)
+      mutateUsage();
+
+      // Handle connection/socket errors
+      if (
+        error.message?.includes("terminated") ||
+        error.message?.includes("SocketError") ||
+        error.message?.includes("other side closed")
+      ) {
+        toast({
+          type: "error",
+          description:
+            "Connection lost while generating response. Please try again.",
+        });
+        stop();
+        return;
+      }
+
       // Prefer structured ChatSDKError
       if (error instanceof ChatSDKError) {
         // Specific handling: rate limit
@@ -202,7 +269,7 @@ export function Chat({
           votes={votes}
         />
 
-        <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+        <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
           {!isReadonly && (
             <MultimodalInput
               attachments={attachments}

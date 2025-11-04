@@ -1,5 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/appwrite/config";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("quick-validate/route");
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ valid: false }, { status: 400 });
     }
 
-    console.log(
+    logger.log(
       `[quick-validate] Checking session for userId=${userId.substring(0, 8)}...`
     );
 
@@ -20,9 +23,9 @@ export async function GET(request: NextRequest) {
 
     // First ensure user exists
     const user = await users.get(userId);
-    console.log(`[quick-validate] User found: ${user.email}`);
+    logger.log(`[quick-validate] User found: ${user.email}`);
 
-    console.log("[quick-validate] Session validation passed (user exists)");
+    logger.log("[quick-validate] Session validation passed (user exists)");
 
     // Set the same cookies that sync endpoint sets
     const response = NextResponse.json(
@@ -57,13 +60,13 @@ export async function GET(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 30,
     });
 
-    console.log(
+    logger.log(
       `[quick-validate] Set cookies for sessionId=${sessionId.substring(0, 8)}..., userId=${userId.substring(0, 8)}...`
     );
 
     return response;
   } catch (error) {
-    console.error("[quick-validate] Error during validation:", error);
+    logger.error("[quick-validate] Error during validation:", error);
     return NextResponse.json({ valid: false }, { status: 500 });
   }
 }

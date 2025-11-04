@@ -16,6 +16,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { ArtifactKind } from "@/components/artifact";
 import type { VisibilityType } from "@/components/visibility-selector";
+import { createLogger } from "@/lib/logger";
 import { ChatSDKError } from "../errors";
 import type { AppUsage } from "../usage";
 import {
@@ -36,6 +37,8 @@ import {
   voteDeprecated,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
+
+const logger = createLogger("db/queries");
 
 // Note: Authentication is handled by Appwrite
 // User records in the database are linked via appwriteId field
@@ -165,7 +168,7 @@ export async function saveChat({
       visibility,
     });
   } catch (error) {
-    console.error("[DB Error] Failed to save chat:", error);
+    logger.error("[DB Error] Failed to save chat:", error);
     throw new ChatSDKError("bad_request:database", "Failed to save chat");
   }
 }
@@ -220,7 +223,7 @@ export async function getChatsByUserId({
 
       if (userByAppwrite) {
         actualUserId = userByAppwrite.id;
-        console.log(
+        logger.log(
           `[getChatsByUserId] Resolved appwriteId ${id} to UUID ${actualUserId}`
         );
       } else if (email) {
@@ -232,7 +235,7 @@ export async function getChatsByUserId({
           .limit(1);
         if (userByEmail) {
           actualUserId = userByEmail.id;
-          console.log(
+          logger.log(
             `[getChatsByUserId] Resolved email ${email} to UUID ${actualUserId}`
           );
         }
@@ -240,7 +243,7 @@ export async function getChatsByUserId({
     }
 
     if (!actualUserId) {
-      console.log(
+      logger.log(
         `[getChatsByUserId] Could not resolve user to UUID (appwriteId=${id}, email=${
           email ?? "n/a"
         })`
@@ -307,8 +310,8 @@ export async function getChatsByUserId({
       hasMore,
     };
   } catch (error) {
-    console.error("[getChatsByUserId] Database error:", error);
-    console.error("[getChatsByUserId] Error details:", {
+    logger.error("[getChatsByUserId] Database error:", error);
+    logger.error("[getChatsByUserId] Error details:", {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       originalId: id,
@@ -608,7 +611,7 @@ export async function updateChatLastContextById({
       .set({ lastContext: context })
       .where(eq(chat.id, chatId));
   } catch (error) {
-    console.warn("Failed to update lastContext for chat", chatId, error);
+    logger.warn("Failed to update lastContext for chat", chatId, error);
     return;
   }
 }

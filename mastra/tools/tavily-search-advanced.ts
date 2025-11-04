@@ -2,37 +2,42 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 /**
- * Tavily Advanced Search Tool for Mastra Agents
- * Performs deep searches with comprehensive results
+ * Tavily Advanced Search Tool for Mastra
+ * Deep search with comprehensive results and AI-generated answer
  */
 export const tavilySearchAdvancedTool = createTool({
   id: "tavily-search-advanced",
   description:
-    "Perform advanced web search for legal information. Returns comprehensive results with AI-generated answer. Use for detailed research queries.",
+    "Advanced search for legal information with comprehensive results and AI-generated answer. Use for queries that need detailed information with sources.",
 
   inputSchema: z.object({
-    query: z.string().describe("The search query"),
+    query: z
+      .string()
+      .describe("The search query for detailed legal information"),
     maxResults: z
       .number()
       .optional()
       .default(5)
-      .describe("Maximum number of results to return (1-10)"),
+      .describe("Maximum number of results (1-10)"),
   }),
 
   outputSchema: z.object({
     query: z.string(),
-    answer: z.string().describe("AI-generated answer based on search results"),
+    answer: z.string().describe("AI-generated comprehensive answer"),
     results: z
       .array(
         z.object({
+          position: z.number(),
           title: z.string(),
           url: z.string(),
           content: z.string(),
-          score: z.number(),
+          relevanceScore: z.number(),
+          publishedDate: z.string(),
         })
       )
-      .describe("Array of search results"),
+      .describe("Array of detailed search results"),
     totalResults: z.number(),
+    searchDepth: z.string(),
   }),
 
   execute: async ({ context }) => {
@@ -43,6 +48,9 @@ export const tavilySearchAdvancedTool = createTool({
     }
 
     try {
+      // Validate maxResults
+      const validMaxResults = Math.min(Math.max(maxResults, 1), 10);
+
       const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
         headers: {
@@ -54,7 +62,7 @@ export const tavilySearchAdvancedTool = createTool({
           search_depth: "advanced",
           include_answer: true,
           include_raw_content: false,
-          max_results: Math.min(Math.max(maxResults, 1), 10),
+          max_results: validMaxResults,
         }),
       });
 
@@ -64,17 +72,22 @@ export const tavilySearchAdvancedTool = createTool({
 
       const data = await response.json();
 
+      const formattedResults =
+        data.results?.map((result: any, index: number) => ({
+          position: index + 1,
+          title: result.title || "",
+          url: result.url || "",
+          content: result.content || "",
+          relevanceScore: result.score || 0,
+          publishedDate: result.published_date || "Not available",
+        })) || [];
+
       return {
-        query: data.query || query,
-        answer: data.answer || "No answer generated",
-        results:
-          data.results?.map((result: any) => ({
-            title: result.title || "",
-            url: result.url || "",
-            content: result.content || "",
-            score: result.score || 0,
-          })) || [],
-        totalResults: data.results?.length || 0,
+        query: data.query,
+        answer: data.answer || "No comprehensive answer available",
+        results: formattedResults,
+        totalResults: formattedResults.length,
+        searchDepth: "advanced",
       };
     } catch (error) {
       console.error("Tavily advanced search error:", error);

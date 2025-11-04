@@ -65,6 +65,11 @@ export type CustomUIDataTypes = {
   toolComplete: {
     id: string;
   };
+  "retry-status": {
+    attempt: number;
+    maxAttempts: number;
+    isRetrying: boolean;
+  };
 };
 
 export type ChatMessage = UIMessage<

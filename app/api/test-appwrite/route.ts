@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { Client } from "node-appwrite";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("test-appwrite/route");
 
 export async function GET() {
   try {
@@ -7,10 +10,10 @@ export async function GET() {
     const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
     const apiKey = process.env.APPWRITE_API_KEY;
 
-    console.log("Testing Appwrite connection...");
-    console.log("Endpoint:", endpoint);
-    console.log("Project ID:", projectId);
-    console.log("API Key present:", !!apiKey);
+    logger.log("Testing Appwrite connection...");
+    logger.log("Endpoint:", endpoint);
+    logger.log("Project ID:", projectId);
+    logger.log("API Key present:", !!apiKey);
 
     if (!endpoint || !projectId || !apiKey) {
       return NextResponse.json(
@@ -53,7 +56,7 @@ export async function GET() {
       health,
     });
   } catch (error) {
-    console.error("Appwrite connection test failed:", error);
+    logger.error("Appwrite connection test failed:", error);
     return NextResponse.json(
       {
         success: false,

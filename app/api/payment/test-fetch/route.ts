@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
+import { createLogger } from "@/lib/logger";
 import { pesepayService } from "@/lib/payment/pesepay-service";
+
+const logger = createLogger("test-fetch/route");
 
 export async function GET() {
   try {
-    console.log("\n=== PESEPAY PAYMENT METHODS TEST ===\n");
+    logger.log("\n=== PESEPAY PAYMENT METHODS TEST ===\n");
 
     // Test: Get payment methods for USD
-    console.log("Fetching payment methods for USD...");
+    logger.log("Fetching payment methods for USD...");
     const paymentMethods =
       await pesepayService.getPaymentMethodsByCurrency("USD");
-    console.log("✅ Payment methods fetched:", paymentMethods);
+    logger.log("✅ Payment methods fetched:", paymentMethods);
 
     return NextResponse.json({
       success: true,
@@ -18,7 +21,7 @@ export async function GET() {
       result: paymentMethods,
     });
   } catch (error: any) {
-    console.error("❌ Test error:", error.message);
+    logger.error("❌ Test error:", error.message);
     return NextResponse.json(
       {
         success: false,

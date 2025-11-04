@@ -15,7 +15,6 @@ import { memo, useState } from "react";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
-import { filterThinkingTokens } from "@/lib/utils/filter-thinking-tokens";
 // import { CitationResult } from "./citation-result";
 import { useDataStream } from "./data-stream-provider";
 import { DocumentToolResult } from "./document";

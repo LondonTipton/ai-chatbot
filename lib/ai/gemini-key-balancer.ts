@@ -4,6 +4,9 @@
  */
 
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("ai/gemini-key-balancer");
 
 interface KeyUsageStats {
   key: string;
@@ -24,7 +27,7 @@ class GeminiKeyBalancer {
   constructor() {
     // Only initialize on server side
     if (typeof window !== "undefined") {
-      console.warn(
+      logger.warn(
         "[Gemini Balancer] Attempted to initialize on client side - skipping"
       );
       this.keys = [];
@@ -77,7 +80,7 @@ class GeminiKeyBalancer {
       );
     }
 
-    console.log(`[Gemini Balancer] Loaded ${keys.length} API key(s)`);
+    logger.log(`[Gemini Balancer] Loaded ${keys.length} API key(s)`);
     return keys;
   }
 
@@ -107,7 +110,7 @@ class GeminiKeyBalancer {
       ) {
         stats.isDisabled = false;
         stats.disabledUntil = undefined;
-        console.log(
+        logger.log(
           `[Gemini Balancer] Re-enabled key ${key.substring(
             0,
             8
@@ -122,7 +125,7 @@ class GeminiKeyBalancer {
     }
 
     // If all keys are disabled, return the least recently disabled one
-    console.warn(
+    logger.warn(
       "[Gemini Balancer] All keys disabled, using least recently disabled key"
     );
     const leastRecentlyDisabled = Array.from(this.keyStats.entries())
@@ -191,7 +194,7 @@ class GeminiKeyBalancer {
     const cooldownMs = (retryDelaySeconds || 60) * 1000;
     stats.disabledUntil = Date.now() + cooldownMs;
 
-    console.warn(
+    logger.warn(
       `[Gemini Balancer] Disabled key ${key.substring(0, 8)}... for ${
         retryDelaySeconds || 60
       }s due to: ${error}`

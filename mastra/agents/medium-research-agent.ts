@@ -3,6 +3,12 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
 /**
+ * Initialize the Cerebras provider ONCE at module load time
+ * This prevents multiple provider instances during streaming
+ */
+const cerebrasProvider = getBalancedCerebrasProvider();
+
+/**
  * Medium Research Agent
  * Handles queries requiring multiple search operations
  * Maximum 4 tool calls per execution
@@ -31,10 +37,7 @@ Example approach for "Find cases about property rights in Zimbabwe":
 
 Remember: You have a maximum of 4 tool calls. Use them strategically to cover different aspects of the query.`,
 
-  model: () => {
-    const provider = getBalancedCerebrasProvider();
-    return provider("gpt-oss-120b");
-  },
+  model: () => cerebrasProvider("gpt-oss-120b"),
 
   tools: {
     tavilySearchAdvancedTool,

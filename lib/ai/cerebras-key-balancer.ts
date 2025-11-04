@@ -4,8 +4,34 @@
  */
 
 import { createCerebras } from "@ai-sdk/cerebras";
+import { createLogger } from "@/lib/logger";
 
-interface KeyUsageStats {
+const logger = createLogger("ai/cerebras-key-balancer");
+
+/**
+ * Wrap a Cerebras provider to add debug logging when a model instance is requested.
+ */
+function wrapWithLogging(
+  provider: ReturnType<typeof createCerebras>,
+  keyPreview: string
+): ReturnType<typeof createCerebras> {
+  const wrapped = ((modelId: string) => {
+    logger.log(
+      `[Cerebras Balancer] 🧪 Creating language model '${modelId}' using key ${keyPreview}...`
+    );
+    return provider(modelId);
+  }) as unknown as ReturnType<typeof createCerebras>;
+
+  try {
+    Object.assign(wrapped, provider);
+  } catch {
+    // ignore if assignment fails
+  }
+
+  return wrapped;
+}
+
+type KeyUsageStats = {
   key: string;
   lastUsed: number;
   requestCount: number;
@@ -13,27 +39,30 @@ interface KeyUsageStats {
   lastError?: string;
   isDisabled: boolean;
   disabledUntil?: number;
-}
+};
 
 class CerebrasKeyBalancer {
-  private keys: string[];
-  private currentIndex = 0;
-  private keyStats: Map<string, KeyUsageStats>;
-  private providers: Map<string, ReturnType<typeof createCerebras>>;
+  private readonly keys: string[];
+  // biome-ignore lint/style/useConst: currentIndex is incremented during key rotation
+  private currentIndex: number;
+  private readonly keyStats: Map<string, KeyUsageStats>;
+  private readonly providers: Map<string, ReturnType<typeof createCerebras>>;
 
   constructor() {
     // Only initialize on server side
     if (typeof window !== "undefined") {
-      console.warn(
+      logger.warn(
         "[Cerebras Balancer] Attempted to initialize on client side - skipping"
       );
       this.keys = [];
+      this.currentIndex = 0;
       this.keyStats = new Map();
       this.providers = new Map();
       return;
     }
 
     this.keys = this.loadApiKeys();
+    this.currentIndex = 0;
     this.keyStats = new Map();
     this.providers = new Map();
 
@@ -48,13 +77,15 @@ class CerebrasKeyBalancer {
       });
       // Note: @ai-sdk/cerebras doesn't expose maxRetries option
       // Retries are handled at the AI SDK level (streamText maxRetries: 5)
-      this.providers.set(key, createCerebras({ apiKey: key }));
+      const base = createCerebras({ apiKey: key });
+      const keyPreview = key.substring(0, 8);
+      this.providers.set(key, wrapWithLogging(base, keyPreview));
     }
 
     // Log initialized keys for visibility
-    console.log("[Cerebras Balancer] 🔑 Initialized keys:");
+    logger.log("[Cerebras Balancer] 🔑 Initialized keys:");
     for (let i = 0; i < this.keys.length; i++) {
-      console.log(
+      logger.log(
         `[Cerebras Balancer]   Key ${i + 1}: ${this.keys[i].substring(
           0,
           8
@@ -90,7 +121,7 @@ class CerebrasKeyBalancer {
       );
     }
 
-    console.log(`[Cerebras Balancer] Loaded ${keys.length} API key(s)`);
+    logger.log(`[Cerebras Balancer] Loaded ${keys.length} API key(s)`);
     return keys;
   }
 
@@ -125,7 +156,7 @@ class CerebrasKeyBalancer {
         const availableKeys = Array.from(this.keyStats.values()).filter(
           (s) => !s.isDisabled
         ).length;
-        console.log(
+        logger.log(
           `[Cerebras Balancer] ✅ Re-enabled key ${key.substring(
             0,
             8
@@ -142,7 +173,7 @@ class CerebrasKeyBalancer {
     }
 
     // If all keys are disabled, return the least recently disabled one
-    console.warn(
+    logger.warn(
       "[Cerebras Balancer] ⚠️  ALL KEYS DISABLED - forcing re-enable of least recently disabled key"
     );
     const leastRecentlyDisabled = Array.from(this.keyStats.entries())
@@ -153,7 +184,7 @@ class CerebrasKeyBalancer {
       const [key, stats] = leastRecentlyDisabled;
       stats.isDisabled = false;
       stats.disabledUntil = undefined;
-      console.warn(
+      logger.warn(
         `[Cerebras Balancer] 🔄 Force re-enabled key ${key.substring(
           0,
           8
@@ -182,7 +213,7 @@ class CerebrasKeyBalancer {
       const availableKeys = Array.from(this.keyStats.values()).filter(
         (s) => !s.isDisabled
       ).length;
-      console.log(
+      logger.log(
         `[Cerebras Balancer] 🔑 Using key ${keyPreview}... (Request #${stats.requestCount}, ${availableKeys}/${this.keys.length} keys available)`
       );
     }
@@ -234,12 +265,12 @@ class CerebrasKeyBalancer {
       (s) => !s.isDisabled
     ).length;
 
-    console.warn(
+    logger.warn(
       `[Cerebras Balancer] ⚠️  DISABLED key ${key.substring(0, 8)}... for ${
         retryDelaySeconds || 60
       }s due to: ${error}`
     );
-    console.warn(
+    logger.warn(
       `[Cerebras Balancer] 📊 Status: ${availableKeys}/${this.keys.length} keys available, ${stats.errorCount} total errors on this key`
     );
   }
@@ -317,7 +348,7 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
     fullErrorString.includes("queue_exceeded") ||
     fullErrorString.includes("high traffic");
 
-  console.log(
+  logger.log(
     `[Cerebras Balancer] 🔍 Analyzing error: Status ${statusCode}, Code: ${errorCode}, HasQueue: ${hasQueueError}`
   );
 
@@ -348,26 +379,23 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
     // For quota errors, use longer cooldown
     // For server errors, use medium cooldown
     let retryDelay = 60; // default
-    let errorType = "Unknown";
+    // errorType intentionally removed (unused).
 
     if (isQueueExceeded) {
       retryDelay = 15; // Queue issues are usually temporary
-      errorType = "Queue Exceeded";
-      console.log(
+      logger.log(
         "[Cerebras Balancer] 🚦 Queue exceeded error detected - using 15s cooldown"
       );
     } else if (isServerError) {
       retryDelay = 30;
-      errorType = "Server Error";
-      console.log(
+      logger.log(
         "[Cerebras Balancer] 🔧 Server error detected - using 30s cooldown"
       );
     } else {
-      errorType = "Rate Limit";
       // Extract retry delay from error if available
       const retryMatch = errorMessage.match(RETRY_DELAY_REGEX);
       retryDelay = retryMatch ? Number.parseFloat(retryMatch[1]) : 60;
-      console.log(
+      logger.log(
         `[Cerebras Balancer] ⏱️  Rate limit detected - using ${retryDelay}s cooldown`
       );
     }
@@ -377,7 +405,7 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
     const keyToMark = apiKey || balancer.getMostRecentlyUsedKey();
 
     if (keyToMark) {
-      console.log(
+      logger.log(
         `[Cerebras Balancer] 🔄 Rotating away from failed key ${keyToMark.substring(
           0,
           8
@@ -394,12 +422,10 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
         retryDelay
       );
     } else {
-      console.warn(
-        "[Cerebras Balancer] ⚠️  Could not identify which key failed"
-      );
+      logger.warn("[Cerebras Balancer] ⚠️  Could not identify which key failed");
     }
   } else {
-    console.log(
+    logger.log(
       "[Cerebras Balancer] ℹ️  Error not related to rate limits or server issues - no key rotation needed"
     );
   }
@@ -419,11 +445,11 @@ export function logCerebrasHealth(): void {
   const stats = getCerebrasStats();
   const healthyKeys = stats.filter((s) => !s.isDisabled).length;
 
-  console.log("=".repeat(60));
-  console.log("[Cerebras Balancer] 📊 KEY HEALTH REPORT");
-  console.log("=".repeat(60));
-  console.log(`Overall Status: ${healthyKeys}/${stats.length} keys available`);
-  console.log("");
+  logger.log("=".repeat(60));
+  logger.log("[Cerebras Balancer] 📊 KEY HEALTH REPORT");
+  logger.log("=".repeat(60));
+  logger.log(`Overall Status: ${healthyKeys}/${stats.length} keys available`);
+  logger.log("");
 
   for (const stat of stats) {
     const status = stat.isDisabled ? "🔴 DISABLED" : "🟢 ACTIVE";
@@ -431,14 +457,14 @@ export function logCerebrasHealth(): void {
       ? ` (until ${new Date(stat.disabledUntil).toLocaleTimeString()})`
       : "";
 
-    console.log(`Key: ${stat.key}`);
-    console.log(`  Status: ${status}${cooldownInfo}`);
-    console.log(`  Requests: ${stat.requestCount}`);
-    console.log(`  Errors: ${stat.errorCount}`);
+    logger.log(`Key: ${stat.key}`);
+    logger.log(`  Status: ${status}${cooldownInfo}`);
+    logger.log(`  Requests: ${stat.requestCount}`);
+    logger.log(`  Errors: ${stat.errorCount}`);
     if (stat.lastError) {
-      console.log(`  Last Error: ${stat.lastError}`);
+      logger.log(`  Last Error: ${stat.lastError}`);
     }
-    console.log("");
+    logger.log("");
   }
-  console.log("=".repeat(60));
+  logger.log("=".repeat(60));
 }

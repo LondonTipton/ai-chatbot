@@ -6,6 +6,9 @@ import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "@/components/toast";
 import { createBrowserClient } from "@/lib/appwrite/config";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("verify/page");
 
 function VerifyContent() {
   const router = useRouter();
@@ -44,7 +47,7 @@ function VerifyContent() {
           router.refresh();
         }, 2000);
       } catch (error: any) {
-        console.error("Verification error:", error);
+        logger.error("Verification error:", error);
         setStatus("error");
 
         // Map Appwrite errors to user-friendly messages

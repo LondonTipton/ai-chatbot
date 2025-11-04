@@ -9,6 +9,9 @@ export const codeDocumentHandler = createDocumentHandler<"code">({
   onCreateDocument: async ({ title, dataStream }) => {
     let draftContent = "";
 
+    console.log(
+      "[Artifact] 🧠 Creating code document with Cerebras artifact-model (reasoning enabled)"
+    );
     const { fullStream } = streamObject({
       model: myProvider.languageModel("artifact-model"),
       system: codePrompt,
@@ -42,6 +45,9 @@ export const codeDocumentHandler = createDocumentHandler<"code">({
   onUpdateDocument: async ({ document, description, dataStream }) => {
     let draftContent = "";
 
+    console.log(
+      "[Artifact] 🧠 Updating code document with Cerebras artifact-model (reasoning enabled)"
+    );
     const { fullStream } = streamObject({
       model: myProvider.languageModel("artifact-model"),
       system: updateDocumentPrompt(document.content, "code"),

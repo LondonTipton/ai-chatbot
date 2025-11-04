@@ -1,10 +1,13 @@
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 import { deleteSession } from "@/lib/appwrite/auth";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("logout/route");
 
 export async function POST() {
   try {
-    console.log("[logout-api] Starting server-side logout...");
+    logger.log("[logout-api] Starting server-side logout...");
 
     const cookieStore = await cookies();
 
@@ -15,12 +18,12 @@ export async function POST() {
       : null;
     const fallbackSessionId = cookieStore.get("appwrite-session")?.value;
 
-    console.log("[logout-api] Project ID:", projectId);
-    console.log(
+    logger.log("[logout-api] Project ID:", projectId);
+    logger.log(
       "[logout-api] Appwrite session cookie:",
       appwriteSessionCookie ? "Present" : "None"
     );
-    console.log(
+    logger.log(
       "[logout-api] Fallback session ID:",
       fallbackSessionId ? "Present" : "None"
     );
@@ -29,9 +32,9 @@ export async function POST() {
     if (appwriteSessionCookie && fallbackSessionId) {
       try {
         await deleteSession(fallbackSessionId);
-        console.log("[logout] Successfully deleted Appwrite session");
+        logger.log("[logout] Successfully deleted Appwrite session");
       } catch (error) {
-        console.log("[logout] Failed to delete Appwrite session:", error);
+        logger.log("[logout] Failed to delete Appwrite session:", error);
         // Continue with cookie cleanup even if Appwrite deletion fails
       }
     }
@@ -69,7 +72,7 @@ export async function POST() {
 
     return response;
   } catch (error) {
-    console.error("[logout-api] Server-side logout error:", error);
+    logger.error("[logout-api] Server-side logout error:", error);
 
     // Even if there's an error, try to clear cookies
     const response = NextResponse.json(

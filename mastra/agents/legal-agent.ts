@@ -4,6 +4,12 @@ import { tavilyExtractTool } from "../tools/tavily-extract";
 import { tavilySearchTool } from "../tools/tavily-search";
 
 /**
+ * Initialize the Cerebras provider ONCE at module load time
+ * This prevents multiple provider instances during streaming
+ */
+const cerebrasProvider = getBalancedCerebrasProvider();
+
+/**
  * Legal AI Agent powered by Cerebras gpt-oss-120b
  * Uses load-balanced API keys for reliability and rate limit handling
  * Specializes in legal research and analysis with web search capabilities
@@ -27,11 +33,7 @@ When responding:
 
 Remember: You are a research assistant, not a lawyer. Always remind users to consult with qualified legal professionals for legal advice.`,
 
-  model: () => {
-    // Use load-balanced Cerebras provider
-    const provider = getBalancedCerebrasProvider();
-    return provider("gpt-oss-120b");
-  },
+  model: () => cerebrasProvider("gpt-oss-120b"),
 
   tools: {
     tavilySearchTool,

@@ -4,7 +4,6 @@ import {
   createUIMessageStream,
   JsonToSseTransformStream,
   smoothStream,
-  stepCountIs,
   streamText,
 } from "ai";
 import { unstable_cache as cache } from "next/cache";
@@ -17,7 +16,11 @@ import type { ModelCatalog } from "tokenlens/core";
 import { fetchModels } from "tokenlens/fetch";
 import { getUsage } from "tokenlens/helpers";
 import type { VisibilityType } from "@/components/visibility-selector";
-import { detectQueryComplexity } from "@/lib/ai/complexity-detector";
+import {
+  detectQueryComplexity,
+  shouldUseMastra,
+} from "@/lib/ai/complexity-detector";
+import { streamMastraAgent } from "@/lib/ai/mastra-sdk-integration";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
@@ -44,16 +47,19 @@ import {
   updateChatLastContextById,
   updateUserAppwriteId,
 } from "@/lib/db/queries";
+import {
+  commitTransaction,
+  rollbackTransaction,
+} from "@/lib/db/usage-transaction";
 import { ChatSDKError } from "@/lib/errors";
+import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
-import {
-  getMessageSummary,
-  validateResponse,
-} from "@/lib/utils/validate-response";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
+
+const logger = createLogger("chat/route");
 
 export const maxDuration = 60;
 
@@ -64,7 +70,7 @@ const getTokenlensCatalog = cache(
     try {
       return await fetchModels();
     } catch (err) {
-      console.warn(
+      logger.warn(
         "TokenLens: catalog fetch failed, using default catalog",
         err
       );
@@ -83,11 +89,11 @@ export function getStreamContext() {
       });
     } catch (error: any) {
       if (error.message.includes("REDIS_URL")) {
-        console.log(
+        logger.log(
           " > Resumable streams are disabled due to missing REDIS_URL"
         );
       } else {
-        console.error(error);
+        logger.error(error);
       }
     }
   }
@@ -96,9 +102,9 @@ export function getStreamContext() {
 }
 
 export async function POST(request: Request) {
-  console.log("=".repeat(80));
-  console.log("🔵 INTELLIGENT ROUTING CHAT ROUTE");
-  console.log("=".repeat(80));
+  logger.log("=".repeat(80));
+  logger.log("🔵 INTELLIGENT ROUTING CHAT ROUTE");
+  logger.log("=".repeat(80));
 
   let requestBody: PostRequestBody;
 
@@ -131,13 +137,11 @@ export async function POST(request: Request) {
     // Detect query complexity
     const complexityAnalysis = detectQueryComplexity(userMessageText);
 
-    console.log(`[Routing] 💬 Chat ID: ${id}`);
-    console.log(`[Routing] 🤖 Selected Model: ${selectedChatModel}`);
-    console.log(
-      `[Routing] 📝 Query: "${userMessageText.substring(0, 100)}..."`
-    );
-    console.log(`[Routing] 🎯 Complexity: ${complexityAnalysis.complexity}`);
-    console.log(`[Routing] 💡 Reasoning: ${complexityAnalysis.reasoning}`);
+    logger.log(`[Routing] 💬 Chat ID: ${id}`);
+    logger.log(`[Routing] 🤖 Selected Model: ${selectedChatModel}`);
+    logger.log(`[Routing] 📝 Query: "${userMessageText.substring(0, 100)}..."`);
+    logger.log(`[Routing] 🎯 Complexity: ${complexityAnalysis.complexity}`);
+    logger.log(`[Routing] 💡 Reasoning: ${complexityAnalysis.reasoning}`);
 
     const session = await auth();
 
@@ -148,7 +152,7 @@ export async function POST(request: Request) {
     // Verify user exists in database; if not, repair mapping via email
     let dbUser = await getUserByAppwriteId(session.user.id);
     if (!dbUser) {
-      console.warn(
+      logger.warn(
         `[Auth Repair] No DB user for appwriteId=${session.user.id}, attempting email fallback...`
       );
       if (session.user.email) {
@@ -161,7 +165,7 @@ export async function POST(request: Request) {
               session.user.id
             );
             dbUser = updated?.[0] || usersByEmail[0];
-            console.log(
+            logger.log(
               `[Auth Repair] Linked existing user ${dbUser.id} to appwriteId=${session.user.id}`
             );
           } else {
@@ -171,60 +175,32 @@ export async function POST(request: Request) {
               session.user.id
             );
             dbUser = created?.[0];
-            console.log(
+            logger.log(
               `[Auth Repair] Created DB user ${dbUser?.id} for appwriteId=${session.user.id}`
             );
           }
         } catch (e) {
-          console.error(
-            "[Auth Repair] Failed to resolve DB user via email:",
-            e
-          );
+          logger.error("[Auth Repair] Failed to resolve DB user via email:", e);
         }
       }
       if (!dbUser) {
-        console.error(
+        logger.error(
           `[Auth Error] Could not resolve DB user for appwriteId=${session.user.id}`
         );
         return new ChatSDKError("unauthorized:chat").toResponse();
       }
     }
 
-    // Check daily usage limit based on user's plan
-    const { checkAndIncrementUsage } = await import("@/lib/db/usage");
-    const usageCheck = await checkAndIncrementUsage(dbUser.id);
-
-    if (!usageCheck.allowed) {
-      console.log(
-        `[Usage] User ${dbUser.id} exceeded daily limit: ${usageCheck.requestsToday}/${usageCheck.dailyLimit}`
-      );
-      // Return a standardized error payload expected by the client
-      return Response.json(
-        {
-          code: "rate_limit:chat",
-          message: `You've reached your daily limit of ${usageCheck.dailyLimit} requests. Upgrade to continue.`,
-          cause: "daily_limit_reached",
-          // Optional metadata for UI (not required by error handler)
-          requestsToday: usageCheck.requestsToday,
-          dailyLimit: usageCheck.dailyLimit,
-          plan: usageCheck.plan,
-        },
-        { status: 429 }
-      );
-    }
-
-    console.log(
-      `[Usage] User ${dbUser.id} usage: ${usageCheck.requestsToday}/${usageCheck.dailyLimit} (${usageCheck.plan} plan)`
-    );
-
+    // Check chat ownership before creating transaction (non-retryable error)
     const chat = await getChatById({ id });
 
-    if (chat) {
-      if (chat.userId !== dbUser.id) {
-        // Use database UUID
-        return new ChatSDKError("forbidden:chat").toResponse();
-      }
-    } else {
+    if (chat && chat.userId !== dbUser.id) {
+      // Use database UUID
+      return new ChatSDKError("forbidden:chat").toResponse();
+    }
+
+    // Create chat if it doesn't exist
+    if (!chat) {
       const title = await generateTitleFromUserMessage({
         message,
       });
@@ -267,13 +243,177 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
 
+    // Check if query should use Mastra
+    let shouldFallbackToAiSdk = false;
+
+    if (shouldUseMastra(complexityAnalysis.complexity)) {
+      logger.log(
+        `[Routing] 🤖 Using Mastra for ${complexityAnalysis.complexity} query`
+      );
+      logger.log(`[Routing] 📊 Message count: ${uiMessages.length}`);
+
+      // Begin usage transaction for Mastra
+      const { beginTransaction: beginMastraTx } = await import(
+        "@/lib/db/usage-transaction"
+      );
+      const txResult = await beginMastraTx(dbUser.id);
+
+      if (!txResult.allowed) {
+        logger.log(
+          `[Usage] User ${dbUser.id} exceeded daily limit: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit}`
+        );
+        return Response.json(
+          {
+            code: "rate_limit:chat",
+            message: `You've reached your daily limit of ${txResult.currentUsage.dailyLimit} requests. Upgrade to continue.`,
+            cause: "daily_limit_reached",
+            requestsToday: txResult.currentUsage.requestsToday,
+            dailyLimit: txResult.currentUsage.dailyLimit,
+            plan: txResult.currentUsage.plan,
+          },
+          { status: 429 }
+        );
+      }
+
+      const txId = txResult.transaction?.transactionId;
+      if (txId) {
+        logger.log(
+          `[Usage] User ${dbUser.id} usage: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit} (${txResult.currentUsage.plan} plan)`
+        );
+        logger.log(`[Usage] Created transaction ${txId}`);
+
+        try {
+          // Route to Mastra using official @mastra/ai-sdk pattern
+          // This uses agent.stream() with format: "aisdk" for AI SDK v5 compatibility
+          const mastraStream = await streamMastraAgent(
+            complexityAnalysis.complexity,
+            userMessageText,
+            {
+              userId: dbUser.id,
+              chatId: id,
+              sessionId: session.user.id,
+              memory: {
+                thread: id, // Use chat ID as thread
+                resource: dbUser.id, // Use user ID as resource
+              },
+            }
+          );
+
+          logger.log(
+            "[Mastra] ✅ Mastra stream created (official @mastra/ai-sdk pattern)"
+          );
+
+          // Use AI SDK v5's native toUIMessageStreamResponse()
+          // This is the official pattern from @mastra/ai-sdk documentation
+          const response = mastraStream.toUIMessageStreamResponse({
+            onFinish: async ({ messages }: { messages: any[] }) => {
+              // Save assistant messages to database
+              try {
+                logger.log("[Mastra] 💾 Saving assistant message to database", {
+                  messageCount: messages.length,
+                });
+
+                const assistantMessages = messages.filter(
+                  (msg: any) => msg.role === "assistant"
+                );
+
+                if (assistantMessages.length > 0) {
+                  await saveMessages({
+                    messages: assistantMessages.map((currentMessage: any) => ({
+                      id: currentMessage.id,
+                      role: currentMessage.role,
+                      parts: currentMessage.parts,
+                      createdAt: new Date(),
+                      attachments: [],
+                      chatId: id,
+                    })),
+                  });
+
+                  logger.log(
+                    "[Mastra] ✅ Assistant message saved successfully"
+                  );
+                }
+
+                // Commit transaction on success
+                await commitTransaction(txId);
+                logger.log(`[Usage] Committed transaction ${txId}`);
+              } catch (err) {
+                logger.error(
+                  "[Mastra] ❌ Failed to save assistant message:",
+                  err
+                );
+                // Rollback transaction on error
+                await rollbackTransaction(txId);
+                logger.log(
+                  `[Usage] Rolled back transaction ${txId} due to save error`
+                );
+              }
+            },
+            onError: async ({ error }: { error: Error | string }) => {
+              logger.error("[Mastra] ❌ Stream error:", error);
+              // Rollback transaction on error
+              try {
+                await rollbackTransaction(txId);
+                logger.log(
+                  `[Usage] Rolled back transaction ${txId} due to stream error`
+                );
+              } catch (err) {
+                logger.error(
+                  `[Usage] Failed to rollback transaction ${txId}:`,
+                  err
+                );
+              }
+            },
+          });
+
+          return response;
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          logger.error("[Mastra] ❌ Mastra routing failed:", {
+            error: errorMessage,
+            complexity: complexityAnalysis.complexity,
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+
+          // Rollback transaction on error
+          try {
+            await rollbackTransaction(txId);
+            logger.log(
+              `[Usage] Rolled back transaction ${txId} after Mastra failure`
+            );
+          } catch (err) {
+            logger.error(
+              `[Usage] Failed to rollback transaction ${txId}:`,
+              err
+            );
+          }
+
+          // Set flag to fallback to AI SDK
+          shouldFallbackToAiSdk = true;
+          logger.log("[Routing] 🔄 Falling back to AI SDK due to Mastra error");
+        }
+      }
+    }
+
+    // AI SDK flow for simple/light queries or Mastra fallback
+    if (shouldFallbackToAiSdk) {
+      logger.log(
+        `[Routing] 🔄 Using AI SDK as fallback for ${complexityAnalysis.complexity} query`
+      );
+    } else {
+      logger.log(
+        `[Routing] ⚡ Using AI SDK for ${complexityAnalysis.complexity} query`
+      );
+    }
+
     // Select tools based on complexity
     let activeTools: string[];
     let toolsConfig: any;
 
     if (complexityAnalysis.complexity === "simple") {
       // Simple Q&A - use QNA search
-      console.log("[Routing] 🔵 Using AI SDK with QNA search (simple)");
+      logger.log("[Routing] 🔵 Using AI SDK with QNA search (simple)");
       activeTools = ["tavilyQna", "createDocument", "updateDocument"];
       toolsConfig = {
         tavilyQna,
@@ -282,7 +422,7 @@ export async function POST(request: Request) {
       };
     } else if (complexityAnalysis.complexity === "light") {
       // Light research - use advanced search
-      console.log("[Routing] 🔵 Using AI SDK with advanced search (light)");
+      logger.log("[Routing] 🔵 Using AI SDK with advanced search (light)");
       activeTools = [
         "tavilyAdvancedSearch",
         "createDocument",
@@ -296,8 +436,8 @@ export async function POST(request: Request) {
         requestSuggestions,
       };
     } else {
-      // Medium/Deep/Workflow - use standard tools (Mastra disabled for now)
-      console.log(
+      // Medium/Deep/Workflow - use standard tools (fallback from Mastra)
+      logger.log(
         `[Routing] 🔵 Using AI SDK with standard tools (${complexityAnalysis.complexity})`
       );
       activeTools = [
@@ -318,18 +458,51 @@ export async function POST(request: Request) {
       };
     }
 
-    console.log(
-      `[Routing] 🚀 Starting stream with model: ${selectedChatModel}`
-    );
-    console.log(`[Routing] 🛠️  Active tools: ${activeTools.join(", ")}`);
-    console.log(`[Routing] 📊 Message count: ${uiMessages.length}`);
+    logger.log(`[Routing] 🚀 Starting stream with model: ${selectedChatModel}`);
+    logger.log(`[Routing] 🛠️  Active tools: ${activeTools.join(", ")}`);
+    logger.log(`[Routing] 📊 Message count: ${uiMessages.length}`);
 
+    // Begin usage transaction for AI SDK flow
+    const { beginTransaction: beginAiSdkTx } = await import(
+      "@/lib/db/usage-transaction"
+    );
+    const txResult = await beginAiSdkTx(dbUser.id);
+
+    if (!txResult.allowed) {
+      logger.log(
+        `[Usage] User ${dbUser.id} exceeded daily limit: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit}`
+      );
+      return Response.json(
+        {
+          code: "rate_limit:chat",
+          message: `You've reached your daily limit of ${txResult.currentUsage.dailyLimit} requests. Upgrade to continue.`,
+          cause: "daily_limit_reached",
+          requestsToday: txResult.currentUsage.requestsToday,
+          dailyLimit: txResult.currentUsage.dailyLimit,
+          plan: txResult.currentUsage.plan,
+        },
+        { status: 429 }
+      );
+    }
+
+    const txId = txResult.transaction?.transactionId;
+    if (!txId) {
+      throw new Error("Transaction ID not found");
+    }
+    logger.log(
+      `[Usage] User ${dbUser.id} usage: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit} (${txResult.currentUsage.plan} plan)`
+    );
+    logger.log(`[Usage] Created transaction ${txId}`);
+
+    // Create stream without retry orchestration (legacy flow)
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
         // Update tools with dataStream
         const updatedTools = {
           ...(toolsConfig.tavilyQna && { tavilyQna }),
-          ...(toolsConfig.tavilyAdvancedSearch && { tavilyAdvancedSearch }),
+          ...(toolsConfig.tavilyAdvancedSearch && {
+            tavilyAdvancedSearch,
+          }),
           ...(toolsConfig.tavilySearch && {
             tavilySearch: tavilySearch({ dataStream }),
           }),
@@ -348,11 +521,25 @@ export async function POST(request: Request) {
           ...(toolsConfig.getWeather && { getWeather }),
         };
 
+        logger.log(
+          `[Routing] 🔧 Registered tools: ${Object.keys(updatedTools).join(
+            ", "
+          )}`
+        );
+        logger.log(
+          `[Routing] 🎯 Active tools filter: ${activeTools.join(", ")}`
+        );
+
+        // Enforce reasoning for all Cerebras models to help debug empty responses
+        const isCerebrasModel = selectedChatModel !== "chat-model-image";
+        logger.log(
+          `[Routing] 🧠 Model: ${selectedChatModel}, isCerebras: ${isCerebrasModel}, reasoning enforced: ${isCerebrasModel}`
+        );
+
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
-          stopWhen: stepCountIs(15), // Increased to allow text generation after tools
           maxRetries: 5,
           experimental_activeTools:
             selectedChatModel === "chat-model-reasoning" ? [] : activeTools,
@@ -386,65 +573,50 @@ export async function POST(request: Request) {
               }
 
               const summary = getUsage({ modelId, usage, providers });
-              finalMergedUsage = { ...usage, ...summary, modelId } as AppUsage;
-              dataStream.write({ type: "data-usage", data: finalMergedUsage });
+              finalMergedUsage = {
+                ...usage,
+                ...summary,
+                modelId,
+              } as AppUsage;
+              dataStream.write({
+                type: "data-usage",
+                data: finalMergedUsage,
+              });
             } catch (err) {
-              console.warn("TokenLens enrichment failed", err);
+              logger.warn("TokenLens enrichment failed", err);
               finalMergedUsage = usage;
-              dataStream.write({ type: "data-usage", data: finalMergedUsage });
+              dataStream.write({
+                type: "data-usage",
+                data: finalMergedUsage,
+              });
             }
           },
         });
 
         dataStream.merge(
           result.toUIMessageStream({
-            sendReasoning: false,
+            sendReasoning: isCerebrasModel, // Send reasoning for Cerebras models to help debug
           })
         );
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
-        // Validate response content
-        const validation = validateResponse(messages);
-        const summary = getMessageSummary(messages);
-
-        if (validation.isValid) {
-          console.log(`[Main Chat] ✅ Response completed: ${summary}`);
-        } else {
-          console.warn(
-            "[Main Chat] ⚠️  Response completed but contains no meaningful content!"
-          );
-          console.warn(`[Main Chat] 📊 Summary: ${summary}`);
-
-          // Log detailed structure for debugging
-          const assistantMessages = messages.filter(
-            (m) => m.role === "assistant"
-          );
-          assistantMessages.forEach((msg, idx) => {
-            const partDetails = msg.parts.map(
-              (p) =>
-                `${p.type}${
-                  p.type === "text" ? `(${p.text?.length || 0} chars)` : ""
-                }`
-            );
-            console.warn(
-              `[Main Chat] Message ${idx + 1}: ${
-                msg.parts.length
-              } parts - ${partDetails.join(", ")}`
-            );
-          });
-
-          // CRITICAL: This is a Cerebras limitation - it stops after tool calls
-          // without generating a text response. This happens when stepCountIs(5)
-          // is reached during tool execution.
-          console.warn(
-            "[Main Chat] 🔧 This is likely due to Cerebras stopping after tool execution."
-          );
-          console.warn(
-            "[Main Chat] 💡 Consider: 1) Increasing stepCountIs limit, 2) Using a different model for tool-heavy queries, or 3) Implementing a follow-up mechanism"
-          );
+        // Ensure all assistant messages have text content
+        const { postProcessAssistantResponse } = await import(
+          "@/lib/ai/post-processing"
+        );
+        const { changed } = await postProcessAssistantResponse(
+          messages as any,
+          {
+            activeTools,
+            userQueryText: userMessageText,
+          }
+        );
+        if (changed) {
+          logger.log("[AI SDK] ✅ Post-processing produced assistant text");
         }
 
+        // Save messages (no validation in legacy flow)
         await saveMessages({
           messages: messages.map((currentMessage) => ({
             id: currentMessage.id,
@@ -463,12 +635,27 @@ export async function POST(request: Request) {
               context: finalMergedUsage,
             });
           } catch (err) {
-            console.warn("Unable to persist last usage for chat", id, err);
+            logger.warn("Unable to persist last usage for chat", id, err);
           }
+        }
+
+        // Commit usage transaction for legacy flow
+        try {
+          await commitTransaction(txId);
+          logger.log(`[Usage] Committed transaction ${txId}`);
+        } catch (err) {
+          logger.error(`[Usage] Failed to commit transaction ${txId}:`, err);
         }
       },
       onError: (error) => {
-        console.error("[Main Chat] ❌ Stream error:", error);
+        logger.error("[Stream] ❌ Stream error:", error);
+
+        // Rollback usage transaction for legacy flow (fire and forget)
+        rollbackTransaction(txId)
+          .then(() => logger.log(`[Usage] Rolled back transaction ${txId}`))
+          .catch((err: Error) =>
+            logger.error(`[Usage] Failed to rollback transaction ${txId}:`, err)
+          );
 
         // Handle Cerebras-specific errors with key rotation
         if (typeof window === "undefined") {
@@ -480,9 +667,7 @@ export async function POST(request: Request) {
 
             // Check if this is a Cerebras model error
             if (selectedChatModel !== "chat-model-image") {
-              console.log(
-                "[Main Chat] 🔄 Attempting automatic key rotation..."
-              );
+              logger.log("[Stream] 🔄 Attempting automatic key rotation...");
               handleCerebrasError(error);
 
               // Log current key health status
@@ -490,73 +675,20 @@ export async function POST(request: Request) {
               const healthyKeys = stats.filter(
                 (s: any) => !s.isDisabled
               ).length;
-              console.log(
-                `[Main Chat] 📊 Key Health: ${healthyKeys}/${stats.length} keys available`
+              logger.log(
+                `[Stream] 📊 Key Health: ${healthyKeys}/${stats.length} keys available`
               );
             }
           } catch (err) {
-            console.warn("[Main Chat] Could not handle Cerebras error:", err);
+            logger.warn("[Stream] Could not handle Cerebras error:", err);
           }
         }
 
-        // Provide user-friendly error messages based on error type
-        if (error instanceof Error) {
-          const errorMessage = error.message.toLowerCase();
-
-          // Cerebras queue exceeded (429)
-          if (
-            errorMessage.includes("high traffic") ||
-            errorMessage.includes("queue_exceeded") ||
-            errorMessage.includes("queue")
-          ) {
-            return "Our AI service is experiencing high demand. We're automatically switching to another server. Please try again.";
-          }
-
-          // Generic rate limit (429)
-          if (
-            errorMessage.includes("rate limit") ||
-            errorMessage.includes("429") ||
-            errorMessage.includes("too many requests")
-          ) {
-            return "Too many requests. Our system is automatically rotating to available servers. Please wait 10-15 seconds and try again.";
-          }
-
-          // Server errors (500)
-          if (
-            errorMessage.includes("server error") ||
-            errorMessage.includes("500")
-          ) {
-            return "The AI service is temporarily unavailable. Please try again in a moment.";
-          }
-
-          // Type validation errors
-          if (errorMessage.includes("type validation")) {
-            return "The AI service returned an unexpected response. Please try again.";
-          }
-
-          // Retry exhausted
-          if (
-            errorMessage.includes("failed after") &&
-            errorMessage.includes("attempts")
-          ) {
-            return "All available AI servers are currently busy. Please wait 30-60 seconds before trying again.";
-          }
-        }
-
-        return "An error occurred while processing your request. Please try again.";
+        return "Stream error occurred";
       },
     });
 
-    // const streamContext = getStreamContext();
-
-    // if (streamContext) {
-    //   return new Response(
-    //     await streamContext.resumableStream(streamId, () =>
-    //       stream.pipeThrough(new JsonToSseTransformStream())
-    //     )
-    //   );
-    // }
-
+    // Return the stream (legacy flow)
     return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
   } catch (error) {
     const vercelId = request.headers.get("x-vercel-id");
@@ -575,7 +707,7 @@ export async function POST(request: Request) {
       return new ChatSDKError("bad_request:activate_gateway").toResponse();
     }
 
-    console.error("Unhandled error in chat API:", error, { vercelId });
+    logger.error("Unhandled error in chat API:", error, { vercelId });
     return new ChatSDKError("offline:chat").toResponse();
   }
 }

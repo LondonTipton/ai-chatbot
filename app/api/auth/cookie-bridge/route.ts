@@ -1,4 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("cookie-bridge/route");
 
 export function GET(request: NextRequest) {
   try {
@@ -14,7 +17,7 @@ export function GET(request: NextRequest) {
       );
     }
 
-    console.log(
+    logger.log(
       `[cookie-bridge] Setting cookies via JS bridge for userId=${userId.substring(
         0,
         8
@@ -34,7 +37,7 @@ export function GET(request: NextRequest) {
           <p>Please wait while we set up your session.</p>
         </div>
         <script>
-          console.log('[cookie-bridge] Setting cookies and auth tokens via JavaScript...');
+          logger.log('[cookie-bridge] Setting cookies and auth tokens via JavaScript...');
           
           // Set cookies via JavaScript (these will be available immediately)
           document.cookie = 'appwrite-session-js=${sessionId}; path=/; SameSite=Lax; max-age=' + (60*60*24*30);
@@ -48,7 +51,7 @@ export function GET(request: NextRequest) {
           }));
           localStorage.setItem('temp-auth-token', tempAuthToken);
           
-          console.log('[cookie-bridge] Cookies and tokens set, redirecting...');
+          logger.log('[cookie-bridge] Cookies and tokens set, redirecting...');
           
           // For development, also set a special header flag
           sessionStorage.setItem('auth-bypass', 'true');
@@ -85,7 +88,7 @@ export function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("[cookie-bridge] Error:", error);
+    logger.error("[cookie-bridge] Error:", error);
     return NextResponse.json(
       { error: "Failed to set cookies" },
       { status: 500 }

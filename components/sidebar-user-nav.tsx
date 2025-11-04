@@ -16,8 +16,11 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
+import { createLogger } from "@/lib/logger";
 import { LoaderIcon } from "./icons";
 import { toast } from "./toast";
+
+const logger = createLogger("sidebar-user-nav");
 
 type SidebarUserNavProps = {
   user: {
@@ -43,7 +46,7 @@ export function SidebarUserNav({ user }: SidebarUserNavProps) {
 
       if (!response.ok) {
         const errorData = await response.text();
-        console.error("[logout] Server error:", errorData);
+        logger.error("[logout] Server error:", errorData);
         throw new Error(`Server-side logout failed: ${response.status}`);
       }
 
@@ -57,7 +60,7 @@ export function SidebarUserNav({ user }: SidebarUserNavProps) {
       // Force a hard redirect to ensure cookies are cleared
       window.location.href = "/login";
     } catch (error) {
-      console.error("[logout] Logout failed:", error);
+      logger.error("[logout] Logout failed:", error);
       toast({
         type: "error",
         description: "Failed to sign out. Please try again.",

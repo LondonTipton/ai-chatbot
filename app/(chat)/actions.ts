@@ -4,6 +4,10 @@ import { generateText, type UIMessage } from "ai";
 import { cookies } from "next/headers";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { myProvider } from "@/lib/ai/providers";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("(chat)/actions");
+
 import {
   deleteMessagesByChatIdAfterTimestamp,
   getMessageById,
@@ -20,6 +24,9 @@ export async function generateTitleFromUserMessage({
 }: {
   message: UIMessage;
 }) {
+  logger.log(
+    "[Title Generation] 🧠 Using Cerebras title-model with reasoning enabled"
+  );
   const { text: title } = await generateText({
     model: myProvider.languageModel("title-model"),
     system: `\n

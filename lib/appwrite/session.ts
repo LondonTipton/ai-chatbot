@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import type { Models } from "node-appwrite";
+import { createLogger } from "@/lib/logger";
 import { getSession, refreshSession } from "./auth";
 import { AuthErrorCode, handleAppwriteError } from "./errors";
+
+const logger = createLogger("appwrite/session");
 
 /**
  * Session cookie configuration
@@ -41,7 +44,7 @@ export async function setSessionCookie(
   if (projectId) {
     const appwriteSessionCookieName = `a_session_${projectId}`;
     cookieStore.delete(appwriteSessionCookieName);
-    console.log("[session] Cleared existing Appwrite session cookie");
+    logger.log("[session] Cleared existing Appwrite session cookie");
   }
 
   // Set our custom session cookie for tracking
@@ -60,11 +63,11 @@ export async function setSessionCookie(
   if (sessionSecret) {
     if (projectId) {
       const appwriteSessionCookieName = `a_session_${projectId}`;
-      console.log(
+      logger.log(
         "[session] Setting Appwrite session cookie:",
         appwriteSessionCookieName
       );
-      console.log("[session] Session secret length:", sessionSecret.length);
+      logger.log("[session] Session secret length:", sessionSecret.length);
       cookieStore.set(appwriteSessionCookieName, sessionSecret, {
         ...SESSION_COOKIE_OPTIONS,
         httpOnly: true,
@@ -74,7 +77,7 @@ export async function setSessionCookie(
       });
     }
   } else {
-    console.warn(
+    logger.warn(
       "[session] No session secret provided, Appwrite cookie not set"
     );
   }
@@ -132,7 +135,7 @@ export async function refreshSessionIfNeeded(
 
     // Check if session needs refresh
     if (shouldRefreshSession(session)) {
-      console.log(
+      logger.log(
         `[session] Refreshing session ${sessionId} (expires: ${session.expire})`
       );
 
@@ -159,7 +162,7 @@ export async function refreshSessionIfNeeded(
       await clearSessionCookie();
     }
 
-    console.error("[session] Error refreshing session:", authError);
+    logger.error("[session] Error refreshing session:", authError);
     return null;
   }
 }

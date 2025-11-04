@@ -3,6 +3,12 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
 /**
+ * Initialize the Cerebras provider ONCE at module load time
+ * This prevents multiple provider instances during streaming
+ */
+const cerebrasProvider = getBalancedCerebrasProvider();
+
+/**
  * Search Agent - Step 1 of Deep Research Workflow
  * Finds relevant sources (max 4 searches)
  */
@@ -25,10 +31,7 @@ Return a list of the most relevant sources found with:
 
 Do NOT provide analysis - just find and list sources. The next agent will extract and analyze.`,
 
-  model: () => {
-    const provider = getBalancedCerebrasProvider();
-    return provider("gpt-oss-120b");
-  },
+  model: () => cerebrasProvider("gpt-oss-120b"),
 
   tools: {
     tavilySearchAdvancedTool,

@@ -1,8 +1,11 @@
 import "server-only";
 
 import { eq } from "drizzle-orm";
+import { createLogger } from "@/lib/logger";
 import { db } from "./queries";
 import { user } from "./schema";
+
+const logger = createLogger("db/usage");
 
 export type UsageCheckResult = {
   allowed: boolean;
@@ -19,6 +22,17 @@ export type UsageCheckResult = {
 export async function checkAndIncrementUsage(
   userId: string
 ): Promise<UsageCheckResult> {
+  // Development bypass - unlimited requests in development
+  if (process.env.NODE_ENV === "development") {
+    logger.log("[Usage] Development mode - bypassing limits");
+    return {
+      allowed: true,
+      requestsToday: 0,
+      dailyLimit: 999,
+      plan: "Dev",
+    };
+  }
+
   try {
     const [userRecord] = await db
       .select()
@@ -38,7 +52,10 @@ export async function checkAndIncrementUsage(
     const now = new Date();
     const lastReset = new Date(userRecord.lastRequestReset);
     const requestsToday = Number.parseInt(userRecord.requestsToday || "0", 10);
-    const dailyLimit = Number.parseInt(userRecord.dailyRequestLimit || "5", 10);
+    const dailyLimit = Number.parseInt(
+      userRecord.dailyRequestLimit || "35",
+      10
+    );
 
     // Check if we need to reset the counter (new day)
     const needsReset =
@@ -93,7 +110,7 @@ export async function checkAndIncrementUsage(
       plan: userRecord.plan,
     };
   } catch (error) {
-    console.error("[Usage] Error checking usage:", error);
+    logger.error("[Usage] Error checking usage:", error);
     return {
       allowed: false,
       requestsToday: 0,
@@ -127,7 +144,10 @@ export async function getUserUsage(userId: string): Promise<UsageCheckResult> {
     const now = new Date();
     const lastReset = new Date(userRecord.lastRequestReset);
     let requestsToday = Number.parseInt(userRecord.requestsToday || "0", 10);
-    const dailyLimit = Number.parseInt(userRecord.dailyRequestLimit || "5", 10);
+    const dailyLimit = Number.parseInt(
+      userRecord.dailyRequestLimit || "35",
+      10
+    );
 
     // Check if counter should be reset
     const needsReset =
@@ -146,7 +166,7 @@ export async function getUserUsage(userId: string): Promise<UsageCheckResult> {
       plan: userRecord.plan,
     };
   } catch (error) {
-    console.error("[Usage] Error getting usage:", error);
+    logger.error("[Usage] Error getting usage:", error);
     return {
       allowed: false,
       requestsToday: 0,
@@ -167,14 +187,14 @@ export async function updateUserPlan(
   try {
     // Set daily limits based on plan
     const limits: Record<string, number> = {
-      Free: 5,
+      Free: 35,
       Basic: 50,
       Pro: 200,
       "Pro+": 600,
       Ultra: 4000,
     };
 
-    const dailyLimit = limits[plan] || 5;
+    const dailyLimit = limits[plan] || 35;
 
     await db
       .update(user)
@@ -185,9 +205,9 @@ export async function updateUserPlan(
       })
       .where(eq(user.id, userId));
 
-    console.log(`[Usage] Updated user ${userId} to plan ${plan}`);
+    logger.log(`[Usage] Updated user ${userId} to plan ${plan}`);
   } catch (error) {
-    console.error("[Usage] Error updating user plan:", error);
+    logger.error("[Usage] Error updating user plan:", error);
     throw error;
   }
 }

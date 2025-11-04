@@ -6,7 +6,10 @@ import { useCallback, useEffect, useState } from "react";
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { createLogger } from "@/lib/logger";
 import { login } from "../actions";
+
+const logger = createLogger("login/page");
 
 export default function Page() {
   const [status, setStatus] = useState<
@@ -30,12 +33,12 @@ export default function Page() {
 
   useEffect(() => {
     if (status === "success") {
-      console.log(
+      logger.log(
         "[login] Login successful, using cookie bridge for reliable redirect..."
       );
 
       // Redirect to home page after successful login
-      console.log("[login] Login successful, redirecting...");
+      logger.log("[login] Login successful, redirecting...");
       setTimeout(() => {
         window.location.href = "/";
       }, 500);

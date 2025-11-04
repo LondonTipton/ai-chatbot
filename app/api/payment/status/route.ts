@@ -3,7 +3,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/appwrite/server-auth";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
+import { createLogger } from "@/lib/logger";
 import { pesepayService } from "@/lib/payment/pesepay-service";
+
+const logger = createLogger("status/route");
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,14 +51,14 @@ export async function GET(request: NextRequest) {
     const pesepayReferenceNumber = pesepayResponse?.referenceNumber;
 
     if (!pesepayReferenceNumber) {
-      console.error("No Pesepay reference number found in payment record");
+      logger.error("No Pesepay reference number found in payment record");
       return NextResponse.json(
         { error: "Invalid payment record" },
         { status: 500 }
       );
     }
 
-    console.log(
+    logger.log(
       `[Payment Status] Checking Pesepay status with reference: ${pesepayReferenceNumber}`
     );
 
@@ -69,8 +72,8 @@ export async function GET(request: NextRequest) {
       statusResponse.transactionStatus === "SUCCESS"
         ? "completed"
         : statusResponse.transactionStatus === "FAILED"
-        ? "failed"
-        : "pending";
+          ? "failed"
+          : "pending";
 
     await db
       .update(payment)
@@ -115,7 +118,7 @@ export async function GET(request: NextRequest) {
       referenceNumber: statusResponse.referenceNumber || referenceNumber,
     });
   } catch (error) {
-    console.error("Status check error:", error);
+    logger.error("Status check error:", error);
     return NextResponse.json(
       {
         error:

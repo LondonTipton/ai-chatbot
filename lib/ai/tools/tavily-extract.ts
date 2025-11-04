@@ -1,8 +1,11 @@
 import { tool, type UIMessageStreamWriter } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
 import { summarizeContent } from "./summarize-content";
+
+const logger = createLogger("tools/tavily-extract");
 
 type TavilyExtractResult = {
   url: string;
@@ -131,7 +134,7 @@ export const tavilyExtract = ({ dataStream }: TavilyExtractProps = {}) =>
 
             // Pre-truncate extremely large content before summarization
             if (result.raw_content.length > ABSOLUTE_MAX_LENGTH) {
-              console.log(
+              logger.log(
                 `[Tavily Extract] Content extremely large (${result.raw_content.length} chars), pre-truncating to ${ABSOLUTE_MAX_LENGTH}`
               );
               result.raw_content = result.raw_content.substring(
@@ -150,7 +153,7 @@ export const tavilyExtract = ({ dataStream }: TavilyExtractProps = {}) =>
                 );
                 processingMethod = "summarized";
               } catch (_error) {
-                console.warn(
+                logger.warn(
                   `[Tavily Extract] Summarization failed for ${result.url}, using truncation`
                 );
                 processedContent =
@@ -199,7 +202,7 @@ export const tavilyExtract = ({ dataStream }: TavilyExtractProps = {}) =>
 
         return result;
       } catch (error) {
-        console.error("Tavily extract error:", error);
+        logger.error("Tavily extract error:", error);
 
         // Provide helpful error context
         if (error instanceof Error) {

@@ -2,15 +2,24 @@ import { streamObject, tool, type UIMessageStreamWriter } from "ai";
 import { z } from "zod";
 import { getDocumentById, saveSuggestions } from "@/lib/db/queries";
 import type { Suggestion } from "@/lib/db/schema";
+import { createLogger } from "@/lib/logger";
 import type { ChatMessage, Session } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
 import { myProvider } from "../providers";
+
+const logger = createLogger("tools/request-suggestions");
 
 type RequestSuggestionsProps = {
   session: Session;
   dataStream: UIMessageStreamWriter<ChatMessage>;
 };
 
+/**
+ * AI SDK Tool: Request Suggestions
+ *
+ * This tool wraps the suggestion service with UI streaming capabilities.
+ * It streams suggestions to the UI in real-time as they're generated.
+ */
 export const requestSuggestions = ({
   session,
   dataStream,
@@ -23,6 +32,10 @@ export const requestSuggestions = ({
         .describe("The ID of the document to request edits"),
     }),
     execute: async ({ documentId }) => {
+      if (!session?.user?.id) {
+        throw new Error("User session required to request suggestions");
+      }
+
       const document = await getDocumentById({ id: documentId });
 
       if (!document || !document.content) {
@@ -36,6 +49,10 @@ export const requestSuggestions = ({
         "userId" | "createdAt" | "documentCreatedAt"
       >[] = [];
 
+      // Generate suggestions with streaming to UI
+      logger.log(
+        "[RequestSuggestions Tool] 🧠 Using Cerebras artifact-model for suggestion generation (reasoning enabled)"
+      );
       const { elementStream } = streamObject({
         model: myProvider.languageModel("artifact-model"),
         system:
@@ -60,6 +77,7 @@ export const requestSuggestions = ({
           isResolved: false,
         };
 
+        // Stream to UI
         dataStream.write({
           type: "data-suggestion",
           data: suggestion,
@@ -69,18 +87,16 @@ export const requestSuggestions = ({
         suggestions.push(suggestion);
       }
 
-      if (session.user?.id) {
-        const userId = session.user.id;
-
-        await saveSuggestions({
-          suggestions: suggestions.map((suggestion) => ({
-            ...suggestion,
-            userId,
-            createdAt: new Date(),
-            documentCreatedAt: document.createdAt,
-          })),
-        });
-      }
+      // Save to database
+      const userId = session.user.id;
+      await saveSuggestions({
+        suggestions: suggestions.map((suggestion) => ({
+          ...suggestion,
+          userId,
+          createdAt: new Date(),
+          documentCreatedAt: document.createdAt,
+        })),
+      });
 
       return {
         id: documentId,

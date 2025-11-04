@@ -8,6 +8,9 @@ export const textDocumentHandler = createDocumentHandler<"text">({
   onCreateDocument: async ({ title, dataStream }) => {
     let draftContent = "";
 
+    console.log(
+      "[Artifact] 🧠 Creating text document with Cerebras artifact-model (reasoning enabled)"
+    );
     const { fullStream } = streamText({
       model: myProvider.languageModel("artifact-model"),
       system:
@@ -37,6 +40,9 @@ export const textDocumentHandler = createDocumentHandler<"text">({
   onUpdateDocument: async ({ document, description, dataStream }) => {
     let draftContent = "";
 
+    console.log(
+      "[Artifact] 🧠 Updating text document with Cerebras artifact-model (reasoning enabled)"
+    );
     const { fullStream } = streamText({
       model: myProvider.languageModel("artifact-model"),
       system: updateDocumentPrompt(document.content, "text"),

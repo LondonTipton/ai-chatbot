@@ -3,7 +3,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/appwrite/server-auth";
 import { db } from "@/lib/db/queries";
 import { payment, subscription } from "@/lib/db/schema";
+import { createLogger } from "@/lib/logger";
 import { pesepayService } from "@/lib/payment/pesepay-service";
+
+const logger = createLogger("initiate/route");
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +15,7 @@ export async function POST(request: NextRequest) {
       !process.env.PESEPAY_INTEGRATION_KEY ||
       !process.env.PESEPAY_ENCRYPTION_KEY
     ) {
-      console.error("Pesepay credentials not configured");
+      logger.error("Pesepay credentials not configured");
       return NextResponse.json(
         {
           error:
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!existingUser) {
-      console.error("User not found in database:", session.user.id);
+      logger.error("User not found in database:", session.user.id);
       return NextResponse.json(
         {
           error: "User session invalid. Please refresh the page and try again.",
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
         currency || "USD"
       );
     } catch (error) {
-      console.error("Error fetching payment methods:", error);
+      logger.error("Error fetching payment methods:", error);
       return NextResponse.json(
         {
           error:
@@ -96,7 +99,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[Payment] Using payment method:", {
+    logger.log("[Payment] Using payment method:", {
       code: ecocashMethod.code,
       name: ecocashMethod.name,
       minAmount: ecocashMethod.minimumAmount,
@@ -120,7 +123,7 @@ export async function POST(request: NextRequest) {
         })
         .returning();
     } catch (error) {
-      console.error("Database error creating payment:", error);
+      logger.error("Database error creating payment:", error);
       return NextResponse.json(
         {
           error:
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Initiate transaction with Pesepay (v1 API)
-    console.log("Initiating Pesepay transaction with:", {
+    logger.log("Initiating Pesepay transaction with:", {
       referenceNumber,
       amount,
       currency: currency || "USD",
@@ -151,9 +154,9 @@ export async function POST(request: NextRequest) {
         referenceNumber,
         paymentMethodCode: ecocashMethod.code,
       });
-      console.log("Pesepay response:", transactionResponse);
+      logger.log("Pesepay response:", transactionResponse);
     } catch (error) {
-      console.error("Pesepay API error:", error);
+      logger.error("Pesepay API error:", error);
       return NextResponse.json(
         {
           error: `Pesepay API error: ${
@@ -220,7 +223,7 @@ export async function POST(request: NextRequest) {
         "Payment initiated. Please complete payment via the redirect URL.",
     });
   } catch (error) {
-    console.error("Payment initiation error:", error);
+    logger.error("Payment initiation error:", error);
     return NextResponse.json(
       {
         error:
