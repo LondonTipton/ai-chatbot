@@ -40,9 +40,9 @@ export type ToolContext = {
  */
 function createDocumentToolWithContext(userId: string) {
   return createTool({
-    id: "create-document",
+    id: "createDocument",
     description:
-      "Create a document for writing or content creation activities. This tool will generate the contents of the document based on the title and kind. Supports text documents, code files, spreadsheets, and images.",
+      "REQUIRED: Use this tool when the user asks to create, write, or draft any document. This tool will generate the document content and display it in an artifact panel. Never write document content directly in your response - always use this tool instead. Supports text documents, code files, spreadsheets, and images.",
 
     inputSchema: z.object({
       title: z
@@ -107,7 +107,7 @@ function createDocumentToolWithContext(userId: string) {
  */
 function updateDocumentToolWithContext(userId: string) {
   return createTool({
-    id: "update-document",
+    id: "updateDocument",
     description:
       "Update an existing document with changes based on a description. Use this when you need to modify, improve, or revise document content.",
 
@@ -170,7 +170,7 @@ function updateDocumentToolWithContext(userId: string) {
  */
 function requestSuggestionsToolWithContext(userId: string) {
   return createTool({
-    id: "request-suggestions",
+    id: "requestSuggestions",
     description:
       "Request AI-powered suggestions to improve a document's writing. Analyzes the document content and provides up to 5 suggestions with original text, suggested improvements, and explanations.",
 

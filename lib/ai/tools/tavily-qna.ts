@@ -1,18 +1,15 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { createLogger } from "@/lib/logger";
-
-const logger = createLogger("tools/tavily-qna");
 
 /**
  * Tavily QNA Search Tool (OPTIMIZED)
- *
+ * 
  * Optimizations applied:
  * - Advanced search depth for higher quality answers (+30% quality)
  * - Reduced max_results to 2 for faster API response (-20% latency)
  * - Domain filtering for legal sources (+40% relevance)
  * - Topic hint for better content matching (+25% accuracy)
- *
+ * 
  * Use for queries requiring current information or specific legal references.
  * For simple definitional queries, use Cerebras direct (see smart routing).
  */
@@ -22,13 +19,11 @@ export const tavilyQna = tool({
   inputSchema: z.object({
     query: z
       .string()
-      .describe(
-        "The legal question to answer (e.g., 'What is the latest Zimbabwe Labour Act?')"
-      ),
+      .describe("The legal question to answer (e.g., 'What is the latest Zimbabwe Labour Act?')"),
   }),
   execute: async ({ query }) => {
     const startTime = Date.now();
-
+    
     try {
       const apiKey = process.env.TAVILY_API_KEY;
 
@@ -38,7 +33,7 @@ export const tavilyQna = tool({
         );
       }
 
-      logger.log("[Tavily QNA] 🔍 Starting optimized search", {
+      console.log("[Tavily QNA] 🔍 Starting optimized search", {
         query: query.substring(0, 100),
         depth: "advanced",
       });
@@ -51,25 +46,25 @@ export const tavilyQna = tool({
         body: JSON.stringify({
           api_key: apiKey,
           query,
-
+          
           // OPTIMIZATION 1: Advanced search for better quality
           search_depth: "advanced",
-
+          
           include_answer: true,
           include_raw_content: false,
-
+          
           // OPTIMIZATION 2: Reduce to 2 results for faster response
           max_results: 2,
-
+          
           // OPTIMIZATION 3: Focus on authoritative legal sources
           include_domains: [
-            "zimlii.org", // Zimbabwe Legal Information Institute
-            "gov.zw", // Government sites
-            "parlzim.gov.zw", // Parliament of Zimbabwe
-            "saflii.org", // Southern African Legal Information Institute
-            "gov.za", // South African government
+            "zimlii.org",      // Zimbabwe Legal Information Institute
+            "gov.zw",          // Government sites
+            "parlzim.gov.zw",  // Parliament of Zimbabwe
+            "saflii.org",      // Southern African Legal Information Institute
+            "gov.za",          // South African government
           ],
-
+          
           // OPTIMIZATION 4: Legal topic hint for better relevance
           topic: "legal",
         }),
@@ -83,7 +78,7 @@ export const tavilyQna = tool({
       const data = await response.json();
       const duration = Date.now() - startTime;
 
-      logger.log("[Tavily QNA] ✅ Search completed", {
+      console.log("[Tavily QNA] ✅ Search completed", {
         duration: `${duration}ms`,
         hasAnswer: !!data.answer,
         sourceCount: data.results?.length || 0,
@@ -108,8 +103,8 @@ export const tavilyQna = tool({
       };
     } catch (error) {
       const duration = Date.now() - startTime;
-
-      logger.error("[Tavily QNA] ❌ Search failed", {
+      
+      console.error("[Tavily QNA] ❌ Search failed", {
         duration: `${duration}ms`,
         error: error instanceof Error ? error.message : "Unknown error",
       });

@@ -7,6 +7,7 @@ import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
  * This prevents multiple provider instances during streaming
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
+console.log("[Mastra] medium-research-agent → Cerebras provider initialized");
 
 /**
  * Medium Research Agent
@@ -37,7 +38,13 @@ Example approach for "Find cases about property rights in Zimbabwe":
 
 Remember: You have a maximum of 4 tool calls. Use them strategically to cover different aspects of the query.`,
 
-  model: () => cerebrasProvider("gpt-oss-120b"),
+  model: () => {
+    // Reuse the singleton provider instance
+    console.log(
+      "[Mastra] medium-research-agent → Using Cerebras model: gpt-oss-120b (reasoning preferred)"
+    );
+    return cerebrasProvider("gpt-oss-120b");
+  },
 
   tools: {
     tavilySearchAdvancedTool,

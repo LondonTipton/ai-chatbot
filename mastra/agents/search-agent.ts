@@ -7,6 +7,7 @@ import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
  * This prevents multiple provider instances during streaming
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
+console.log("[Mastra] search-agent → Cerebras provider initialized");
 
 /**
  * Search Agent - Step 1 of Deep Research Workflow
@@ -31,7 +32,13 @@ Return a list of the most relevant sources found with:
 
 Do NOT provide analysis - just find and list sources. The next agent will extract and analyze.`,
 
-  model: () => cerebrasProvider("gpt-oss-120b"),
+  model: () => {
+    // Reuse the singleton provider instance
+    console.log(
+      "[Mastra] search-agent → Using Cerebras model: gpt-oss-120b (reasoning preferred)"
+    );
+    return cerebrasProvider("gpt-oss-120b");
+  },
 
   tools: {
     tavilySearchAdvancedTool,

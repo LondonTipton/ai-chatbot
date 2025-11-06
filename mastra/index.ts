@@ -1,6 +1,7 @@
 import { chatRoute } from "@mastra/ai-sdk";
 import { Mastra } from "@mastra/core";
 import { analysisAgent } from "./agents/analysis-agent";
+import { chatAgent } from "./agents/chat-agent";
 import { extractAgent } from "./agents/extract-agent";
 import { legalAgent } from "./agents/legal-agent";
 import { mediumResearchAgent } from "./agents/medium-research-agent";
@@ -14,6 +15,7 @@ import { searchAgent } from "./agents/search-agent";
  */
 export const mastra = new Mastra({
   agents: {
+    chatAgent: chatAgent as any,
     legalAgent: legalAgent as any,
     mediumResearchAgent: mediumResearchAgent as any,
     searchAgent: searchAgent as any,

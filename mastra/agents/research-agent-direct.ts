@@ -6,13 +6,14 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
  * This prevents multiple provider instances during streaming
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
+console.log("[Mastra] research-agent-direct → Cerebras provider initialized (NO TOOLS)");
 
 /**
  * Direct Research Agent (NO TOOLS)
- *
+ * 
  * Optimized for ultra-fast responses to general research queries.
  * Uses ONLY Cerebras model knowledge - no web search.
- *
+ * 
  * Use this agent when:
  * - User asks general knowledge questions
  * - Query doesn't require current information
@@ -53,7 +54,12 @@ Response structure (ALWAYS use this format):
 
 SPEED is critical: Respond immediately without searching. Your knowledge base is sufficient for general queries.`,
 
-  model: () => cerebrasProvider("gpt-oss-120b"),
+  model: () => {
+    console.log(
+      "[Mastra] research-agent-direct → Using Cerebras model: gpt-oss-120b (FAST, NO TOOLS)"
+    );
+    return cerebrasProvider("gpt-oss-120b");
+  },
 
   tools: {}, // NO TOOLS - pure Cerebras knowledge
 });

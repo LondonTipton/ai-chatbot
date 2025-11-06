@@ -5,12 +5,16 @@
  * All agents have access to all tools as per requirements 11.1-11.8.
  */
 
+import { advancedSearchWorkflowTool } from "./advanced-search-workflow-tool";
 import { createDocumentTool } from "./create-document";
 import { getWeatherTool } from "./get-weather";
 import { requestSuggestionsTool } from "./request-suggestions";
 import { summarizeContentTool } from "./summarize-content";
+import { tavilyContextSearchTool } from "./tavily-context-search";
 import { tavilyExtractTool } from "./tavily-extract";
+import { tavilyNewsSearchTool } from "./tavily-news-search";
 import { tavilyQnaTool } from "./tavily-qna";
+import { tavilyQnaDirectTool } from "./tavily-qna-direct";
 import { tavilySearchTool } from "./tavily-search";
 import { tavilySearchAdvancedTool } from "./tavily-search-advanced";
 import { updateDocumentTool } from "./update-document";
@@ -29,9 +33,13 @@ import { updateDocumentTool } from "./update-document";
  * - 11.8: All agents have access to all tools
  */
 export const allMastraTools = {
+  advancedSearchWorkflow: advancedSearchWorkflowTool,
   tavilySearch: tavilySearchTool,
   tavilySearchAdvanced: tavilySearchAdvancedTool,
   tavilyQna: tavilyQnaTool,
+  tavilyQnaDirect: tavilyQnaDirectTool,
+  tavilyContextSearch: tavilyContextSearchTool,
+  tavilyNewsSearch: tavilyNewsSearchTool,
   tavilyExtract: tavilyExtractTool,
   createDocument: createDocumentTool,
   updateDocument: updateDocumentTool,

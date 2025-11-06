@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createLogger } from "@/lib/logger";
 import { analysisAgent } from "@/mastra/agents/analysis-agent";
 import { extractAgent } from "@/mastra/agents/extract-agent";
 import { legalAgent } from "@/mastra/agents/legal-agent";
@@ -9,8 +8,6 @@ import { mediumResearchAgent } from "@/mastra/agents/medium-research-agent";
 import { researchAgentDirect } from "@/mastra/agents/research-agent-direct";
 import { searchAgent } from "@/mastra/agents/search-agent";
 import { synthesizerAgent } from "@/mastra/agents/synthesizer-agent";
-
-const logger = createLogger("ai/agent-orchestrator");
 
 export type AgentPair = {
   taskAgent: any;
@@ -107,21 +104,19 @@ export async function orchestrateDirectStreamCerebras(
 
   // Use directAgent if available (tool-free), otherwise fall back to taskAgent
   const agent = pair.directAgent || pair.taskAgent;
-  const agentMode = pair.directAgent
-    ? "DIRECT (NO TOOLS)"
-    : "FALLBACK (has tools)";
+  const agentMode = pair.directAgent ? "DIRECT (NO TOOLS)" : "FALLBACK (has tools)";
 
-  logger.log(
+  console.log(
     `[Agent Orchestrator] ⚡ CEREBRAS FAST PATH: Direct streaming ${agentType} (${agentMode})`
   );
-
+  
   if (!pair.directAgent) {
-    logger.warn(
+    console.warn(
       `[Agent Orchestrator] ⚠️  WARNING: No direct agent for ${agentType}, using tool-enabled agent (may be slow!)`
     );
   }
-
-  logger.log("[Agent Orchestrator] 🎯 No synthesis - immediate response");
+  
+  console.log("[Agent Orchestrator] 🎯 No synthesis - immediate response");
 
   // Enhanced prompt to ensure quality output without synthesis
   const enhancedQuery = `${query}
@@ -153,7 +148,7 @@ Format your response professionally and completely. Make it clear and easy to un
       ...(context || {}),
     });
 
-    logger.log(
+    console.log(
       `[Agent Orchestrator] ✅ Cerebras direct stream started (100-500ms TTFB, ${agentMode})`
     );
 
@@ -165,7 +160,7 @@ Format your response professionally and completely. Make it clear and easy to un
       },
     };
   } catch (error) {
-    logger.error(
+    console.error(
       "[Agent Orchestrator] ❌ Cerebras direct stream failed:",
       error instanceof Error ? error.message : error
     );
@@ -191,10 +186,10 @@ export async function orchestrateAgentPairStream(
     chatId?: string;
   }
 ): Promise<StreamOrchestrationResult> {
-  logger.log(
+  console.log(
     `[Agent Orchestrator] 🚀 Starting ${agentType} dual-agent STREAMING workflow`
   );
-  logger.log(`[Agent Orchestrator] 📝 Query: "${query.substring(0, 100)}..."`);
+  console.log(`[Agent Orchestrator] 📝 Query: "${query.substring(0, 100)}..."`);
 
   const pair = AGENT_PAIRS[agentType];
   if (!pair) {
@@ -206,7 +201,7 @@ export async function orchestrateAgentPairStream(
 
   // Step 1: Run task agent (non-streaming to get results)
   try {
-    logger.log(
+    console.log(
       `[Agent Orchestrator] 🔧 Step 1: Running ${pair.name} task agent...`
     );
     const taskStart = Date.now();
@@ -218,30 +213,30 @@ export async function orchestrateAgentPairStream(
     const taskDuration = Date.now() - taskStart;
     taskSuccess = true;
 
-    logger.log(
+    console.log(
       `[Agent Orchestrator] ✅ Task agent completed in ${taskDuration}ms`
     );
-    logger.log(
+    console.log(
       `[Agent Orchestrator] 📊 Task result type: ${typeof taskResult}`
     );
 
     // Log a preview of the result
     if (taskResult?.text) {
-      logger.log(
+      console.log(
         `[Agent Orchestrator] 📄 Task output preview: "${taskResult.text.substring(
           0,
           100
         )}..."`
       );
     } else {
-      logger.log(
+      console.log(
         `[Agent Orchestrator] 📄 Task output: ${JSON.stringify(
           taskResult
         ).substring(0, 100)}...`
       );
     }
   } catch (error) {
-    logger.error(
+    console.error(
       "[Agent Orchestrator] ❌ Task agent failed:",
       error instanceof Error ? error.message : error
     );
@@ -252,7 +247,7 @@ export async function orchestrateAgentPairStream(
   }
 
   // Step 2: Stream synthesizer with task results (AI SDK v5 format)
-  logger.log("[Agent Orchestrator] 🧪 Step 2: Starting synthesizer stream...");
+  console.log("[Agent Orchestrator] 🧪 Step 2: Starting synthesizer stream...");
 
   // Extract text content from task result
   let taskOutput = "";
@@ -303,7 +298,7 @@ CRITICAL: Make this response complete, clear, and useful. The user should not ne
       format: "aisdk", // Enable AI SDK v5 compatibility
     });
 
-    logger.log(
+    console.log(
       "[Agent Orchestrator] ✅ Synthesizer stream started (AI SDK v5 format)"
     );
 
@@ -315,7 +310,7 @@ CRITICAL: Make this response complete, clear, and useful. The user should not ne
       },
     };
   } catch (error) {
-    logger.error(
+    console.error(
       "[Agent Orchestrator] ❌ Synthesizer stream failed:",
       error instanceof Error ? error.message : error
     );
@@ -344,10 +339,10 @@ export async function orchestrateAgentPair(
 ): Promise<OrchestrationResult> {
   const startTime = Date.now();
 
-  logger.log(
+  console.log(
     `[Agent Orchestrator] 🚀 Starting ${agentType} dual-agent workflow`
   );
-  logger.log(`[Agent Orchestrator] 📝 Query: "${query.substring(0, 100)}..."`);
+  console.log(`[Agent Orchestrator] 📝 Query: "${query.substring(0, 100)}..."`);
 
   const pair = AGENT_PAIRS[agentType];
   if (!pair) {
@@ -361,7 +356,7 @@ export async function orchestrateAgentPair(
 
   // Step 1: Run task agent
   try {
-    logger.log(
+    console.log(
       `[Agent Orchestrator] 🔧 Step 1: Running ${pair.name} task agent...`
     );
     const taskStart = Date.now();
@@ -373,30 +368,30 @@ export async function orchestrateAgentPair(
     const taskDuration = Date.now() - taskStart;
     taskSuccess = true;
 
-    logger.log(
+    console.log(
       `[Agent Orchestrator] ✅ Task agent completed in ${taskDuration}ms`
     );
-    logger.log(
+    console.log(
       `[Agent Orchestrator] 📊 Task result type: ${typeof taskResult}`
     );
 
     // Log a preview of the result
     if (taskResult?.text) {
-      logger.log(
+      console.log(
         `[Agent Orchestrator] 📄 Task output preview: "${taskResult.text.substring(
           0,
           100
         )}..."`
       );
     } else {
-      logger.log(
+      console.log(
         `[Agent Orchestrator] 📄 Task output: ${JSON.stringify(
           taskResult
         ).substring(0, 100)}...`
       );
     }
   } catch (error) {
-    logger.error(
+    console.error(
       "[Agent Orchestrator] ❌ Task agent failed:",
       error instanceof Error ? error.message : error
     );
@@ -408,7 +403,7 @@ export async function orchestrateAgentPair(
 
   // Step 2: Run synthesizer with task results
   try {
-    logger.log("[Agent Orchestrator] 🧪 Step 2: Running synthesizer agent...");
+    console.log("[Agent Orchestrator] 🧪 Step 2: Running synthesizer agent...");
     const synthesisStart = Date.now();
 
     // Extract text content from task result
@@ -468,14 +463,14 @@ CRITICAL: Make this response complete, clear, and useful. The user should not ne
       synthesizedResponse = JSON.stringify(synthesisResult);
     }
 
-    logger.log(
+    console.log(
       `[Agent Orchestrator] ✅ Synthesizer completed in ${synthesisDuration}ms`
     );
-    logger.log(
+    console.log(
       `[Agent Orchestrator] 📝 Response length: ${synthesizedResponse.length} chars`
     );
   } catch (error) {
-    logger.error(
+    console.error(
       "[Agent Orchestrator] ❌ Synthesizer failed:",
       error instanceof Error ? error.message : error
     );
@@ -495,10 +490,10 @@ Error details: ${error instanceof Error ? error.message : "Unknown error"}`;
 
   const totalDuration = Date.now() - startTime;
 
-  logger.log(
+  console.log(
     `[Agent Orchestrator] 🎯 Total dual-agent workflow: ${totalDuration}ms`
   );
-  logger.log(
+  console.log(
     `[Agent Orchestrator] 📊 Status: Task=${
       taskSuccess ? "✅" : "❌"
     }, Synthesis=${synthesisSuccess ? "✅" : "❌"}`

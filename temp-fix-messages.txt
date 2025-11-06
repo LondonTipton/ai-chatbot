@@ -1,0 +1,1 @@
+Remove isArtifactVisible parameter from PureMessages function

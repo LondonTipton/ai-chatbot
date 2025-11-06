@@ -22,11 +22,10 @@
  * ```
  */
 
-import { createLogger } from "@/lib/logger";
 import {
   orchestrateLegal,
-  orchestrateLegalDirect,
   orchestrateLegalStream,
+  orchestrateLegalDirect,
   orchestrateResearch,
   orchestrateResearchStream,
 } from "./agent-orchestrator";
@@ -37,10 +36,10 @@ import { executeCaseLawAnalysis } from "./workflows/case-law-analysis";
 import { executeDeepResearch } from "./workflows/deep-research";
 import { executeDocumentReview } from "./workflows/document-review";
 import { executeLegalDrafting } from "./workflows/legal-drafting";
-
-const logger = createLogger("ai/mastra-router");
-
-import { getOptimalRoute, logRoutingDecision } from "./cerebras-router";
+import {
+  getOptimalRoute,
+  logRoutingDecision,
+} from "./cerebras-router";
 
 /**
  * Context for Mastra routing
@@ -85,7 +84,7 @@ export async function routeToMastra(
   query: string,
   context?: MastraContext
 ): Promise<MastraResult> {
-  logger.log("[Mastra Router] Routing query", {
+  console.log("[Mastra Router] Routing query", {
     complexity,
     query: query.substring(0, 100),
     context,
@@ -102,7 +101,7 @@ export async function routeToMastra(
 
     switch (complexity) {
       case "medium": {
-        logger.log(
+        console.log(
           "[Mastra Router] 🔍 Routing to Medium Research Agent with Synthesizer (dual-agent orchestration)"
         );
 
@@ -127,7 +126,7 @@ export async function routeToMastra(
               agentsUsed: 2, // Task agent + synthesizer
             };
 
-            logger.log(
+            console.log(
               "[Mastra Router] ✅ Medium Research orchestration completed",
               {
                 duration: `${duration}ms`,
@@ -142,7 +141,7 @@ export async function routeToMastra(
               ? "Synthesizer failed"
               : "Task agent failed";
 
-            logger.error(
+            console.error(
               "[Mastra Router] ❌ Medium Research orchestration failed",
               {
                 error: errorReason,
@@ -164,7 +163,7 @@ export async function routeToMastra(
           const errorMessage =
             error instanceof Error ? error.message : String(error);
 
-          logger.error(
+          console.error(
             "[Mastra Router] ❌ Medium Research orchestration threw exception",
             {
               error: errorMessage,
@@ -183,20 +182,20 @@ export async function routeToMastra(
       }
 
       case "deep": {
-        logger.log(
+        console.log(
           "[Mastra Router] 🔬 Routing to Deep Research Workflow (3 agents: Search → Extract → Analyze)"
         );
 
         result = await executeDeepResearch(query, context);
 
         if (result.success) {
-          logger.log("[Mastra Router] ✅ Deep Research Workflow completed", {
+          console.log("[Mastra Router] ✅ Deep Research Workflow completed", {
             duration: `${result.duration}ms`,
             agentsUsed: result.agentsUsed,
             responseLength: result.response.length,
           });
         } else {
-          logger.error("[Mastra Router] ❌ Deep Research Workflow failed", {
+          console.error("[Mastra Router] ❌ Deep Research Workflow failed", {
             duration: `${result.duration}ms`,
             stepsCompleted: result.steps?.length || 0,
           });
@@ -205,20 +204,20 @@ export async function routeToMastra(
       }
 
       case "workflow-review": {
-        logger.log(
+        console.log(
           "[Mastra Router] 📋 Routing to Document Review Workflow (3 agents: Structure → Issues → Recommendations)"
         );
 
         result = await executeDocumentReview(query, context);
 
         if (result.success) {
-          logger.log("[Mastra Router] ✅ Document Review Workflow completed", {
+          console.log("[Mastra Router] ✅ Document Review Workflow completed", {
             duration: `${result.duration}ms`,
             agentsUsed: result.agentsUsed,
             responseLength: result.response.length,
           });
         } else {
-          logger.error("[Mastra Router] ❌ Document Review Workflow failed", {
+          console.error("[Mastra Router] ❌ Document Review Workflow failed", {
             duration: `${result.duration}ms`,
             stepsCompleted: result.steps?.length || 0,
           });
@@ -227,14 +226,14 @@ export async function routeToMastra(
       }
 
       case "workflow-caselaw": {
-        logger.log(
+        console.log(
           "[Mastra Router] ⚖️ Routing to Case Law Analysis Workflow (3 agents: Search Cases → Extract Holdings → Compare)"
         );
 
         result = await executeCaseLawAnalysis(query, context);
 
         if (result.success) {
-          logger.log(
+          console.log(
             "[Mastra Router] ✅ Case Law Analysis Workflow completed",
             {
               duration: `${result.duration}ms`,
@@ -243,30 +242,33 @@ export async function routeToMastra(
             }
           );
         } else {
-          logger.error("[Mastra Router] ❌ Case Law Analysis Workflow failed", {
-            duration: `${result.duration}ms`,
-            stepsCompleted: result.steps?.length || 0,
-          });
+          console.error(
+            "[Mastra Router] ❌ Case Law Analysis Workflow failed",
+            {
+              duration: `${result.duration}ms`,
+              stepsCompleted: result.steps?.length || 0,
+            }
+          );
         }
         break;
       }
 
       case "workflow-drafting": {
-        logger.log(
+        console.log(
           "[Mastra Router] ✍️ Routing to Legal Drafting Workflow (3 agents: Research → Draft → Refine)"
         );
 
         result = await executeLegalDrafting(query, context);
 
         if (result.success) {
-          logger.log("[Mastra Router] ✅ Legal Drafting Workflow completed", {
+          console.log("[Mastra Router] ✅ Legal Drafting Workflow completed", {
             duration: `${result.duration}ms`,
             agentsUsed: result.agentsUsed,
             responseLength: result.response.length,
             documentId: result.documentId,
           });
         } else {
-          logger.error("[Mastra Router] ❌ Legal Drafting Workflow failed", {
+          console.error("[Mastra Router] ❌ Legal Drafting Workflow failed", {
             duration: `${result.duration}ms`,
             stepsCompleted: result.steps?.length || 0,
           });
@@ -276,7 +278,7 @@ export async function routeToMastra(
 
       case "simple":
       case "light": {
-        logger.log(
+        console.log(
           `[Mastra Router] 💡 Routing ${complexity} query to Legal Agent with Synthesizer (dual-agent orchestration)`
         );
 
@@ -306,7 +308,7 @@ export async function routeToMastra(
             agentsUsed: 0, // No agents needed for greeting
           };
 
-          logger.log(
+          console.log(
             `[Mastra Router] ✅ ${complexity} query handled as greeting`,
             {
               duration: `${duration}ms`,
@@ -337,7 +339,7 @@ export async function routeToMastra(
               agentsUsed: 2, // Legal agent + synthesizer
             };
 
-            logger.log(
+            console.log(
               `[Mastra Router] ✅ ${complexity} query orchestration completed`,
               {
                 duration: `${duration}ms`,
@@ -352,7 +354,7 @@ export async function routeToMastra(
               ? "Synthesizer failed"
               : "Legal agent failed";
 
-            logger.error(
+            console.error(
               `[Mastra Router] ❌ ${complexity} query orchestration failed`,
               {
                 error: errorReason,
@@ -374,7 +376,7 @@ export async function routeToMastra(
           const errorMessage =
             error instanceof Error ? error.message : String(error);
 
-          logger.error(
+          console.error(
             `[Mastra Router] ❌ ${complexity} query orchestration threw exception`,
             {
               error: errorMessage,
@@ -396,7 +398,7 @@ export async function routeToMastra(
         const duration = Date.now() - startTime;
         const errorMessage = `Unsupported complexity level for Mastra: ${complexity}`;
 
-        logger.error("[Mastra Router] ❌ Invalid routing", {
+        console.error("[Mastra Router] ❌ Invalid routing", {
           complexity,
           error: errorMessage,
           duration: `${duration}ms`,
@@ -410,12 +412,12 @@ export async function routeToMastra(
     const validation = validateMastraResponse(result);
 
     if (validation.isValid) {
-      logger.log("[Mastra Router] ✅ Response validation passed", {
+      console.log("[Mastra Router] ✅ Response validation passed", {
         complexity,
         responseLength: validation.responseLength,
       });
     } else {
-      logger.error("[Mastra Router] ❌ Response validation failed", {
+      console.error("[Mastra Router] ❌ Response validation failed", {
         complexity,
         reason: validation.reason,
         responseLength: validation.responseLength,
@@ -434,7 +436,7 @@ export async function routeToMastra(
     const duration = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    logger.error("[Mastra Router] ❌ Routing failed", {
+    console.error("[Mastra Router] ❌ Routing failed", {
       complexity,
       error: errorMessage,
       duration: `${duration}ms`,
@@ -471,7 +473,7 @@ export async function streamMastraRoute(
   query: string,
   context?: MastraContext
 ) {
-  logger.log("[Mastra Router] Streaming query (AI SDK v5 format)", {
+  console.log("[Mastra Router] Streaming query (AI SDK v5 format)", {
     complexity,
     query: query.substring(0, 100),
     context,
@@ -480,7 +482,7 @@ export async function streamMastraRoute(
   try {
     switch (complexity) {
       case "medium": {
-        logger.log(
+        console.log(
           "[Mastra Router] 🔍 Streaming Medium Research Agent with Synthesizer (AI SDK v5)"
         );
 
@@ -488,7 +490,7 @@ export async function streamMastraRoute(
           userId: context?.userId,
         });
 
-        logger.log(
+        console.log(
           "[Mastra Router] ✅ Medium Research stream created (AI SDK v5 format)"
         );
 
@@ -497,7 +499,7 @@ export async function streamMastraRoute(
 
       case "simple":
       case "light": {
-        logger.log(
+        console.log(
           `[Mastra Router] 💡 Streaming ${complexity} query with smart routing (Cerebras optimized)`
         );
 
@@ -525,7 +527,7 @@ export async function streamMastraRoute(
           case "cerebras-direct": {
             // Fast path: Direct to Cerebras without synthesis or tools
             // Expected: 100-500ms TTFB
-            logger.log(
+            console.log(
               `[Mastra Router] ⚡ ${complexity} query → CEREBRAS DIRECT (ultra-fast path, no tools)`
             );
 
@@ -534,7 +536,7 @@ export async function streamMastraRoute(
             });
 
             const routeDuration = Date.now() - routeStartTime;
-            logger.log(
+            console.log(
               `[Mastra Router] ✅ Cerebras direct stream created in ${routeDuration}ms (expected: 100-500ms)`
             );
 
@@ -544,7 +546,7 @@ export async function streamMastraRoute(
           case "tavily-qna": {
             // Optimized path: Tavily QNA for current info, then direct Cerebras
             // Expected: 1-2s TTFB
-            logger.log(
+            console.log(
               `[Mastra Router] 🔍 ${complexity} query → TAVILY QNA + CEREBRAS (optimized search path)`
             );
 
@@ -554,7 +556,7 @@ export async function streamMastraRoute(
             });
 
             const routeDuration = Date.now() - routeStartTime;
-            logger.log(
+            console.log(
               `[Mastra Router] ✅ Tavily QNA + Cerebras stream created in ${routeDuration}ms (expected: 1-2s)`
             );
 
@@ -564,7 +566,7 @@ export async function streamMastraRoute(
           case "full-workflow": {
             // Full workflow: Task agent → synthesizer with all tools
             // Expected: 5-20s depending on tool usage
-            logger.log(
+            console.log(
               `[Mastra Router] 🔄 ${complexity} query → FULL WORKFLOW (task agent + synthesizer)`
             );
 
@@ -573,7 +575,7 @@ export async function streamMastraRoute(
             });
 
             const routeDuration = Date.now() - routeStartTime;
-            logger.log(
+            console.log(
               `[Mastra Router] ✅ Full workflow stream created in ${routeDuration}ms (expected: 5-20s)`
             );
 
@@ -582,7 +584,7 @@ export async function streamMastraRoute(
 
           default: {
             // Fallback to full workflow if routing decision is unclear
-            logger.warn(
+            console.warn(
               `[Mastra Router] ⚠️ Unknown route decision: ${routeDecision}, falling back to full workflow`
             );
 
@@ -601,7 +603,7 @@ export async function streamMastraRoute(
       case "workflow-drafting": {
         const errorMessage = `Streaming not yet implemented for ${complexity} complexity. Use AI SDK fallback.`;
 
-        logger.error("[Mastra Router] ❌ Streaming not implemented", {
+        console.error("[Mastra Router] ❌ Streaming not implemented", {
           complexity,
           error: errorMessage,
         });
@@ -612,7 +614,7 @@ export async function streamMastraRoute(
       default: {
         const errorMessage = `Unsupported complexity level for Mastra: ${complexity}`;
 
-        logger.error("[Mastra Router] ❌ Invalid streaming routing", {
+        console.error("[Mastra Router] ❌ Invalid streaming routing", {
           complexity,
           error: errorMessage,
         });
@@ -623,7 +625,7 @@ export async function streamMastraRoute(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    logger.error("[Mastra Router] ❌ Streaming routing failed", {
+    console.error("[Mastra Router] ❌ Streaming routing failed", {
       complexity,
       error: errorMessage,
     });

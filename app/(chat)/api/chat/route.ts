@@ -48,6 +48,7 @@ import {
   updateUserAppwriteId,
 } from "@/lib/db/queries";
 import {
+  beginTransaction,
   commitTransaction,
   rollbackTransaction,
 } from "@/lib/db/usage-transaction";
@@ -121,11 +122,13 @@ export async function POST(request: Request) {
       message,
       selectedChatModel,
       selectedVisibilityType,
+      comprehensiveWorkflowEnabled,
     }: {
       id: string;
       message: ChatMessage;
       selectedChatModel: ChatModel["id"];
       selectedVisibilityType: VisibilityType;
+      comprehensiveWorkflowEnabled?: boolean;
     } = requestBody;
 
     // Extract user message text for complexity detection
@@ -134,8 +137,19 @@ export async function POST(request: Request) {
         ? message.parts[0].text
         : "";
 
-    // Detect query complexity
-    const complexityAnalysis = detectQueryComplexity(userMessageText);
+    // Check if using simple chat model (no research)
+    const useSimpleChat = selectedChatModel === "chat-model";
+
+    // Detect query complexity (skip for simple chat)
+    const complexityAnalysis = useSimpleChat
+      ? {
+          complexity: "simple" as const,
+          reasoning: "Simple chat mode",
+          requiresResearch: false,
+          requiresMultiStep: false,
+          estimatedSteps: 1,
+        }
+      : detectQueryComplexity(userMessageText);
 
     logger.log(`[Routing] 💬 Chat ID: ${id}`);
     logger.log(`[Routing] 🤖 Selected Model: ${selectedChatModel}`);
@@ -243,13 +257,139 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
 
+    // Check if comprehensive workflow is explicitly enabled
+    if (comprehensiveWorkflowEnabled) {
+      logger.log(
+        "[Routing] 🔬 Using Comprehensive Analysis Workflow (user-enabled)"
+      );
+      logger.log("[Routing] ⚠️  High token usage: 18K-20K tokens");
+      logger.log("[Routing] ⏱️  High latency: 25-47 seconds");
+
+      // Begin usage transaction for comprehensive workflow
+      const txResult = await beginTransaction(dbUser.id);
+
+      if (!txResult.allowed) {
+        logger.log(
+          `[Usage] User ${dbUser.id} exceeded daily limit: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit}`
+        );
+        return Response.json(
+          {
+            code: "rate_limit:chat",
+            message: `You've reached your daily limit of ${txResult.currentUsage.dailyLimit} requests. Upgrade to continue.`,
+            cause: "daily_limit_reached",
+            requestsToday: txResult.currentUsage.requestsToday,
+            dailyLimit: txResult.currentUsage.dailyLimit,
+            plan: txResult.currentUsage.plan,
+          },
+          { status: 429 }
+        );
+      }
+
+      const txId = txResult.transaction?.transactionId;
+      if (!txId) {
+        throw new Error("Transaction ID not found");
+      }
+
+      try {
+        // Import and execute comprehensive workflow
+        const { comprehensiveAnalysisWorkflow } = await import(
+          "@/mastra/workflows/comprehensive-analysis-workflow"
+        );
+
+        logger.log("[Routing] 🚀 Starting comprehensive analysis workflow");
+
+        const run = await comprehensiveAnalysisWorkflow.createRunAsync();
+        const result = await run.start({
+          inputData: {
+            query: userMessageText,
+            jurisdiction: "Zimbabwe",
+          },
+        });
+
+        logger.log(
+          `[Routing] Workflow completed with status: ${result.status}`
+        );
+
+        if (result.status !== "success") {
+          throw new Error(
+            `Comprehensive workflow failed with status: ${result.status}`
+          );
+        }
+
+        // Extract output from document step
+        const documentStep = result.steps.document;
+
+        if (!documentStep || documentStep.status !== "success") {
+          throw new Error("Document step failed or not found");
+        }
+
+        const output = documentStep.output as {
+          response: string;
+          totalTokens: number;
+          path: "enhance" | "deep-dive";
+        };
+
+        logger.log(
+          `[Routing] ✅ Comprehensive workflow completed. Path: ${output.path}, Tokens: ${output.totalTokens}`
+        );
+
+        // Save assistant message
+        const assistantMessageId = generateUUID();
+        await saveMessages({
+          messages: [
+            {
+              id: assistantMessageId,
+              role: "assistant",
+              parts: [{ type: "text", text: output.response }],
+              createdAt: new Date(),
+              attachments: [],
+              chatId: id,
+            },
+          ],
+        });
+
+        // Commit transaction
+        await commitTransaction(txId);
+        logger.log(`[Usage] Committed transaction ${txId}`);
+
+        // Return simple JSON response (not streaming for comprehensive workflow)
+        return Response.json({
+          id: assistantMessageId,
+          role: "assistant",
+          content: output.response,
+          totalTokens: output.totalTokens,
+          path: output.path,
+        });
+      } catch (error) {
+        logger.error("[Routing] ❌ Comprehensive workflow error:", error);
+
+        // Rollback transaction
+        await rollbackTransaction(txId);
+        logger.log(`[Usage] Rolled back transaction ${txId}`);
+
+        throw error;
+      }
+    }
+
     // Check if query should use Mastra
     let shouldFallbackToAiSdk = false;
 
-    if (shouldUseMastra(complexityAnalysis.complexity)) {
-      logger.log(
-        `[Routing] 🤖 Using Mastra for ${complexityAnalysis.complexity} query`
-      );
+    if (useSimpleChat || shouldUseMastra(complexityAnalysis.complexity)) {
+      // Log routing decision with workflow capability info
+      if (complexityAnalysis.complexity === "medium") {
+        logger.log(
+          "[Routing] 🤖 Using Mastra chatAgent with workflow tool capability for medium complexity query"
+        );
+        logger.log(
+          "[Routing] 🔧 Chat Agent will invoke advancedSearchWorkflow tool if research is needed"
+        );
+      } else if (useSimpleChat) {
+        logger.log("[Routing] 🤖 Using Mastra for simple chat");
+      } else {
+        logger.log(
+          `[Routing] 🤖 Using Mastra for ${complexityAnalysis.complexity} query`
+        );
+      }
       logger.log(`[Routing] 📊 Message count: ${uiMessages.length}`);
 
       // Begin usage transaction for Mastra
@@ -292,6 +432,7 @@ export async function POST(request: Request) {
               userId: dbUser.id,
               chatId: id,
               sessionId: session.user.id,
+              agentName: useSimpleChat ? "chatAgent" : undefined, // Use simple chat agent if selected
               memory: {
                 thread: id, // Use chat ID as thread
                 resource: dbUser.id, // Use user ID as resource
@@ -302,6 +443,16 @@ export async function POST(request: Request) {
           logger.log(
             "[Mastra] ✅ Mastra stream created (official @mastra/ai-sdk pattern)"
           );
+
+          // Log workflow tool capability for medium complexity
+          if (complexityAnalysis.complexity === "medium") {
+            logger.log(
+              "[Mastra] 🔧 Chat Agent configured with advancedSearchWorkflow tool"
+            );
+            logger.log(
+              "[Mastra] 📊 Workflow tool will be invoked if research is needed"
+            );
+          }
 
           // Use AI SDK v5's native toUIMessageStreamResponse()
           // This is the official pattern from @mastra/ai-sdk documentation
@@ -318,6 +469,21 @@ export async function POST(request: Request) {
                 );
 
                 if (assistantMessages.length > 0) {
+                  // Log if workflow tool was used (check for tool calls in messages)
+                  const hasToolCalls = assistantMessages.some((msg: any) =>
+                    msg.parts?.some(
+                      (part: any) =>
+                        part.type === "tool-call" &&
+                        part.toolName === "advancedSearchWorkflow"
+                    )
+                  );
+
+                  if (hasToolCalls) {
+                    logger.log(
+                      "[Mastra] 🔧 Workflow tool 'advancedSearchWorkflow' was invoked during this interaction"
+                    );
+                  }
+
                   await saveMessages({
                     messages: assistantMessages.map((currentMessage: any) => ({
                       id: currentMessage.id,

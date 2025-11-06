@@ -27,6 +27,7 @@ export const postRequestBodySchema = z.object({
     "chat-model-image",
   ]),
   selectedVisibilityType: z.enum(["public", "private"]),
+  comprehensiveWorkflowEnabled: z.boolean().optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

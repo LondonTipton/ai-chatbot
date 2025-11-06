@@ -15,6 +15,7 @@ export type MastraStreamOptions = {
   userId?: string;
   chatId?: string;
   sessionId?: string;
+  agentName?: string; // Override agent selection
   memory?: {
     thread?: string;
     resource?: string;
@@ -43,35 +44,121 @@ export async function streamMastraAgent(
     options,
   });
 
-  // Select agent based on complexity
-  const agentName = selectAgentForComplexity(complexity);
+  // Select agent based on complexity or use override
+  const agentName = options?.agentName || selectAgentForComplexity(complexity);
 
   logger.log(`[Mastra SDK] Selected agent: ${agentName}`);
 
   // Get the agent from Mastra instance
-  const agent = mastra.getAgent(agentName as any);
+  // If userId is provided, use factory for context injection (enables document tools)
+  let agent: any;
+
+  if (options?.userId) {
+    logger.log(
+      `[Mastra SDK] Creating ${agentName} with userId context: ${options.userId}`
+    );
+
+    switch (agentName) {
+      case "chatAgent": {
+        // Chat agent needs factory for document tools
+        const { createToolsWithContext } = await import(
+          "@/lib/services/tool-context-factory"
+        );
+        const { Agent } = await import("@mastra/core/agent");
+        const { getBalancedCerebrasProvider } = await import(
+          "@/lib/ai/cerebras-key-balancer"
+        );
+        const { advancedSearchWorkflowTool } = await import(
+          "@/mastra/tools/advanced-search-workflow-tool"
+        );
+
+        const cerebrasProvider = getBalancedCerebrasProvider();
+        const contextTools = createToolsWithContext(options.userId);
+
+        agent = new Agent({
+          name: "chat-agent",
+          instructions: `You are DeepCounsel, a helpful legal AI assistant for Zimbabwe.
+
+**CRITICAL: When user asks to "create a document" or "draft a document", you MUST call the createDocument tool. Do NOT write document content in your response.**
+
+Your capabilities:
+- Answer legal questions about Zimbabwe law
+- Use the advancedSearchWorkflow tool for complex research queries requiring multiple sources
+- Create documents using the createDocument tool
+- Update existing documents using the updateDocument tool
+- Provide legal information and guidance
+
+When to use advancedSearchWorkflow:
+- User asks for comprehensive research on a topic
+- Query requires multiple perspectives or sources
+- Question involves case law, precedents, or detailed legal analysis
+- User explicitly requests "research" or "find cases about"
+
+When NOT to use advancedSearchWorkflow:
+- Simple definitions or explanations
+- Direct questions with straightforward answers
+- General legal guidance
+
+When responding:
+1. Be clear, concise, and professional
+2. Provide accurate legal information about Zimbabwe
+3. **Use advancedSearchWorkflow tool for research-intensive queries**
+4. **ALWAYS use createDocument tool when asked to create/draft documents**
+5. Use updateDocument tool when asked to modify documents
+6. Cite relevant Zimbabwe laws and statutes when applicable
+
+DOCUMENT CREATION RULE:
+- User says: "Create a document about X"
+- You MUST: Call createDocument({ title: "X", kind: "text" })
+- You MUST NOT: Write the document content in your response
+
+Remember: You provide legal information, not legal advice. Always recommend consulting qualified legal professionals for specific legal matters.`,
+          model: () => cerebrasProvider("gpt-oss-120b"),
+          tools: {
+            advancedSearchWorkflow: advancedSearchWorkflowTool,
+            createDocument: contextTools.createDocument,
+            updateDocument: contextTools.updateDocument,
+          },
+        });
+        break;
+      }
+      case "legalAgent": {
+        const { createLegalAgentWithContext } = await import(
+          "@/mastra/agents/legal-agent-factory"
+        );
+        agent = createLegalAgentWithContext(options.userId);
+        break;
+      }
+      case "mediumResearchAgent": {
+        const { createMediumResearchAgentWithContext } = await import(
+          "@/mastra/agents/medium-research-agent-factory"
+        );
+        agent = createMediumResearchAgentWithContext(options.userId);
+        break;
+      }
+      case "searchAgent": {
+        const { createSearchAgentWithContext } = await import(
+          "@/mastra/agents/search-agent-factory"
+        );
+        agent = createSearchAgentWithContext(options.userId);
+        break;
+      }
+      default:
+        agent = mastra.getAgent(agentName as any);
+    }
+  } else {
+    agent = mastra.getAgent(agentName as any);
+  }
 
   if (!agent) {
     throw new Error(`Agent '${agentName}' not found in Mastra instance`);
   }
 
-  // Build memory configuration if provided
-  const memoryConfig = options?.memory
-    ? {
-        thread: options.memory.thread || options?.chatId || "default-thread",
-        resource: options.memory.resource || options?.userId || "default-user",
-      }
-    : undefined;
-
-  if (memoryConfig) {
-    logger.log("[Mastra SDK] Memory config:", memoryConfig);
-  }
-
   // Stream with AI SDK v5 format
-  // This uses the official Mastra pattern from the documentation
+  // Don't pass memory config or context - just the messages
   const stream = await agent.stream([{ role: "user", content: query }], {
     format: "aisdk", // AI SDK v5 format
-    ...(memoryConfig && { memory: memoryConfig }),
+    maxSteps: 5, // Allow multiple tool calls
   } as any);
 
   logger.log("[Mastra SDK] ✅ Stream created successfully");
@@ -88,11 +175,13 @@ export async function streamMastraAgent(
 function selectAgentForComplexity(complexity: QueryComplexity): string {
   switch (complexity) {
     case "simple":
+      return "chatAgent"; // Simple chat with document tools
+
     case "light":
-      return "legalAgent"; // Fast, direct responses
+      return "chatAgent"; // Fast, direct responses with chat agent
 
     case "medium":
-      return "mediumResearchAgent"; // Multiple searches, synthesis
+      return "chatAgent"; // Chat agent with workflow tool for research
 
     case "deep":
     case "workflow-review":
@@ -102,9 +191,9 @@ function selectAgentForComplexity(complexity: QueryComplexity): string {
 
     default:
       logger.warn(
-        `[Mastra SDK] Unknown complexity: ${complexity}, using legalAgent`
+        `[Mastra SDK] Unknown complexity: ${complexity}, using chatAgent`
       );
-      return "legalAgent";
+      return "chatAgent";
   }
 }
 
@@ -164,7 +253,105 @@ export async function streamMastraAgentWithHistory(
   logger.log(`[Mastra SDK] Selected agent: ${agentName}`);
 
   // Get the agent from Mastra instance
-  const agent = mastra.getAgent(agentName as any);
+  // If userId is provided, use factory for context injection (enables document tools)
+  let agent: any;
+
+  if (options?.userId) {
+    logger.log(
+      `[Mastra SDK] Creating ${agentName} with userId context: ${options.userId}`
+    );
+
+    switch (agentName) {
+      case "chatAgent": {
+        // Chat agent needs factory for document tools
+        const { createToolsWithContext } = await import(
+          "@/lib/services/tool-context-factory"
+        );
+        const { Agent } = await import("@mastra/core/agent");
+        const { getBalancedCerebrasProvider } = await import(
+          "@/lib/ai/cerebras-key-balancer"
+        );
+        const { advancedSearchWorkflowTool } = await import(
+          "@/mastra/tools/advanced-search-workflow-tool"
+        );
+
+        const cerebrasProvider = getBalancedCerebrasProvider();
+        const contextTools = createToolsWithContext(options.userId);
+
+        agent = new Agent({
+          name: "chat-agent",
+          instructions: `You are DeepCounsel, a helpful legal AI assistant for Zimbabwe.
+
+**CRITICAL: When user asks to "create a document" or "draft a document", you MUST call the createDocument tool. Do NOT write document content in your response.**
+
+Your capabilities:
+- Answer legal questions about Zimbabwe law
+- Use the advancedSearchWorkflow tool for complex research queries requiring multiple sources
+- Create documents using the createDocument tool
+- Update existing documents using the updateDocument tool
+- Provide legal information and guidance
+
+When to use advancedSearchWorkflow:
+- User asks for comprehensive research on a topic
+- Query requires multiple perspectives or sources
+- Question involves case law, precedents, or detailed legal analysis
+- User explicitly requests "research" or "find cases about"
+
+When NOT to use advancedSearchWorkflow:
+- Simple definitions or explanations
+- Direct questions with straightforward answers
+- General legal guidance
+
+When responding:
+1. Be clear, concise, and professional
+2. Provide accurate legal information about Zimbabwe
+3. **Use advancedSearchWorkflow tool for research-intensive queries**
+4. **ALWAYS use createDocument tool when asked to create/draft documents**
+5. Use updateDocument tool when asked to modify documents
+6. Cite relevant Zimbabwe laws and statutes when applicable
+
+DOCUMENT CREATION RULE:
+- User says: "Create a document about X"
+- You MUST: Call createDocument({ title: "X", kind: "text" })
+- You MUST NOT: Write the document content in your response
+
+Remember: You provide legal information, not legal advice. Always recommend consulting qualified legal professionals for specific legal matters.`,
+          model: () => cerebrasProvider("gpt-oss-120b"),
+          tools: {
+            advancedSearchWorkflow: advancedSearchWorkflowTool,
+            createDocument: contextTools.createDocument,
+            updateDocument: contextTools.updateDocument,
+          },
+        });
+        break;
+      }
+      case "legalAgent": {
+        const { createLegalAgentWithContext } = await import(
+          "@/mastra/agents/legal-agent-factory"
+        );
+        agent = createLegalAgentWithContext(options.userId);
+        break;
+      }
+      case "mediumResearchAgent": {
+        const { createMediumResearchAgentWithContext } = await import(
+          "@/mastra/agents/medium-research-agent-factory"
+        );
+        agent = createMediumResearchAgentWithContext(options.userId);
+        break;
+      }
+      case "searchAgent": {
+        const { createSearchAgentWithContext } = await import(
+          "@/mastra/agents/search-agent-factory"
+        );
+        agent = createSearchAgentWithContext(options.userId);
+        break;
+      }
+      default:
+        agent = mastra.getAgent(agentName as any);
+    }
+  } else {
+    agent = mastra.getAgent(agentName as any);
+  }
 
   if (!agent) {
     throw new Error(`Agent '${agentName}' not found in Mastra instance`);
@@ -173,23 +360,13 @@ export async function streamMastraAgentWithHistory(
   // Convert messages to Mastra format
   const mastraMessages = convertToMastraMessages(messages);
 
-  // Build memory configuration if provided
-  const memoryConfig = options?.memory
-    ? {
-        thread: options.memory.thread || options?.chatId || "default-thread",
-        resource: options.memory.resource || options?.userId || "default-user",
-      }
-    : undefined;
-
-  if (memoryConfig) {
-    logger.log("[Mastra SDK] Memory config:", memoryConfig);
-  }
   logger.log("[Mastra SDK] Message count:", mastraMessages.length);
 
   // Stream with AI SDK v5 format
+  // Don't pass memory config or context - just the messages
   const stream = await agent.stream(mastraMessages, {
     format: "aisdk", // AI SDK v5 format
-    ...(memoryConfig && { memory: memoryConfig }),
+    maxSteps: 5, // Allow multiple tool calls
   } as any);
 
   logger.log("[Mastra SDK] ✅ Stream created successfully");

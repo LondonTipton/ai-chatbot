@@ -6,6 +6,7 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
  * This prevents multiple provider instances during streaming
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
+console.log("[Mastra] synthesizer-agent → Cerebras provider initialized");
 
 /**
  * Synthesizer Agent
@@ -46,7 +47,13 @@ CRITICAL RULE: Your response must be self-contained and complete. The user shoul
 
 If the input data is incomplete or unclear, acknowledge this and provide the best possible answer with what's available.`,
 
-  model: () => cerebrasProvider("gpt-oss-120b"),
+  model: () => {
+    // Reuse the singleton provider instance
+    console.log(
+      "[Mastra] synthesizer-agent → Using Cerebras model: gpt-oss-120b (reasoning preferred)"
+    );
+    return cerebrasProvider("gpt-oss-120b");
+  },
 
   // No tools - pure synthesis and text generation
   tools: {},

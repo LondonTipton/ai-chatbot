@@ -79,6 +79,14 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
       },
     },
+    {
+      name: "performance",
+      testMatch: /performance\/.*.test.ts/,
+      timeout: 600_000, // 10 minutes for performance tests
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+    },
 
     // {
     //   name: 'firefox',

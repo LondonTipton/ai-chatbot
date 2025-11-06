@@ -4,18 +4,24 @@ export type ChatModel = {
   id: string;
   name: string;
   description: string;
+  icon?: string;
+  latency?: string;
+  disabled?: boolean;
+  comingSoon?: boolean;
 };
 
 export const chatModels: ChatModel[] = [
   {
     id: "chat-model",
-    name: "Tsukiyo",
-    description: "Fast and efficient model for everyday legal queries",
+    name: "Basic",
+    description: "Interactive chat with intelligent routing",
+    latency: "<1s",
   },
   {
-    id: "chat-model-reasoning",
-    name: "Jacana",
-    description:
-      "More powerful model with greater reasoning for complex legal analysis",
+    id: "advanced-model",
+    name: "Advanced",
+    description: "Coming soon",
+    disabled: true,
+    comingSoon: true,
   },
 ];

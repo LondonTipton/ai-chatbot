@@ -41,6 +41,7 @@ export function DocumentPreview({
 
   const previewDocument = useMemo(() => documents?.[0], [documents]);
   const hitboxRef = useRef<HTMLDivElement>(null);
+  const hasAutoOpenedRef = useRef<string | null>(null);
 
   useEffect(() => {
     const boundingBox = hitboxRef.current?.getBoundingClientRect();
@@ -57,6 +58,31 @@ export function DocumentPreview({
       }));
     }
   }, [artifact.documentId, setArtifact]);
+
+  // Auto-open artifact when document is created (only once per document)
+  useEffect(() => {
+    // Only auto-open if we haven't already opened this document
+    if (result?.id && hasAutoOpenedRef.current !== result.id) {
+      hasAutoOpenedRef.current = result.id;
+      const boundingBox = hitboxRef.current?.getBoundingClientRect();
+
+      setArtifact((currentArtifact) => ({
+        ...currentArtifact,
+        title: result.title,
+        documentId: result.id,
+        kind: result.kind,
+        isVisible: true,
+        boundingBox: boundingBox
+          ? {
+              left: boundingBox.x,
+              top: boundingBox.y,
+              width: boundingBox.width,
+              height: boundingBox.height,
+            }
+          : currentArtifact.boundingBox,
+      }));
+    }
+  }, [result, setArtifact]);
 
   if (artifact.isVisible) {
     if (result) {
@@ -87,15 +113,15 @@ export function DocumentPreview({
   const document: Document | null = previewDocument
     ? previewDocument
     : artifact.status === "streaming"
-      ? {
-          title: artifact.title,
-          kind: artifact.kind,
-          content: artifact.content,
-          id: artifact.documentId,
-          createdAt: new Date(),
-          userId: "noop",
-        }
-      : null;
+    ? {
+        title: artifact.title,
+        kind: artifact.kind,
+        content: artifact.content,
+        id: artifact.documentId,
+        createdAt: new Date(),
+        userId: "noop",
+      }
+    : null;
 
   if (!document) {
     return <LoadingSkeleton artifactKind={artifact.kind} />;

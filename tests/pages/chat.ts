@@ -13,6 +13,10 @@ export class ChatPage {
     this.page = page;
   }
 
+  async waitForTimeout(ms: number) {
+    await this.page.waitForTimeout(ms);
+  }
+
   get sendButton() {
     return this.page.getByTestId("send-button");
   }
@@ -104,6 +108,31 @@ export class ChatPage {
   async getSelectedModel() {
     const modelId = await this.page.getByTestId("model-selector").innerText();
     return modelId;
+  }
+
+  // Deep Research toggle helpers
+  get deepResearchSwitch() {
+    return this.page.getByTestId("deep-research-switch");
+  }
+  get deepResearchLabel() {
+    return this.page.getByTestId("deep-research-label");
+  }
+  get deepResearchOnBadge() {
+    return this.page.getByTestId("deep-research-on-badge");
+  }
+
+  async toggleDeepResearchViaSwitch() {
+    await this.deepResearchSwitch.click();
+  }
+  async toggleDeepResearchViaLabel() {
+    await this.deepResearchLabel.click();
+  }
+  async expectDeepResearchOnBadgeVisible(visible: boolean) {
+    if (visible) {
+      await expect(this.deepResearchOnBadge).toBeVisible();
+    } else {
+      await expect(this.deepResearchOnBadge).toHaveCount(0);
+    }
   }
 
   async chooseModelFromSelector(chatModelId: string) {

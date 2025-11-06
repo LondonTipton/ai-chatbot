@@ -11,7 +11,7 @@ import { requestSuggestionsService } from "@/lib/services/suggestion-service";
  * Note: userId must be provided in the context for proper suggestion ownership.
  */
 export const requestSuggestionsTool = createTool({
-  id: "request-suggestions",
+  id: "requestSuggestions",
   description:
     "Request AI-powered suggestions to improve a document's writing. Analyzes the document content and provides up to 5 suggestions with original text, suggested improvements, and explanations.",
 

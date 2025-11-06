@@ -255,15 +255,31 @@ export function detectQueryComplexity(message: string): ComplexityAnalysis {
 
 /**
  * Determine if query should use Mastra or AI SDK
- * Updated: ALL queries now use Mastra for consistent orchestration
+ * Updated: Route medium+ complexity queries through Mastra
+ * Medium queries use chatAgent with workflow tool capability
  */
 export function shouldUseMastra(complexity: QueryComplexity): boolean {
-  // Force all queries to use Mastra
-  const useMastra = true;
+  // Route medium and higher complexity queries through Mastra
+  // Medium uses chatAgent with advancedSearchWorkflow tool
+  // Deep and workflow types use searchAgent
+  const useMastra =
+    complexity === "medium" ||
+    complexity === "deep" ||
+    complexity === "workflow-review" ||
+    complexity === "workflow-caselaw" ||
+    complexity === "workflow-drafting";
 
   logger.log(
-    `[Complexity] 🤖 Route decision: Mastra (forced) for complexity: ${complexity}`
+    `[Complexity] 🤖 Route decision: ${
+      useMastra ? "Mastra" : "AI SDK"
+    } for complexity: ${complexity}`
   );
+
+  if (complexity === "medium") {
+    logger.log(
+      "[Complexity] 📋 Medium complexity will use chatAgent with workflow tool capability"
+    );
+  }
 
   return useMastra;
 }

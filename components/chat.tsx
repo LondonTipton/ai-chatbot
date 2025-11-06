@@ -75,6 +75,14 @@ export function Chat({
   });
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
+  const [comprehensiveWorkflowEnabled, setComprehensiveWorkflowEnabled] =
+    useState(false);
+  // Keep a ref in sync to avoid stale closure in transport.prepareSendMessagesRequest
+  const comprehensiveWorkflowEnabledRef = useRef(comprehensiveWorkflowEnabled);
+
+  useEffect(() => {
+    comprehensiveWorkflowEnabledRef.current = comprehensiveWorkflowEnabled;
+  }, [comprehensiveWorkflowEnabled]);
 
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
@@ -103,6 +111,8 @@ export function Chat({
             message: request.messages.at(-1),
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibilityType,
+              // Read latest value from ref to avoid stale state
+              comprehensiveWorkflowEnabled: comprehensiveWorkflowEnabledRef.current,
             ...request.body,
           },
         };
@@ -286,6 +296,8 @@ export function Chat({
               status={status}
               stop={stop}
               usage={usage}
+              comprehensiveWorkflowEnabled={comprehensiveWorkflowEnabled}
+              onComprehensiveWorkflowChange={setComprehensiveWorkflowEnabled}
             />
           )}
         </div>

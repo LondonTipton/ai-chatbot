@@ -12,7 +12,7 @@ import { createDocumentService } from "@/lib/services/document-service";
  * Note: userId must be provided in the context for proper document ownership.
  */
 export const createDocumentTool = createTool({
-  id: "create-document",
+  id: "createDocument",
   description:
     "Create a document for writing or content creation activities. This tool will generate the contents of the document based on the title and kind. Supports text documents, code files, spreadsheets, and images.",
 
@@ -23,9 +23,6 @@ export const createDocumentTool = createTool({
       .describe(
         "The type of document: 'text' for markdown documents, 'code' for code files, 'sheet' for spreadsheets, 'image' for images"
       ),
-    userId: z
-      .string()
-      .describe("The ID of the user creating the document (required)"),
   }),
 
   outputSchema: z.object({
@@ -38,11 +35,23 @@ export const createDocumentTool = createTool({
       .describe("A success message about the document creation"),
   }),
 
-  execute: async ({ context }) => {
-    const { title, kind, userId } = context;
+  execute: async (executionContext: any) => {
+    const { context } = executionContext;
+    const { title, kind } = context;
+
+    // Get userId from agent context (passed through agent.generate() or agent.stream() options)
+    // Priority: agentContext > runtimeContext > context > default
+    const userId =
+      executionContext?.agentContext?.userId ||
+      executionContext?.runtimeContext?.userId ||
+      executionContext?.context?.userId ||
+      "anonymous";
 
     console.log(
-      `[Mastra Tool - createDocument] Creating document: "${title}" (${kind}) for user ${userId}`
+      `[Mastra Tool - createDocument] ✅ TOOL CALLED! Creating document: "${title}" (${kind}) for user ${userId}`
+    );
+    console.log(
+      "[Mastra Tool - createDocument] This message proves the tool was invoked!"
     );
 
     try {

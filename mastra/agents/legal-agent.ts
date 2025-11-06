@@ -8,6 +8,7 @@ import { tavilySearchTool } from "../tools/tavily-search";
  * This prevents multiple provider instances during streaming
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
+console.log("[Mastra] legal-agent → Cerebras provider initialized");
 
 /**
  * Legal AI Agent powered by Cerebras gpt-oss-120b
@@ -33,7 +34,13 @@ When responding:
 
 Remember: You are a research assistant, not a lawyer. Always remind users to consult with qualified legal professionals for legal advice.`,
 
-  model: () => cerebrasProvider("gpt-oss-120b"),
+  model: () => {
+    // Reuse the singleton provider instance
+    console.log(
+      "[Mastra] legal-agent → Using Cerebras model: gpt-oss-120b (reasoning preferred)"
+    );
+    return cerebrasProvider("gpt-oss-120b");
+  },
 
   tools: {
     tavilySearchTool,

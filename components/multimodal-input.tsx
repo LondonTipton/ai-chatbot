@@ -22,11 +22,11 @@ import { saveChatModelAsCookie } from "@/app/(chat)/actions";
 import { SelectItem } from "@/components/ui/select";
 import { useUsage } from "@/hooks/use-usage";
 import { chatModels } from "@/lib/ai/models";
-import { myProvider } from "@/lib/ai/providers";
 import { createLogger } from "@/lib/logger";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { cn } from "@/lib/utils";
+import { ComprehensiveWorkflowToggle } from "./comprehensive-workflow-toggle";
 import { Context } from "./elements/context";
 import {
   PromptInput,
@@ -68,6 +68,8 @@ function PureMultimodalInput({
   selectedModelId,
   onModelChange,
   usage,
+  comprehensiveWorkflowEnabled,
+  onComprehensiveWorkflowChange,
 }: {
   chatId: string;
   input: string;
@@ -84,6 +86,8 @@ function PureMultimodalInput({
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
   usage?: AppUsage;
+  comprehensiveWorkflowEnabled?: boolean;
+  onComprehensiveWorkflowChange?: (enabled: boolean) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -203,10 +207,6 @@ function PureMultimodalInput({
       toast.error("Failed to upload file, please try again!");
     }
   }, []);
-
-  const _modelResolver = useMemo(() => {
-    return myProvider.languageModel(selectedModelId);
-  }, [selectedModelId]);
 
   const contextProps = useMemo(
     () => ({
@@ -352,6 +352,13 @@ function PureMultimodalInput({
                 onModelChange={onModelChange}
                 selectedModelId={selectedModelId}
               />
+              {comprehensiveWorkflowEnabled !== undefined &&
+                onComprehensiveWorkflowChange && (
+                  <ComprehensiveWorkflowToggle
+                    enabled={comprehensiveWorkflowEnabled}
+                    onChange={onComprehensiveWorkflowChange}
+                  />
+                )}
             </PromptInputTools>
 
             {status === "submitted" ? (
@@ -390,6 +397,13 @@ export const MultimodalInput = memo(
     if (prevProps.selectedModelId !== nextProps.selectedModelId) {
       return false;
     }
+    // Re-render when deep research toggle changes
+    if (
+      prevProps.comprehensiveWorkflowEnabled !==
+      nextProps.comprehensiveWorkflowEnabled
+    ) {
+      return false;
+    }
 
     return true;
   }
@@ -404,7 +418,7 @@ function PureAttachmentsButton({
   status: UseChatHelpers<ChatMessage>["status"];
   selectedModelId: string;
 }) {
-  const isReasoningModel = selectedModelId === "chat-model-reasoning";
+  const isResearchModel = selectedModelId.startsWith("research-");
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const { usage } = useUsage();
 
@@ -432,7 +446,7 @@ function PureAttachmentsButton({
       <Button
         className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
         data-testid="attachments-button"
-        disabled={status !== "ready" || isReasoningModel}
+        disabled={status !== "ready" || isResearchModel}
         onClick={handleClick}
         variant="ghost"
       >
@@ -488,10 +502,35 @@ function PureModelSelectorCompact({
       <PromptInputModelSelectContent className="min-w-[260px] p-0">
         <div className="flex flex-col gap-px">
           {chatModels.map((model) => (
-            <SelectItem key={model.id} value={model.name}>
-              <div className="truncate font-medium text-xs">{model.name}</div>
-              <div className="mt-px truncate text-[10px] text-muted-foreground leading-tight">
-                {model.description}
+            <SelectItem
+              className={model.disabled ? "cursor-not-allowed opacity-50" : ""}
+              disabled={model.disabled}
+              key={model.id}
+              value={model.name}
+            >
+              <div className="flex items-center gap-2">
+                {model.comingSoon && (
+                  <svg
+                    className="h-3 w-3 text-muted-foreground"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <rect height="11" rx="2" ry="2" width="7" x="3" y="11" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                )}
+                {model.icon && <span className="text-base">{model.icon}</span>}
+                <div className="flex-1">
+                  <div className="truncate font-medium text-xs">
+                    {model.name}
+                  </div>
+                  <div className="mt-px truncate text-[10px] text-muted-foreground leading-tight">
+                    {model.description}
+                  </div>
+                </div>
               </div>
             </SelectItem>
           ))}

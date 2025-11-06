@@ -11,7 +11,7 @@ import { updateDocumentService } from "@/lib/services/document-service";
  * Note: userId must be provided in the context for ownership verification.
  */
 export const updateDocumentTool = createTool({
-  id: "update-document",
+  id: "updateDocument",
   description:
     "Update an existing document with changes based on a description. Use this when you need to modify, improve, or revise document content.",
 
@@ -22,9 +22,6 @@ export const updateDocumentTool = createTool({
       .describe(
         "A description of the changes to make to the document (e.g., 'add a conclusion section', 'fix typos', 'make it more formal')"
       ),
-    userId: z
-      .string()
-      .describe("The ID of the user updating the document (required)"),
   }),
 
   outputSchema: z.object({
@@ -35,8 +32,17 @@ export const updateDocumentTool = createTool({
     message: z.string().describe("A success message"),
   }),
 
-  execute: async ({ context }) => {
-    const { id, description, userId } = context;
+  execute: async (executionContext: any) => {
+    const { context } = executionContext;
+    const { id, description } = context;
+
+    // Get userId from agent context (passed through agent.generate() or agent.stream() options)
+    // Priority: agentContext > runtimeContext > context > default
+    const userId =
+      executionContext?.agentContext?.userId ||
+      executionContext?.runtimeContext?.userId ||
+      executionContext?.context?.userId ||
+      "anonymous";
 
     console.log(
       `[Mastra Tool - updateDocument] Updating document: ${id} for user ${userId}`

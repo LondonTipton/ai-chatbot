@@ -7,6 +7,7 @@ import { tavilyExtractTool } from "../tools/tavily-extract";
  * This prevents multiple provider instances during streaming
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
+console.log("[Mastra] extract-agent → Cerebras provider initialized");
 
 /**
  * Extract Agent - Step 2 of Deep Research Workflow
@@ -36,7 +37,13 @@ For each source, provide:
 
 Do NOT analyze - just extract. The analysis agent will handle that.`,
 
-  model: () => cerebrasProvider("gpt-oss-120b"),
+  model: () => {
+    // Reuse the singleton provider instance
+    console.log(
+      "[Mastra] extract-agent → Using Cerebras model: gpt-oss-120b (reasoning preferred)"
+    );
+    return cerebrasProvider("gpt-oss-120b");
+  },
 
   tools: {
     tavilyExtractTool,

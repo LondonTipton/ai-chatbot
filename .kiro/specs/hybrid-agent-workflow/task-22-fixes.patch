@@ -1,0 +1,36 @@
+diff --git a/components/chat.tsx b/components/chat.tsx
+index 1234567..abcdefg 100644
+--- a/components/chat.tsx
++++ b/components/chat.tsx
+@@ -3,7 +3,7 @@
+ import { useChat } from "@ai-sdk/react";
+ import { DefaultChatTransport } from "ai";
+ import { useSearchParams } from "next/navigation";
+-import { useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useRef, useState } from "react";
+ import useSWR, { useSWRConfig } from "swr";
+ import { unstable_serialize } from "swr/infinite";
+ import { ChatHeader } from "@/components/chat-header";
+
+diff --git a/components/multimodal-input.tsx b/components/multimodal-input.tsx
+index 1234567..abcdefg 100644
+--- a/components/multimodal-input.tsx
++++ b/components/multimodal-input.tsx
+@@ -405,7 +405,7 @@ function PureAttachmentsButton({
+   status: UseChatHelpers<ChatMessage>["status"];
+   selectedModelId: string;
+ }) {
+-  const isReasoningModel = selectedModelId === "chat-model-reasoning";
++  const isResearchModel = selectedModelId.startsWith("research-");
+   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+   const { usage } = useUsage();
+ 
+@@ -430,7 +430,7 @@ function PureAttachmentsButton({
+       <Button
+         className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
+         data-testid="attachments-button"
+-        disabled={status !== "ready" || isReasoningModel}
++        disabled={status !== "ready" || isResearchModel}
+         onClick={handleClick}
+         variant="ghost"
+       >
