@@ -14,7 +14,7 @@ import { createDocumentService } from "@/lib/services/document-service";
 export const createDocumentTool = createTool({
   id: "createDocument",
   description:
-    "Create a document for writing or content creation activities. This tool will generate the contents of the document based on the title and kind. Supports text documents, code files, spreadsheets, and images.",
+    "REQUIRED: Call this tool IMMEDIATELY when users ask to create, write, draft, generate, compose, or produce any document. This tool generates full content automatically based on title and kind. NEVER write document content in chat responses. Supports text documents, code files, spreadsheets, and images.",
 
   inputSchema: z.object({
     title: z.string().describe("The title or topic of the document to create"),

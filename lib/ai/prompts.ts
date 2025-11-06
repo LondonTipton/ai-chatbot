@@ -15,6 +15,19 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - For content users will likely save/reuse (emails, code, essays, etc.)
 - When explicitly requested to create a document
 - For when content contains a single code snippet
+- When user asks to "write", "draft", "create", "compose", "generate", or "produce" any document type
+
+**Document Creation Triggers - CALL createDocument IMMEDIATELY on:**
+- "Create a document" or "Create a [type] document"
+- "Write a [type]..." (essay, report, summary, analysis, brief, memo, guide, handbook, etc.)
+- "Draft a [type]..." (contract, agreement, letter, proposal, deed, covenant, etc.)
+- "Generate a [type]..." (outline, template, checklist, framework, etc.)
+- "Compose [a/an] [type]..." (letter, email, proposal, document, etc.)
+- "Produce [a/an] [type]..." (report, analysis, framework, document, etc.)
+- "I need [a/an] [type]..." (when document type is clear)
+- "Can you [write/create/draft/make] me a [type]..."
+- "Make [a/an] [type]..."
+- Any request for substantial written content (>200 words) that would benefit from being reusable
 
 **When NOT to use \`createDocument\`:**
 - For informational/explanatory content
@@ -68,11 +81,20 @@ CRITICAL RULES FOR TOOL USAGE:
    - NEVER leave the response empty or with only tool calls
 3. **Never end with just tool calls** - Tool results alone are not sufficient. Always synthesize and explain.
 4. **DOCUMENT CREATION WORKFLOW** - When user asks to CREATE a document:
-   a) If you need information: Search FIRST using tavily tools
-   b) Then IMMEDIATELY call createDocument with the title
-   c) DO NOT explain in chat what will be in the document
-   d) Let the createDocument tool generate the content
-   e) After document is created, provide brief guidance about using it
+   a) Recognize trigger keywords: "create", "write", "draft", "generate", "compose", "produce"
+   b) If you need information: Search FIRST using tavily tools
+   c) Then IMMEDIATELY call createDocument with descriptive title
+   d) DO NOT explain in chat what will be in the document
+   e) Let the createDocument tool generate the content
+   f) After document is created, provide brief guidance (1-2 sentences) about using it
+
+DOCUMENT CREATION TRIGGER EXAMPLES:
+• "Create a document about [topic]" → Call createDocument immediately
+• "Write a [type] about [topic]" → Call createDocument immediately
+• "Draft a [type] for [purpose]" → Call createDocument immediately
+• "Generate [type] for [context]" → Call createDocument immediately
+• "Can you write me a [type]?" → Call createDocument immediately
+• "I need a [type] about [topic]" → Call createDocument immediately
 
 EXAMPLE OF CORRECT DOCUMENT CREATION FLOW:
 User: "Create a document about contract law"
@@ -85,6 +107,19 @@ User: "Create a document about contract law"
 1. Call tavilyQna → Get information
 2. [No createDocument call] ❌ WRONG! Must call createDocument when user asks for document creation
 3. [Response with information] ❌ WRONG! Should create the document, not just explain
+
+DIFFERENT REQUEST TYPES:
+User: "Create a contract for employment" 
+→ Call createDocument({ title: "Employment Contract", kind: "text" })
+
+User: "Draft a memo about policy changes"
+→ Call createDocument({ title: "Policy Changes Memo", kind: "text" })
+
+User: "Write a research paper on constitutional law"
+→ tavilySearch → createDocument({ title: "Constitutional Law Research", kind: "text" })
+
+User: "Generate a code template for API handling"
+→ Call createDocument({ title: "API Handler Template", kind: "code" })
 
 EXAMPLE OF CORRECT RESPONSE FLOW:
 User: "What is the legal framework for IP in Zimbabwe?"
@@ -298,19 +333,19 @@ Current document content:
 ${currentContent}
 `
     : type === "code"
-      ? `\
+    ? `\
 Improve the following code snippet based on the given prompt.
 
 CRITICAL: Output ONLY the updated code. Do NOT include explanatory text before or after the code.
 
 ${currentContent}
 `
-      : type === "sheet"
-        ? `\
+    : type === "sheet"
+    ? `\
 Improve the following spreadsheet based on the given prompt.
 
 CRITICAL: Output ONLY the updated spreadsheet data in CSV format. Do NOT include explanatory text.
 
 ${currentContent}
 `
-        : "";
+    : "";

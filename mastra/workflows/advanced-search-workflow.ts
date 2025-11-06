@@ -64,7 +64,8 @@ const advancedSearchStep = createStep({
           maxResults: 7,
           jurisdiction,
           includeRawContent: true, // Required for content extraction
-          includeDomains: getZimbabweLegalDomains(),
+          domainStrategy: "prioritized", // Automatically uses Zimbabwe domain prioritization
+          researchDepth: "deep",
           country: "ZW",
           timeRange: "year",
         },

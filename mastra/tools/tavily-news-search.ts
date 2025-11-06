@@ -1,6 +1,12 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import {
+  type DomainStrategy,
+  getExcludeDomains,
+  getPriorityDomains,
+} from "@/lib/utils/tavily-domain-strategy";
 import { estimateTokens } from "@/lib/utils/token-estimation";
+import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 
 /**
  * Tavily News Search Tool for Mastra
@@ -78,6 +84,12 @@ export const tavilyNewsSearchTool = createTool({
       .max(10)
       .default(5)
       .describe("Maximum number of news results to return (default: 5)"),
+
+    domainStrategy: z
+      .enum(["strict", "prioritized", "open"])
+      .optional()
+      .default("prioritized")
+      .describe("Domain strategy for prioritizing news sources"),
   }),
 
   outputSchema: z.object({
@@ -91,9 +103,10 @@ export const tavilyNewsSearchTool = createTool({
             .string()
             .describe("Publication date (ISO 8601 format)"),
           score: z.number().describe("Relevance score (0-1)"),
+          tier: z.enum(["tier1", "tier2", "tier3", "tier4", "external"]),
         })
       )
-      .describe("Array of news articles"),
+      .describe("Array of news articles with authority tier"),
 
     totalResults: z.number().describe("Total number of results returned"),
 
@@ -110,7 +123,19 @@ export const tavilyNewsSearchTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, days, jurisdiction, maxResults } = context;
+    const {
+      query,
+      days,
+      jurisdiction,
+      maxResults,
+      domainStrategy = "prioritized",
+    } = context as {
+      query: string;
+      days?: number;
+      jurisdiction?: string;
+      maxResults?: number;
+      domainStrategy?: DomainStrategy;
+    };
 
     // Validate environment
     if (!process.env.TAVILY_API_KEY) {
@@ -125,7 +150,7 @@ export const tavilyNewsSearchTool = createTool({
     // Calculate date range
     const toDate = new Date();
     const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - days);
+    fromDate.setDate(fromDate.getDate() - (days || 7));
 
     // Retry logic configuration
     const MAX_RETRIES = 1;
@@ -136,21 +161,34 @@ export const tavilyNewsSearchTool = createTool({
     // Attempt execution with retry logic
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
+        const requestBody: Record<string, unknown> = {
+          api_key: process.env.TAVILY_API_KEY,
+          query: enhancedQuery,
+          topic: "news", // Use news topic for time-sensitive queries
+          days: days || 7, // Time filtering parameter
+          max_results: maxResults || 5,
+          include_answer: false, // We want raw news results
+          include_raw_content: false, // Content summaries are sufficient
+          search_depth: "basic", // Basic is sufficient for news
+        };
+
+        // Apply domain strategy
+        if (domainStrategy === "strict") {
+          requestBody.include_domains = getPriorityDomains("standard");
+        } else if (domainStrategy === "prioritized") {
+          requestBody.exclude_domains = getExcludeDomains();
+          requestBody.include_domains = getPriorityDomains("standard");
+        } else {
+          // open
+          requestBody.exclude_domains = getExcludeDomains();
+        }
+
         const response = await fetch("https://api.tavily.com/search", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            api_key: process.env.TAVILY_API_KEY,
-            query: enhancedQuery,
-            topic: "news", // Use news topic for time-sensitive queries
-            days, // Time filtering parameter
-            max_results: maxResults,
-            include_answer: false, // We want raw news results
-            include_raw_content: false, // Content summaries are sufficient
-            search_depth: "basic", // Basic is sufficient for news
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -171,6 +209,7 @@ export const tavilyNewsSearchTool = createTool({
             publishedDate:
               result.published_date || new Date().toISOString().split("T")[0],
             score: result.score || 0,
+            tier: getDomainTier(result.url),
           })) || [];
 
         // Estimate tokens in the response

@@ -415,6 +415,69 @@ export async function POST(request: Request) {
                 );
               }
 
+              // Log createDocument tool invocations
+              const hasCreateDocumentCalls = assistantMessages.some(
+                (msg: any) =>
+                  msg.parts?.some(
+                    (part: any) =>
+                      part.type === "tool-call" &&
+                      part.toolName === "createDocument"
+                  )
+              );
+
+              if (hasCreateDocumentCalls) {
+                logger.log(
+                  "[Mastra] 📄 Document creation tool 'createDocument' was successfully invoked"
+                );
+
+                // Extract createDocument tool results to log document details
+                assistantMessages.forEach((msg: any) => {
+                  msg.parts?.forEach((part: any) => {
+                    if (
+                      part.type === "tool-call" &&
+                      part.toolName === "createDocument"
+                    ) {
+                      logger.log(
+                        `[Mastra] 📝 Document created: "${part.args?.title}" (kind: ${part.args?.kind})`
+                      );
+                    }
+                    if (
+                      part.type === "tool-result" &&
+                      part.toolName === "createDocument"
+                    ) {
+                      try {
+                        const result =
+                          typeof part.content === "string"
+                            ? JSON.parse(part.content)
+                            : part.content;
+                        logger.log(
+                          `[Mastra] ✅ Document creation result: ID=${result.id}, Title="${result.title}"`
+                        );
+                      } catch (_) {
+                        logger.log(
+                          "[Mastra] ✅ Document creation completed successfully"
+                        );
+                      }
+                    }
+                  });
+                });
+              }
+
+              // Log all tool calls for analysis
+              const allToolCalls = assistantMessages.flatMap(
+                (msg: any) =>
+                  msg.parts
+                    ?.filter((part: any) => part.type === "tool-call")
+                    .map((part: any) => part.toolName) || []
+              );
+              if (allToolCalls.length > 0) {
+                logger.log(
+                  `[Mastra] 🔨 Tools invoked in this interaction: ${allToolCalls.join(
+                    ", "
+                  )}`
+                );
+              }
+
               await saveMessages({
                 messages: assistantMessages.map((currentMessage: any) => ({
                   id: currentMessage.id,

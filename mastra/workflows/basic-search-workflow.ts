@@ -56,7 +56,9 @@ const searchStep = createStep({
         context: {
           query: `${query} ${jurisdiction} law`,
           maxResults: 5,
-          filterZimbabweDomains: jurisdiction.toLowerCase() === "zimbabwe",
+          domainStrategy:
+            jurisdiction.toLowerCase() === "zimbabwe" ? "prioritized" : "open",
+          researchDepth: "standard",
         },
         runtimeContext,
       });

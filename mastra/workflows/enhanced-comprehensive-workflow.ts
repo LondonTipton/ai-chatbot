@@ -5,59 +5,72 @@ import {
   identifyResearchGaps,
   summarizeGaps,
 } from "@/lib/utils/research-helpers";
-import { createTokenBudgetTracker } from "@/lib/utils/token-budget-tracker";
+import {
+  createTokenBudgetTracker,
+  type TokenBudgetReport,
+} from "@/lib/utils/token-budget-tracker";
+import { estimateTokens } from "@/lib/utils/token-estimation";
 import { summarizerAgent } from "../agents/summarizer-agent";
 import { synthesizerAgent } from "../agents/synthesizer-agent";
 import { tavilyContextSearchTool } from "../tools/tavily-context-search";
 
 /**
- * Comprehensive Analysis Workflow
+ * Enhanced Comprehensive Analysis Workflow with Intelligent Summarization
  *
- * Token Budget: 18K-20K tokens
- * Steps: initial-research → analyze-gaps → enhance-or-deep-dive → document
- * Latency: 25-47s
+ * Token Budget: 18K-25K tokens (adaptive)
+ * Steps: initial-research → conditional-summarization → analyze-gaps → enhance-or-deep-dive → final-summarization → document
+ * Latency: 25-50s
  *
- * This workflow provides comprehensive legal research by:
- * 1. Performing initial research with context search (5K tokens)
- * 2. Analyzing gaps in the research results
- * 3. Conditionally branching:
- *    - If gaps.length > 2: deep-dive with 2 parallel searches (10K tokens)
- *    - Else: enhance with single additional search (5K tokens)
- * 4. Synthesizing all results into comprehensive document (3K-5K tokens)
+ * Key Improvements:
+ * 1. Token budget tracking throughout workflow
+ * 2. Conditional summarization when token pressure detected
+ * 3. Intelligent compression before gap analysis
+ * 4. Final summarization before synthesis to ensure quality
+ * 5. Adaptive token allocation based on usage patterns
  *
- * Requirements: 6.3
+ * This workflow prevents information loss from truncation while staying within budget.
  */
 
 /**
- * Step 1: Initial Research
- * Performs comprehensive context search with 5K token budget
- * Token estimate: 5K tokens
+ * Step 1: Initial Research with Token Tracking
  */
 const initialResearchStep = createStep({
   id: "initial-research",
-  description: "Perform initial comprehensive research with context search",
+  description: "Perform initial comprehensive research with token tracking",
   inputSchema: z.object({
     query: z.string().describe("The research query"),
     jurisdiction: z
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    tokenBudget: z
+      .number()
+      .default(20_000)
+      .describe("Total token budget for workflow"),
   }),
   outputSchema: z.object({
     context: z.string().describe("Research context from initial search"),
     tokenCount: z.number().describe("Tokens used in initial research"),
     truncated: z.boolean().describe("Whether content was truncated"),
     query: z.string().describe("The enhanced query used"),
+    budgetReport: z.any().describe("Token budget tracking report"),
   }),
   execute: async ({ inputData, runtimeContext }) => {
-    const { query, jurisdiction } = inputData;
+    const { query, jurisdiction, tokenBudget } = inputData;
 
-    try {
-      console.log("[Comprehensive Analysis] Starting initial research", {
+    // Initialize token budget tracker
+    const tracker = createTokenBudgetTracker(tokenBudget, 0.7);
+
+    console.log(
+      "[Enhanced Comprehensive] Starting initial research with budget tracking",
+      {
         query: `${query.substring(0, 50)}...`,
         jurisdiction,
-      });
+        tokenBudget,
+      }
+    );
 
+    try {
       // Execute context search with 5K token budget
       const searchResults = await tavilyContextSearchTool.execute({
         context: {
@@ -69,26 +82,32 @@ const initialResearchStep = createStep({
         runtimeContext,
       });
 
-      console.log("[Comprehensive Analysis] Initial research complete", {
-        tokenCount: searchResults.tokenCount,
-        truncated: searchResults.truncated,
-      });
+      // Track token usage
+      tracker.addUsage(
+        "initial-research",
+        searchResults.tokenCount,
+        searchResults.truncated
+      );
+
+      // Log budget status
+      tracker.logReport();
 
       return {
         context: searchResults.context,
         tokenCount: searchResults.tokenCount,
         truncated: searchResults.truncated,
         query: searchResults.query,
+        budgetReport: tracker.getReport(),
       };
     } catch (error) {
-      console.error("[Comprehensive Analysis] Initial research error:", error);
+      console.error("[Enhanced Comprehensive] Initial research error:", error);
 
-      // Return minimal context to allow workflow to continue
       return {
         context: "Initial research failed. Proceeding with limited context.",
         tokenCount: 0,
         truncated: false,
         query,
+        budgetReport: tracker.getReport(),
       };
     }
   },
@@ -96,8 +115,7 @@ const initialResearchStep = createStep({
 
 /**
  * Step 2: Conditional Summarization
- * Intelligently summarizes content if truncation or token pressure detected
- * Token estimate: 0-3K tokens (only runs when needed)
+ * Summarizes content if truncation detected OR token pressure is high
  */
 const conditionalSummarizationStep = createStep({
   id: "conditional-summarization",
@@ -108,6 +126,7 @@ const conditionalSummarizationStep = createStep({
     tokenCount: z.number(),
     truncated: z.boolean(),
     query: z.string(),
+    budgetReport: z.any(),
   }),
   outputSchema: z.object({
     context: z.string(),
@@ -116,12 +135,14 @@ const conditionalSummarizationStep = createStep({
     query: z.string(),
     summarized: z.boolean(),
     compressionRatio: z.number().optional(),
+    budgetReport: z.any(),
   }),
-  execute: async ({ inputData }) => {
-    const { context, tokenCount, truncated, query } = inputData;
+  execute: async ({ inputData, getInitData }) => {
+    const { context, tokenCount, truncated, query, budgetReport } = inputData;
+    const { tokenBudget } = getInitData();
 
-    // Initialize token tracker with 20K budget
-    const tracker = createTokenBudgetTracker(20_000, 0.7);
+    // Recreate tracker from report
+    const tracker = createTokenBudgetTracker(tokenBudget, 0.7);
     tracker.addUsage("initial-research", tokenCount, truncated);
 
     // Determine if summarization is needed
@@ -132,7 +153,7 @@ const conditionalSummarizationStep = createStep({
 
     if (!shouldSummarize) {
       console.log(
-        "[Comprehensive Analysis] Summarization not needed - proceeding with original content"
+        "[Enhanced Comprehensive] Summarization not needed - proceeding with original content"
       );
       return {
         context,
@@ -140,10 +161,11 @@ const conditionalSummarizationStep = createStep({
         truncated,
         query,
         summarized: false,
+        budgetReport: tracker.getReport(),
       };
     }
 
-    console.log("[Comprehensive Analysis] Summarization triggered", {
+    console.log("[Enhanced Comprehensive] Summarization triggered", {
       reason: truncated
         ? "content truncated"
         : tracker.shouldSummarize(0.6)
@@ -164,10 +186,13 @@ Target: 50-70% token reduction. Keep ALL case names, statutory references, dates
         maxSteps: 1,
       });
 
-      const summarizedTokens = Math.ceil(summarized.text.length / 4);
+      const summarizedTokens = estimateTokens(summarized.text);
       const compressionRatio = summarizedTokens / tokenCount;
 
-      console.log("[Comprehensive Analysis] Summarization complete", {
+      // Update tracker
+      tracker.addUsage("summarization", summarizedTokens);
+
+      console.log("[Enhanced Comprehensive] Summarization complete", {
         originalTokens: tokenCount,
         summarizedTokens,
         compressionRatio: compressionRatio.toFixed(2),
@@ -181,9 +206,10 @@ Target: 50-70% token reduction. Keep ALL case names, statutory references, dates
         query,
         summarized: true,
         compressionRatio,
+        budgetReport: tracker.getReport(),
       };
     } catch (error) {
-      console.error("[Comprehensive Analysis] Summarization error:", error);
+      console.error("[Enhanced Comprehensive] Summarization error:", error);
 
       // Continue with original content if summarization fails
       return {
@@ -192,15 +218,14 @@ Target: 50-70% token reduction. Keep ALL case names, statutory references, dates
         truncated,
         query,
         summarized: false,
+        budgetReport: tracker.getReport(),
       };
     }
   },
 });
 
 /**
- * Step 3: Analyze Gaps
- * Analyzes research results to identify gaps and determine next steps
- * Token estimate: minimal (local processing)
+ * Step 3: Analyze Gaps (same as original)
  */
 const analyzeGapsStep = createStep({
   id: "analyze-gaps",
@@ -212,13 +237,13 @@ const analyzeGapsStep = createStep({
     query: z.string(),
     summarized: z.boolean(),
     compressionRatio: z.number().optional(),
+    budgetReport: z.any(),
   }),
   outputSchema: z.object({
     context: z.string(),
     tokenCount: z.number(),
     truncated: z.boolean(),
     query: z.string(),
-    summarized: z.boolean(),
     gaps: z.array(
       z.object({
         type: z.string(),
@@ -230,19 +255,15 @@ const analyzeGapsStep = createStep({
     gapSummary: z.string(),
     shouldDeepDive: z.boolean(),
     gapQueries: z.array(z.string()),
+    budgetReport: z.any(),
   }),
   execute: async ({ inputData, getInitData }) => {
-    const { context, tokenCount, truncated, query, summarized } = inputData;
-    const initData = getInitData();
-    const { jurisdiction } = initData;
+    const { context, tokenCount, truncated, query, budgetReport } = inputData;
+    const { jurisdiction } = getInitData();
 
     try {
-      console.log("[Comprehensive Analysis] Analyzing research gaps", {
-        summarized,
-      });
+      console.log("[Enhanced Comprehensive] Analyzing research gaps");
 
-      // Parse context to extract results for gap analysis
-      // The context is formatted with sections, so we'll treat it as a single result
       const mockResults = [
         {
           title: "Initial Research Results",
@@ -251,27 +272,20 @@ const analyzeGapsStep = createStep({
         },
       ];
 
-      // Identify research gaps
       const gaps = identifyResearchGaps({
         query,
         results: mockResults,
         jurisdiction,
       });
 
-      // Generate summary
       const gapSummary = summarizeGaps(gaps);
-
-      // Determine if deep dive is needed (more than 2 gaps)
       const shouldDeepDive = gaps.length > 2;
-
-      // Generate gap-filling queries
       const gapQueries = generateGapFillingQueries(gaps);
 
-      console.log("[Comprehensive Analysis] Gap analysis complete", {
+      console.log("[Enhanced Comprehensive] Gap analysis complete", {
         gapsFound: gaps.length,
         shouldDeepDive,
         gapQueriesCount: gapQueries.length,
-        gapSummary,
       });
 
       return {
@@ -279,35 +293,32 @@ const analyzeGapsStep = createStep({
         tokenCount,
         truncated,
         query,
-        summarized,
         gaps,
         gapSummary,
         shouldDeepDive,
         gapQueries,
+        budgetReport,
       };
     } catch (error) {
-      console.error("[Comprehensive Analysis] Gap analysis error:", error);
+      console.error("[Enhanced Comprehensive] Gap analysis error:", error);
 
-      // Return no gaps to continue with enhance path
       return {
         context,
         tokenCount,
         truncated,
         query,
-        summarized,
         gaps: [],
         gapSummary: "Gap analysis failed",
         shouldDeepDive: false,
         gapQueries: [],
+        budgetReport,
       };
     }
   },
 });
 
 /**
- * Step 4: Enhance or Deep Dive (conditional based on gaps)
- * Performs either single additional search (enhance) or 2 parallel searches (deep-dive)
- * Token estimate: 5K tokens (enhance) or 10K tokens (deep-dive)
+ * Step 4: Enhance or Deep Dive with Token Tracking
  */
 const enhanceOrDeepDiveStep = createStep({
   id: "enhance-or-deep-dive",
@@ -318,7 +329,6 @@ const enhanceOrDeepDiveStep = createStep({
     tokenCount: z.number(),
     truncated: z.boolean(),
     query: z.string(),
-    summarized: z.boolean(),
     gaps: z.array(
       z.object({
         type: z.string(),
@@ -330,6 +340,7 @@ const enhanceOrDeepDiveStep = createStep({
     gapSummary: z.string(),
     shouldDeepDive: z.boolean(),
     gapQueries: z.array(z.string()),
+    budgetReport: z.any(),
   }),
   outputSchema: z.object({
     initialContext: z.string(),
@@ -338,31 +349,37 @@ const enhanceOrDeepDiveStep = createStep({
     deepDiveContext2: z.string().optional(),
     totalTokens: z.number(),
     path: z.enum(["enhance", "deep-dive"]),
+    budgetReport: z.any(),
   }),
   execute: async ({ inputData, getInitData, runtimeContext }) => {
-    const { context, tokenCount, shouldDeepDive, gapQueries } = inputData;
-    const initData = getInitData();
-    const { jurisdiction } = initData;
+    const { context, tokenCount, shouldDeepDive, gapQueries, budgetReport } =
+      inputData;
+    const { jurisdiction, tokenBudget } = getInitData();
 
-    // Conditional branching: if gaps.length > 2, go to deep-dive; else go to enhance
+    // Recreate tracker
+    const tracker = createTokenBudgetTracker(tokenBudget, 0.7);
+    tracker.addUsage("previous-steps", tokenCount);
+
+    // Check remaining budget
+    const remaining = tracker.getRemaining();
+    console.log("[Enhanced Comprehensive] Remaining budget:", remaining);
+
+    // Adjust search budget based on remaining tokens
+    const searchBudget = Math.min(5000, Math.floor(remaining * 0.6));
+
     if (shouldDeepDive) {
-      // Deep Dive Path
-      try {
-        console.log(
-          "[Comprehensive Analysis] Taking deep-dive path (gaps > 2)"
-        );
+      console.log("[Enhanced Comprehensive] Taking deep-dive path (gaps > 2)");
 
-        // Use first 2 gap queries, or generate fallback queries
+      try {
         const query1 = gapQueries[0] || `${inputData.query} detailed analysis`;
         const query2 =
           gapQueries[1] || `${inputData.query} case law precedents`;
 
-        // Execute 2 parallel searches
         const [results1, results2] = await Promise.all([
           tavilyContextSearchTool.execute({
             context: {
               query: query1,
-              maxTokens: 5000,
+              maxTokens: searchBudget,
               jurisdiction,
               timeRange: "year",
             },
@@ -371,7 +388,7 @@ const enhanceOrDeepDiveStep = createStep({
           tavilyContextSearchTool.execute({
             context: {
               query: query2,
-              maxTokens: 5000,
+              maxTokens: searchBudget,
               jurisdiction,
               timeRange: "year",
             },
@@ -379,10 +396,20 @@ const enhanceOrDeepDiveStep = createStep({
           }),
         ]);
 
-        const totalTokens =
-          tokenCount + results1.tokenCount + results2.tokenCount;
+        tracker.addUsage(
+          "deep-dive-1",
+          results1.tokenCount,
+          results1.truncated
+        );
+        tracker.addUsage(
+          "deep-dive-2",
+          results2.tokenCount,
+          results2.truncated
+        );
 
-        console.log("[Comprehensive Analysis] Deep dive complete", {
+        const totalTokens = tracker.getReport().totalUsed;
+
+        console.log("[Enhanced Comprehensive] Deep dive complete", {
           deepDive1Tokens: results1.tokenCount,
           deepDive2Tokens: results2.tokenCount,
           totalTokens,
@@ -395,11 +422,11 @@ const enhanceOrDeepDiveStep = createStep({
           deepDiveContext2: results2.context,
           totalTokens,
           path: "deep-dive" as const,
+          budgetReport: tracker.getReport(),
         };
       } catch (error) {
-        console.error("[Comprehensive Analysis] Deep dive error:", error);
+        console.error("[Enhanced Comprehensive] Deep dive error:", error);
 
-        // Continue with initial context only
         return {
           initialContext: context,
           enhancedContext: undefined,
@@ -407,30 +434,34 @@ const enhanceOrDeepDiveStep = createStep({
           deepDiveContext2: undefined,
           totalTokens: tokenCount,
           path: "deep-dive" as const,
+          budgetReport: tracker.getReport(),
         };
       }
     } else {
-      // Enhance Path
-      try {
-        console.log("[Comprehensive Analysis] Taking enhance path (gaps <= 2)");
+      console.log("[Enhanced Comprehensive] Taking enhance path (gaps <= 2)");
 
-        // Use first gap query if available, otherwise use original query
+      try {
         const enhanceQuery = gapQueries[0] || inputData.query;
 
-        // Perform single additional search
         const enhancedResults = await tavilyContextSearchTool.execute({
           context: {
             query: enhanceQuery,
-            maxTokens: 5000,
+            maxTokens: searchBudget,
             jurisdiction,
             timeRange: "year",
           },
           runtimeContext,
         });
 
-        console.log("[Comprehensive Analysis] Enhancement complete", {
+        tracker.addUsage(
+          "enhancement",
+          enhancedResults.tokenCount,
+          enhancedResults.truncated
+        );
+
+        console.log("[Enhanced Comprehensive] Enhancement complete", {
           enhancedTokens: enhancedResults.tokenCount,
-          totalTokens: tokenCount + enhancedResults.tokenCount,
+          totalTokens: tracker.getReport().totalUsed,
         });
 
         return {
@@ -438,13 +469,13 @@ const enhanceOrDeepDiveStep = createStep({
           enhancedContext: enhancedResults.context,
           deepDiveContext1: undefined,
           deepDiveContext2: undefined,
-          totalTokens: tokenCount + enhancedResults.tokenCount,
+          totalTokens: tracker.getReport().totalUsed,
           path: "enhance" as const,
+          budgetReport: tracker.getReport(),
         };
       } catch (error) {
-        console.error("[Comprehensive Analysis] Enhancement error:", error);
+        console.error("[Enhanced Comprehensive] Enhancement error:", error);
 
-        // Continue with initial context only
         return {
           initialContext: context,
           enhancedContext: undefined,
@@ -452,6 +483,7 @@ const enhanceOrDeepDiveStep = createStep({
           deepDiveContext2: undefined,
           totalTokens: tokenCount,
           path: "enhance" as const,
+          budgetReport: tracker.getReport(),
         };
       }
     }
@@ -461,7 +493,6 @@ const enhanceOrDeepDiveStep = createStep({
 /**
  * Step 5: Final Summarization Before Synthesis
  * Ensures all content is within reasonable bounds for high-quality synthesis
- * Token estimate: 0-5K tokens (only runs when needed)
  */
 const finalSummarizationStep = createStep({
   id: "final-summarization",
@@ -473,14 +504,15 @@ const finalSummarizationStep = createStep({
     deepDiveContext2: z.string().optional(),
     totalTokens: z.number(),
     path: z.enum(["enhance", "deep-dive"]),
+    budgetReport: z.any(),
   }),
   outputSchema: z.object({
     summarizedContent: z.string(),
     totalTokens: z.number(),
     path: z.enum(["enhance", "deep-dive"]),
-    finalSummarized: z.boolean(),
+    budgetReport: z.any(),
   }),
-  execute: async ({ inputData }) => {
+  execute: async ({ inputData, getInitData }) => {
     const {
       initialContext,
       enhancedContext,
@@ -488,9 +520,11 @@ const finalSummarizationStep = createStep({
       deepDiveContext2,
       totalTokens,
       path,
+      budgetReport,
     } = inputData;
+    const { tokenBudget } = getInitData();
 
-    const tracker = createTokenBudgetTracker(20_000, 0.7);
+    const tracker = createTokenBudgetTracker(tokenBudget, 0.7);
     tracker.addUsage("previous-steps", totalTokens);
 
     // Check if final summarization is needed
@@ -499,7 +533,7 @@ const finalSummarizationStep = createStep({
 
     if (!shouldSummarize) {
       console.log(
-        "[Comprehensive Analysis] Final summarization not needed - proceeding to synthesis"
+        "[Enhanced Comprehensive] Final summarization not needed - proceeding to synthesis"
       );
 
       // Concatenate all contexts
@@ -519,12 +553,12 @@ const finalSummarizationStep = createStep({
         summarizedContent: combinedContent,
         totalTokens,
         path,
-        finalSummarized: false,
+        budgetReport: tracker.getReport(),
       };
     }
 
     console.log(
-      "[Comprehensive Analysis] Final summarization triggered before synthesis",
+      "[Enhanced Comprehensive] Final summarization triggered before synthesis",
       {
         totalTokens,
         utilization: `${(tracker.getUtilization() * 100).toFixed(1)}%`,
@@ -561,9 +595,10 @@ Create a structured summary that:
         maxSteps: 1,
       });
 
-      const summarizedTokens = Math.ceil(summarized.text.length / 4);
+      const summarizedTokens = estimateTokens(summarized.text);
+      tracker.addUsage("final-summarization", summarizedTokens);
 
-      console.log("[Comprehensive Analysis] Final summarization complete", {
+      console.log("[Enhanced Comprehensive] Final summarization complete", {
         originalTokens: totalTokens,
         summarizedTokens,
         compressionRatio: (summarizedTokens / totalTokens).toFixed(2),
@@ -572,13 +607,13 @@ Create a structured summary that:
 
       return {
         summarizedContent: summarized.text,
-        totalTokens: summarizedTokens,
+        totalTokens: tracker.getReport().totalUsed,
         path,
-        finalSummarized: true,
+        budgetReport: tracker.getReport(),
       };
     } catch (error) {
       console.error(
-        "[Comprehensive Analysis] Final summarization error:",
+        "[Enhanced Comprehensive] Final summarization error:",
         error
       );
 
@@ -599,80 +634,43 @@ Create a structured summary that:
         summarizedContent: combinedContent,
         totalTokens,
         path,
-        finalSummarized: false,
+        budgetReport: tracker.getReport(),
       };
     }
   },
 });
 
 /**
- * Step 6: Document
- * Synthesizes all research into comprehensive document
- * Token estimate: 3K-5K tokens
+ * Step 6: Document Synthesis
  */
 const documentStep = createStep({
   id: "document",
   description: "Synthesize all research into comprehensive document",
   inputSchema: z.object({
-    initialContext: z.string(),
-    enhancedContext: z.string().optional(),
-    deepDiveContext1: z.string().optional(),
-    deepDiveContext2: z.string().optional(),
+    summarizedContent: z.string(),
     totalTokens: z.number(),
     path: z.enum(["enhance", "deep-dive"]),
+    budgetReport: z.any(),
   }),
   outputSchema: z.object({
     response: z.string().describe("Comprehensive synthesized document"),
     totalTokens: z.number().describe("Total tokens used in workflow"),
     path: z.enum(["enhance", "deep-dive"]).describe("Path taken in workflow"),
+    budgetReport: z.any().describe("Final token budget report"),
   }),
   execute: async ({ inputData, getInitData }) => {
-    const {
-      initialContext,
-      enhancedContext,
-      deepDiveContext1,
-      deepDiveContext2,
-      totalTokens,
-      path,
-    } = inputData;
-    const initData = getInitData();
-    const { query } = initData;
+    const { summarizedContent, totalTokens, path, budgetReport } = inputData;
+    const { query } = getInitData();
 
     try {
-      console.log("[Comprehensive Analysis] Creating final document", {
+      console.log("[Enhanced Comprehensive] Creating final document", {
         path,
         totalTokensSoFar: totalTokens,
       });
 
-      // Build comprehensive synthesis prompt
-      let synthesisPrompt = `Create a comprehensive legal research document for: "${query}"
+      const synthesisPrompt = `Create a comprehensive legal research document for: "${query}"
 
-## Initial Research
-${initialContext}
-`;
-
-      // Add enhanced or deep dive content based on path
-      if (path === "enhance" && enhancedContext) {
-        synthesisPrompt += `
-## Enhanced Research
-${enhancedContext}
-`;
-      } else if (path === "deep-dive") {
-        if (deepDiveContext1) {
-          synthesisPrompt += `
-## Deep Dive Research - Part 1
-${deepDiveContext1}
-`;
-        }
-        if (deepDiveContext2) {
-          synthesisPrompt += `
-## Deep Dive Research - Part 2
-${deepDiveContext2}
-`;
-        }
-      }
-
-      synthesisPrompt += `
+${summarizedContent}
 
 ## Instructions
 Create a publication-quality legal research document that:
@@ -686,82 +684,72 @@ Create a publication-quality legal research document that:
 
 The document should be self-contained and suitable for professional use.`;
 
-      // Generate comprehensive synthesis
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
         maxSteps: 1,
       });
 
-      // Estimate synthesis tokens
       const synthesisTokens = Math.ceil(synthesized.text.length / 4);
       const finalTotalTokens = totalTokens + synthesisTokens;
 
-      console.log("[Comprehensive Analysis] Document creation complete", {
+      console.log("[Enhanced Comprehensive] Document creation complete", {
         synthesisTokens,
         finalTotalTokens,
-        withinBudget: finalTotalTokens <= 20_000,
+        withinBudget:
+          finalTotalTokens <= (budgetReport as TokenBudgetReport).totalBudget,
       });
 
       return {
         response: synthesized.text,
         totalTokens: finalTotalTokens,
         path,
+        budgetReport,
       };
     } catch (error) {
-      console.error("[Comprehensive Analysis] Document creation error:", error);
-
-      // Fallback: return concatenated context
-      const fallbackResponse = `# Comprehensive Research Results
-
-## Initial Research
-${initialContext}
-
-${
-  enhancedContext
-    ? `## Enhanced Research\n${enhancedContext}`
-    : deepDiveContext1
-    ? `## Deep Dive Research\n${deepDiveContext1}\n\n${deepDiveContext2 || ""}`
-    : ""
-}
-
-Note: Synthesis failed. Raw research results provided above.`;
+      console.error("[Enhanced Comprehensive] Document creation error:", error);
 
       return {
-        response: fallbackResponse,
+        response: summarizedContent,
         totalTokens,
         path,
+        budgetReport,
       };
     }
   },
 });
 
 /**
- * Comprehensive Analysis Workflow
+ * Enhanced Comprehensive Analysis Workflow
  *
- * Executes: initial-research → analyze-gaps → enhance-or-deep-dive → document
- * Token Budget: 18K-20K tokens
- * Latency Target: 25-47s
+ * Executes: initial-research → conditional-summarization → analyze-gaps →
+ *           enhance-or-deep-dive → final-summarization → document
  *
- * Conditional branching:
- * - If gaps.length > 2: goes to deep-dive path
- * - Else: goes to enhance path
+ * Token Budget: 18K-25K tokens (adaptive)
+ * Latency Target: 25-50s
  */
-export const comprehensiveAnalysisWorkflow = createWorkflow({
-  id: "comprehensive-analysis-workflow",
+export const enhancedComprehensiveWorkflow = createWorkflow({
+  id: "enhanced-comprehensive-workflow",
   inputSchema: z.object({
     query: z.string().describe("The research query"),
     jurisdiction: z
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    tokenBudget: z
+      .number()
+      .default(20_000)
+      .describe("Total token budget for workflow"),
   }),
   outputSchema: z.object({
     response: z.string().describe("Comprehensive synthesized document"),
     totalTokens: z.number().describe("Total tokens used in workflow"),
     path: z.enum(["enhance", "deep-dive"]).describe("Path taken in workflow"),
+    budgetReport: z.any().describe("Final token budget report"),
   }),
 })
   .then(initialResearchStep)
+  .then(conditionalSummarizationStep)
   .then(analyzeGapsStep)
   .then(enhanceOrDeepDiveStep)
+  .then(finalSummarizationStep)
   .then(documentStep)
   .commit();

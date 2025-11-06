@@ -1,20 +1,27 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
+  analyzeSourceDistribution,
+  type DomainStrategy,
+  getExcludeDomains,
+  getPriorityDomains,
+  type ResearchDepth,
+} from "@/lib/utils/tavily-domain-strategy";
+import {
   estimateSearchResultTokens,
   estimateTokens,
 } from "@/lib/utils/token-estimation";
-import { getZimbabweLegalDomains } from "@/lib/utils/zimbabwe-domains";
+import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 
 /**
  * Tavily Search Tool for Mastra
  * Performs web searches using the Tavily API
- * Optimized for token efficiency with Zimbabwe legal domain filtering
+ * Optimized for token efficiency with intelligent Zimbabwe legal domain prioritization
  */
 export const tavilySearchTool = createTool({
   id: "tavily-search",
   description:
-    "Search the web for current information on any topic. Returns relevant search results with sources. Optimized for token efficiency with default 3 results.",
+    "Search the web for current information. Returns relevant search results with intelligent Zimbabwe domain prioritization. Optimized for token efficiency with default 3 results.",
 
   inputSchema: z.object({
     query: z.string().describe("The search query"),
@@ -23,13 +30,18 @@ export const tavilySearchTool = createTool({
       .optional()
       .default(3)
       .describe("Maximum number of results to return (default: 3)"),
-    filterZimbabweDomains: z
-      .boolean()
+    domainStrategy: z
+      .enum(["strict", "prioritized", "open"])
       .optional()
-      .default(false)
+      .default("prioritized")
       .describe(
-        "Filter results to Zimbabwe legal domains only (gov.zw, zimlii.org, etc.)"
+        "Domain strategy: 'strict' (ZW only), 'prioritized' (ZW + global), 'open' (exclude spam only)"
       ),
+    researchDepth: z
+      .enum(["quick", "standard", "deep", "comprehensive"])
+      .optional()
+      .default("standard")
+      .describe("Research depth for domain prioritization"),
   }),
 
   outputSchema: z.object({
@@ -41,35 +53,71 @@ export const tavilySearchTool = createTool({
           url: z.string(),
           content: z.string(),
           score: z.number(),
+          tier: z.enum(["tier1", "tier2", "tier3", "tier4", "external"]),
         })
       )
-      .describe("Array of search results"),
+      .describe("Array of search results with authority tier"),
     totalResults: z.number().describe("Total number of results found"),
     tokenEstimate: z
       .number()
       .describe("Estimated token count for the search results"),
+    sourceDistribution: z.object({
+      zimbabweAuthority: z.number(),
+      zimbabweOther: z.number(),
+      regional: z.number(),
+      global: z.number(),
+    }),
   }),
 
   execute: async ({ context }) => {
-    const { query, maxResults, filterZimbabweDomains } = context;
+    const {
+      query,
+      maxResults = 3,
+      domainStrategy = "prioritized",
+      researchDepth = "standard",
+    } = context as {
+      query: string;
+      maxResults?: number;
+      domainStrategy?: DomainStrategy;
+      researchDepth?: ResearchDepth;
+    };
 
     if (!process.env.TAVILY_API_KEY) {
       throw new Error("TAVILY_API_KEY is not configured");
     }
 
     try {
-      // Build request body with optional Zimbabwe domain filtering
-      const requestBody: any = {
+      // Build request body with intelligent domain prioritization
+      const requestBody: Record<string, unknown> = {
         api_key: process.env.TAVILY_API_KEY,
         query,
         max_results: maxResults,
         include_answer: true,
         include_raw_content: false,
+        search_depth: "basic",
+        country: "ZW",
       };
 
-      // Add Zimbabwe domain filtering if requested
-      if (filterZimbabweDomains) {
-        requestBody.include_domains = getZimbabweLegalDomains();
+      // Apply domain strategy
+      if (domainStrategy === "strict") {
+        requestBody.include_domains = getPriorityDomains(researchDepth);
+      } else if (domainStrategy === "prioritized") {
+        requestBody.exclude_domains = getExcludeDomains();
+        requestBody.include_domains = getPriorityDomains(researchDepth);
+      } else {
+        // open
+        requestBody.exclude_domains = getExcludeDomains();
+      }
+
+      // Apply domain strategy
+      if (domainStrategy === "strict") {
+        requestBody.include_domains = getPriorityDomains(researchDepth);
+      } else if (domainStrategy === "prioritized") {
+        requestBody.exclude_domains = getExcludeDomains();
+        requestBody.include_domains = getPriorityDomains(researchDepth);
+      } else {
+        // open
+        requestBody.exclude_domains = getExcludeDomains();
       }
 
       const response = await fetch("https://api.tavily.com/search", {
@@ -92,6 +140,7 @@ export const tavilySearchTool = createTool({
           url: result.url || "",
           content: result.content || "",
           score: result.score || 0,
+          tier: getDomainTier(result.url),
         })) || [];
 
       // Calculate token estimate for results
@@ -99,11 +148,14 @@ export const tavilySearchTool = createTool({
       const resultsTokens = estimateSearchResultTokens(results);
       const tokenEstimate = answerTokens + resultsTokens;
 
+      const sourceDistribution = analyzeSourceDistribution(results);
+
       return {
         answer: data.answer || "No answer generated",
         results,
         totalResults: results.length,
         tokenEstimate,
+        sourceDistribution,
       };
     } catch (error) {
       console.error("Tavily search error:", error);
