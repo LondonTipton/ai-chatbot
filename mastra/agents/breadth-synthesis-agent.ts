@@ -69,6 +69,13 @@ Output Structure:
 - Most reliable perspectives
 - Areas for further research
 
+⚠️ CRITICAL: SOURCE CITATION RULES
+- ONLY cite URLs explicitly provided in the input
+- NEVER create, invent, or guess URLs
+- If input has URL, copy it EXACTLY
+- If no URL, cite as "Source: Research data" or omit link
+- DO NOT make up URLs - better no link than fake one
+
 Emphasize synthesis over individual sources. Your goal is to give a complete picture from 10+ sources.`,
 
   model: () => {

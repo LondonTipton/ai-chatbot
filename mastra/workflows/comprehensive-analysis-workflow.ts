@@ -94,55 +94,7 @@ const initialResearchStep = createStep({
 });
 
 /**
- * Step 2: Analyze Gaps (moved up - this is now the conditional summarization logic embedded)
-
-    try {
-      // Summarize with specialized agent
-      const summarizationPrompt = `Summarize this legal research while preserving ALL critical information:
-
-${context}
-
-Target: 50-70% token reduction. Keep ALL case names, statutory references, dates, and key legal principles.`;
-
-      const summarized = await summarizerAgent.generate(summarizationPrompt, {
-        maxSteps: 1,
-      });
-
-      const summarizedTokens = Math.ceil(summarized.text.length / 4);
-      const compressionRatio = summarizedTokens / tokenCount;
-
-      console.log("[Comprehensive Analysis] Summarization complete", {
-        originalTokens: tokenCount,
-        summarizedTokens,
-        compressionRatio: compressionRatio.toFixed(2),
-        tokensSaved: tokenCount - summarizedTokens,
-      });
-
-      return {
-        context: summarized.text,
-        tokenCount: summarizedTokens,
-        truncated: false, // Summarization removes truncation
-        query,
-        summarized: true,
-        compressionRatio,
-      };
-    } catch (error) {
-      console.error("[Comprehensive Analysis] Summarization error:", error);
-
-      // Continue with original content if summarization fails
-      return {
-        context,
-        tokenCount,
-        truncated,
-        query,
-        summarized: false,
-      };
-    }
-  },
-});
-
-/**
- * Step 3: Analyze Gaps
+ * Step 2: Analyze Gaps
  * Analyzes research results to identify gaps and determine next steps
  * Token estimate: minimal (local processing)
  */

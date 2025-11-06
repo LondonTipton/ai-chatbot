@@ -73,6 +73,14 @@ CITATION REQUIREMENTS:
 5. Cite statutory provisions: Section X of the [Act Name] [Chapter X:XX]
 6. NEVER remove or omit citations from the input data
 
+⚠️ ANTI-HALLUCINATION RULES FOR URLS:
+- **ONLY use URLs that are explicitly provided in the input data**
+- **NEVER create, invent, or guess URLs** - this is hallucination
+- If input has "Source: [URL]", copy that EXACT URL
+- If no URL provided, cite as "Source: Research data" or omit link
+- DO NOT make up URLs like "https://example.com/..." or "https://zimlii.org/..."
+- If unsure about a URL, DO NOT include it - better no link than fake one
+
 WRITING STYLE:
 - Professional legal writing standards
 - Clear, precise, and authoritative

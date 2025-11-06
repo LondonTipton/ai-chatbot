@@ -1,5 +1,6 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
+import { parallelSummarize } from "@/lib/utils/parallel-summarization";
 import {
   generateGapFillingQueries,
   identifyResearchGaps,
@@ -9,8 +10,6 @@ import {
   createTokenBudgetTracker,
   type TokenBudgetReport,
 } from "@/lib/utils/token-budget-tracker";
-import { estimateTokens } from "@/lib/utils/token-estimation";
-import { summarizerAgent } from "../agents/summarizer-agent";
 import { synthesizerAgent } from "../agents/synthesizer-agent";
 import { tavilyContextSearchTool } from "../tools/tavily-context-search";
 
@@ -114,13 +113,14 @@ const initialResearchStep = createStep({
 });
 
 /**
- * Step 2: Conditional Summarization
- * Summarizes content if truncation detected OR token pressure is high
+ * Step 2: Conditional Summarization with Parallel Agents
+ * Uses parallel multi-agent summarization for content >10K tokens
+ * Supports 1-14 parallel agents based on document size
  */
 const conditionalSummarizationStep = createStep({
   id: "conditional-summarization",
   description:
-    "Intelligently summarize content if truncation or token pressure detected",
+    "Intelligently summarize content using parallel agents if truncation or token pressure detected",
   inputSchema: z.object({
     context: z.string(),
     tokenCount: z.number(),
@@ -135,10 +135,11 @@ const conditionalSummarizationStep = createStep({
     query: z.string(),
     summarized: z.boolean(),
     compressionRatio: z.number().optional(),
+    agentsUsed: z.number().optional(),
     budgetReport: z.any(),
   }),
   execute: async ({ inputData, getInitData }) => {
-    const { context, tokenCount, truncated, query, budgetReport } = inputData;
+    const { context, tokenCount, truncated, query } = inputData;
     const { tokenBudget } = getInitData();
 
     // Recreate tracker from report
@@ -165,7 +166,7 @@ const conditionalSummarizationStep = createStep({
       };
     }
 
-    console.log("[Enhanced Comprehensive] Summarization triggered", {
+    console.log("[Enhanced Comprehensive] Parallel summarization triggered", {
       reason: truncated
         ? "content truncated"
         : tracker.shouldSummarize(0.6)
@@ -175,41 +176,39 @@ const conditionalSummarizationStep = createStep({
     });
 
     try {
-      // Summarize with specialized agent
-      const summarizationPrompt = `Summarize this legal research while preserving ALL critical information:
-
-${context}
-
-Target: 50-70% token reduction. Keep ALL case names, statutory references, dates, and key legal principles.`;
-
-      const summarized = await summarizerAgent.generate(summarizationPrompt, {
-        maxSteps: 1,
+      // Use parallel summarization
+      const result = await parallelSummarize(context, {
+        maxInputPerAgent: 10_000,
+        safeOutputTarget: 10_000,
       });
 
-      const summarizedTokens = estimateTokens(summarized.text);
-      const compressionRatio = summarizedTokens / tokenCount;
-
       // Update tracker
-      tracker.addUsage("summarization", summarizedTokens);
+      tracker.addUsage("summarization", result.summarizedTokens);
 
-      console.log("[Enhanced Comprehensive] Summarization complete", {
-        originalTokens: tokenCount,
-        summarizedTokens,
-        compressionRatio: compressionRatio.toFixed(2),
-        tokensSaved: tokenCount - summarizedTokens,
+      console.log("[Enhanced Comprehensive] Parallel summarization complete", {
+        originalTokens: result.originalTokens,
+        summarizedTokens: result.summarizedTokens,
+        compressionRatio: result.compressionRatio.toFixed(2),
+        agentsUsed: result.agentsUsed,
+        strategy: result.strategyUsed,
+        tokensSaved: result.originalTokens - result.summarizedTokens,
       });
 
       return {
-        context: summarized.text,
-        tokenCount: summarizedTokens,
-        truncated: false, // Summarization removes truncation
+        context: result.finalSummary,
+        tokenCount: result.summarizedTokens,
+        truncated: false,
         query,
         summarized: true,
-        compressionRatio,
+        compressionRatio: result.compressionRatio,
+        agentsUsed: result.agentsUsed,
         budgetReport: tracker.getReport(),
       };
     } catch (error) {
-      console.error("[Enhanced Comprehensive] Summarization error:", error);
+      console.error(
+        "[Enhanced Comprehensive] Parallel summarization error:",
+        error
+      );
 
       // Continue with original content if summarization fails
       return {
@@ -225,7 +224,7 @@ Target: 50-70% token reduction. Keep ALL case names, statutory references, dates
 });
 
 /**
- * Step 3: Analyze Gaps (same as original)
+ * Step 3: Analyze Gaps (updated to accept agentsUsed from parallel summarization)
  */
 const analyzeGapsStep = createStep({
   id: "analyze-gaps",
@@ -237,6 +236,7 @@ const analyzeGapsStep = createStep({
     query: z.string(),
     summarized: z.boolean(),
     compressionRatio: z.number().optional(),
+    agentsUsed: z.number().optional(),
     budgetReport: z.any(),
   }),
   outputSchema: z.object({
@@ -258,8 +258,7 @@ const analyzeGapsStep = createStep({
     budgetReport: z.any(),
   }),
   execute: async ({ inputData, getInitData }) => {
-    const { context, tokenCount, truncated, query, summarized, budgetReport } =
-      inputData;
+    const { context, tokenCount, truncated, query, summarized } = inputData;
     const { jurisdiction } = await Promise.resolve(getInitData());
 
     try {
@@ -299,7 +298,7 @@ const analyzeGapsStep = createStep({
         gapSummary,
         shouldDeepDive,
         gapQueries,
-        budgetReport,
+        budgetReport: inputData.budgetReport,
       };
     } catch (error) {
       console.error("[Enhanced Comprehensive] Gap analysis error:", error);
@@ -314,7 +313,7 @@ const analyzeGapsStep = createStep({
         gapSummary: "Gap analysis failed",
         shouldDeepDive: false,
         gapQueries: [],
-        budgetReport,
+        budgetReport: inputData.budgetReport,
       };
     }
   },
@@ -355,8 +354,7 @@ const enhanceOrDeepDiveStep = createStep({
     budgetReport: z.any(),
   }),
   execute: async ({ inputData, getInitData, runtimeContext }) => {
-    const { context, tokenCount, shouldDeepDive, gapQueries, budgetReport } =
-      inputData;
+    const { context, tokenCount, shouldDeepDive, gapQueries } = inputData;
     const { jurisdiction, tokenBudget } = getInitData();
 
     // Recreate tracker
@@ -523,7 +521,6 @@ const finalSummarizationStep = createStep({
       deepDiveContext2,
       totalTokens,
       path,
-      budgetReport,
     } = inputData;
     const { tokenBudget } = getInitData();
 
@@ -582,34 +579,28 @@ const finalSummarizationStep = createStep({
         }
       }
 
-      // Summarize all content
-      const summarizationPrompt = `Summarize this comprehensive legal research while preserving ALL critical information:
-
-${allContent}
-
-Create a structured summary that:
-1. Preserves ALL case names, citations, and statutory references
-2. Keeps ALL URLs and sources
-3. Maintains logical organization
-4. Reduces verbosity by 40-50%
-5. Ensures no information loss`;
-
-      const summarized = await summarizerAgent.generate(summarizationPrompt, {
-        maxSteps: 1,
+      // Use parallel summarization for final pass
+      const result = await parallelSummarize(allContent, {
+        maxInputPerAgent: 10_000,
+        safeOutputTarget: 10_000,
       });
 
-      const summarizedTokens = estimateTokens(summarized.text);
-      tracker.addUsage("final-summarization", summarizedTokens);
+      tracker.addUsage("final-summarization", result.summarizedTokens);
 
-      console.log("[Enhanced Comprehensive] Final summarization complete", {
-        originalTokens: totalTokens,
-        summarizedTokens,
-        compressionRatio: (summarizedTokens / totalTokens).toFixed(2),
-        tokensSaved: totalTokens - summarizedTokens,
-      });
+      console.log(
+        "[Enhanced Comprehensive] Final parallel summarization complete",
+        {
+          originalTokens: result.originalTokens,
+          summarizedTokens: result.summarizedTokens,
+          compressionRatio: result.compressionRatio.toFixed(2),
+          agentsUsed: result.agentsUsed,
+          strategy: result.strategyUsed,
+          tokensSaved: result.originalTokens - result.summarizedTokens,
+        }
+      );
 
       return {
-        summarizedContent: summarized.text,
+        summarizedContent: result.finalSummary,
         totalTokens: tracker.getReport().totalUsed,
         path,
         budgetReport: tracker.getReport(),
@@ -673,19 +664,48 @@ const documentStep = createStep({
 
       const synthesisPrompt = `Create a comprehensive legal research document for: "${query}"
 
+🎯 CRITICAL GROUNDING RULES:
+1. ONLY synthesize from the research content provided below
+2. Do NOT add external knowledge or general legal information
+3. Label each major claim with its source section: [From: Initial Research] or [From: Enhanced Research] or [From: Deep Dive 1/2]
+4. Note any gaps or conflicting information clearly
+5. Use exact quotations when appropriate
+6. Include all relevant URLs and citations from the research
+7. If information is missing, explicitly state "This information was not found in the research"
+
+RESEARCH CONTENT TO SYNTHESIZE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${summarizedContent}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## Instructions
-Create a publication-quality legal research document that:
-1. Provides comprehensive analysis of the topic
-2. Includes all relevant Zimbabwe legal context
-3. Cites all sources with proper URLs
-4. Organizes information logically with clear sections
-5. Provides actionable conclusions and recommendations
-6. Uses professional legal writing style
-7. Includes executive summary at the beginning
+SYNTHESIS TASK:
+1. Analyze the research content above thoroughly
+2. Create a logical document structure with clear sections
+3. Label each major finding with its research source (e.g., "[From: Initial Research]")
+4. Note if any findings conflict between different research phases
+5. Identify what information was NOT found in the research
+6. Include a confidence assessment for each major claim
+7. Provide actionable conclusions based ONLY on the research findings
 
-The document should be self-contained and suitable for professional use.`;
+REQUIRED DOCUMENT STRUCTURE:
+1. **Executive Summary** (with source labels for key points)
+2. **Key Findings** (each with [From: X] labels and confidence indicators)
+3. **Detailed Analysis** (organized by topic, with section labels and citations)
+4. **Source Integration Analysis** (note where sources agree/disagree)
+5. **Research Gaps and Limitations** (what wasn't covered)
+6. **Recommendations** (based on research, with source backing)
+
+WRITING GUIDELINES:
+- Professional legal writing style appropriate for Zimbabwe
+- Clear markdown formatting with headings
+- Use exact quotations from research where appropriate
+- Conservative with claims - only state what research supports
+- Include confidence qualifiers: "may", "appears to", "according to"
+- Note the research path taken: ${path === "enhance" ? "Enhanced Research" : "Deep Dive Research"}
+
+ABSOLUTE RULE: 
+Do not claim the research contains information it doesn't. Every fact, statute reference, case name, or legal principle MUST be traceable to the research content above. If you're unsure whether something is in the research, check again before including it.`;
+
 
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
         maxSteps: 1,

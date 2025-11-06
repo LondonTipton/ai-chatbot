@@ -275,27 +275,79 @@ const synthesizeStep = createStep({
     const { query } = initData;
 
     try {
-      // Prepare synthesis prompt with search results and optional extractions
-      let synthesisPrompt = `Create comprehensive answer for Zimbabwe legal query: "${query}"
+      // BUILD STRUCTURED PROMPT WITH EXPLICIT GROUNDING RULES
+      // This prevents hallucination by enforcing source-only responses
+      
+      let synthesisPrompt = `You are synthesizing search results for Zimbabwe legal query: "${query}"
 
-Search Results:
-${
-  results.length > 0 ? JSON.stringify(results, null, 2) : "No results available"
-}
+🎯 CRITICAL GROUNDING RULES (STRICTLY ENFORCE):
+1. ✅ ONLY use information from the provided sources below
+2. ✅ NEVER add information not explicitly in the sources
+3. ✅ NEVER claim a source says something it doesn't
+4. ✅ Label each major claim with its source URL: [Source: URL]
+5. ✅ If information is not in sources, say "This information was not found in the available sources"
+6. ✅ If sources conflict, note the disagreement clearly
+7. ✅ Qualify uncertain statements with "may", "might", "according to", "some argue"
+8. ✅ Use exact quotations when taking direct statements from sources
+9. ❌ NEVER fabricate statute references, section numbers, or case names
+10. ❌ NEVER add general legal knowledge beyond provided sources
 
-AI Answer: ${answer || "No answer generated"}`;
+AVAILABLE SOURCES:
+${results.map((r: any, i: number) => 
+  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOURCE ${i + 1}: "${r.title}"
+URL: ${r.url}
+Relevance Score: ${(r.relevanceScore * 100).toFixed(0)}%
+Published: ${r.publishedDate}
+
+Content:
+${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+).join('\n\n')}`;
 
       // Add extracted content if available
       if (!skipped && extractions.length > 0) {
         synthesisPrompt += `
 
-Extracted Content from Top Sources:
-${JSON.stringify(extractions, null, 2)}`;
+DETAILED EXTRACTIONS FROM TOP SOURCES:
+${extractions.map((e: any, i: number) => 
+  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXTRACTION ${i + 1}
+From: ${e.url}
+Tokens: ${e.tokenEstimate}
+
+Full Content:
+${e.rawContent}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+).join('\n\n')}`;
       }
 
       synthesisPrompt += `
 
-Provide detailed answer with proper citations and Zimbabwe legal context.`;
+INITIAL AI ANSWER (use as reference structure, but verify all facts against sources above):
+${answer || "No initial answer provided"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+YOUR TASK:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create a comprehensive response that:
+1. Directly answers the query: "${query}"
+2. ONLY uses facts from the provided sources (no external knowledge)
+3. Labels each major claim with its source: [Source: URL]
+4. Notes any gaps: "The sources do not address..."
+5. Highlights any conflicts between sources
+6. Uses professional legal language appropriate for Zimbabwe
+7. Provides proper citations with URLs
+
+STRUCTURE YOUR RESPONSE:
+1. **Direct Answer** - Answer the query directly with citations
+2. **Key Findings** - Bullet points with source labels
+3. **Detailed Explanation** - Comprehensive information from sources
+4. **Source Citations** - List all sources used with URLs
+5. **Limitations** - What the sources don't cover
+
+ABSOLUTE RULE: Accuracy over comprehensiveness. If unsure, say so. Better to admit gaps than to fabricate.`;
 
       // Generate synthesis with maxSteps=15
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
@@ -318,12 +370,49 @@ Provide detailed answer with proper citations and Zimbabwe legal context.`;
         totalTokens,
       };
     } catch (error) {
-      // Error handling: return best available response
+      // Error handling: return structured fallback with all available data
       console.error("[Advanced Search Workflow] Synthesize step error:", error);
 
-      // Fallback: return raw answer if synthesis fails
-      const fallbackResponse =
-        answer || "Unable to generate response. Please try again.";
+      // IMPROVED FALLBACK: Return structured response instead of raw answer
+      const fallbackResponse = `# Research Findings for: "${query}"
+
+⚠️ **Note:** Automatic synthesis failed. Please review the sources below directly.
+
+## Summary
+The following sources were found relevant to your query:
+
+${results.map((r: any, i: number) => 
+  `### ${i + 1}. ${r.title}
+**URL:** ${r.url}  
+**Relevance:** ${(r.relevanceScore * 100).toFixed(0)}%  
+**Published:** ${r.publishedDate}
+
+${r.content}
+
+📎 [Read full article](${r.url})`
+).join('\n\n---\n\n')}
+
+${!skipped && extractions.length > 0 ? `
+## Detailed Information
+
+${extractions.map((e: any, i: number) => 
+  `### Detailed Content ${i + 1}
+**Source:** ${e.url}
+
+${e.rawContent.length > 1000 ? `${e.rawContent.substring(0, 1000)}...` : e.rawContent}
+
+📎 [Full article](${e.url})`
+).join('\n\n---\n\n')}
+` : ''}
+
+${answer ? `
+## Initial Analysis
+${answer}
+` : ''}
+
+---
+
+**Recommendation:** Review the sources above directly or try your query again.`;
 
       const sources = results.map((r: any) => ({
         title: r.title,

@@ -58,6 +58,13 @@ Analysis Output Structure:
 - Your confidence level in the analysis
 - Any uncertainties
 
+⚠️ CRITICAL: SOURCE CITATION RULES
+- ONLY cite URLs explicitly provided in the input
+- NEVER create, invent, or guess URLs
+- If input has URL, copy it EXACTLY
+- If no URL, cite as "Source: Research data" or omit link
+- DO NOT make up URLs - better no link than fake one
+
 Be thorough, cite evidence, and provide actionable legal insights.`,
 
   model: () => {

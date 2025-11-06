@@ -5,7 +5,6 @@ import {
 } from "resumable-stream";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { detectQueryComplexity } from "@/lib/ai/complexity-detector";
-import { streamMastraAgent } from "@/lib/ai/mastra-sdk-integration";
 import type { ChatModel } from "@/lib/ai/models";
 import { auth } from "@/lib/appwrite/server-auth";
 import {
@@ -237,18 +236,21 @@ export async function POST(request: Request) {
       }
 
       try {
-        // Import and execute comprehensive workflow
-        const { comprehensiveAnalysisWorkflow } = await import(
-          "@/mastra/workflows/comprehensive-analysis-workflow"
+        // Import and execute enhanced comprehensive workflow with better token handling
+        const { enhancedComprehensiveWorkflow } = await import(
+          "@/mastra/workflows/enhanced-comprehensive-workflow"
         );
 
-        logger.log("[Routing] 🚀 Starting comprehensive analysis workflow");
+        logger.log(
+          "[Routing] 🚀 Starting enhanced comprehensive analysis workflow"
+        );
 
-        const run = await comprehensiveAnalysisWorkflow.createRunAsync();
+        const run = await enhancedComprehensiveWorkflow.createRunAsync();
         const result = await run.start({
           inputData: {
             query: userMessageText,
             jurisdiction: "Zimbabwe",
+            tokenBudget: 20_000,
           },
         });
 
@@ -354,11 +356,17 @@ export async function POST(request: Request) {
     logger.log(`[Usage] Created transaction ${txId}`);
 
     try {
-      // Route to Mastra using official @mastra/ai-sdk pattern
+      // Route to Mastra using official @mastra/ai-sdk pattern with full message history
       // This uses agent.stream() with format: "aisdk" for AI SDK v5 compatibility
-      const mastraStream = await streamMastraAgent(
+      logger.log(`[Mastra] 📜 Passing full message history (${uiMessages.length} messages)`);
+      
+      const { streamMastraAgentWithHistory } = await import(
+        "@/lib/ai/mastra-sdk-integration"
+      );
+      
+      const mastraStream = await streamMastraAgentWithHistory(
         complexityAnalysis.complexity,
-        userMessageText,
+        uiMessages, // ✅ FIXED: Pass full message history instead of just latest query
         {
           userId: dbUser.id,
           chatId: id,
@@ -372,7 +380,7 @@ export async function POST(request: Request) {
       );
 
       logger.log(
-        "[Mastra] ✅ Mastra stream created (official @mastra/ai-sdk pattern)"
+        "[Mastra] ✅ Mastra stream created with full conversation history (official @mastra/ai-sdk pattern)"
       );
 
       // Log workflow tool capability for medium complexity
