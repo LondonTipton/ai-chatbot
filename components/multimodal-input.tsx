@@ -355,6 +355,7 @@ function PureMultimodalInput({
               {comprehensiveWorkflowEnabled !== undefined &&
                 onComprehensiveWorkflowChange && (
                   <ComprehensiveWorkflowToggle
+                    key={`toggle-${comprehensiveWorkflowEnabled}`}
                     enabled={comprehensiveWorkflowEnabled}
                     onChange={onComprehensiveWorkflowChange}
                   />
