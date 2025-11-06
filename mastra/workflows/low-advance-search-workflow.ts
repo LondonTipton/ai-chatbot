@@ -1,6 +1,5 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
-import { getZimbabweLegalDomains } from "@/lib/utils/zimbabwe-domains";
 import { synthesizerAgent } from "../agents/synthesizer-agent";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
@@ -61,7 +60,8 @@ const searchStep = createStep({
         context: {
           query: `${query} ${jurisdiction}`,
           maxResults: 5,
-          includeDomains: getZimbabweLegalDomains(),
+          domainStrategy: "strict",
+          researchDepth: "standard",
           timeRange: "year",
           country: "ZW",
           jurisdiction,

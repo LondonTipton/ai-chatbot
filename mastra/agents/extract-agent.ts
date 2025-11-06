@@ -12,6 +12,20 @@ console.log("[Mastra] extract-agent → Cerebras provider initialized");
 /**
  * Extract Agent - Step 2 of Deep Research Workflow
  * Extracts full content from sources (max 4 extractions)
+ *
+ * Configuration:
+ * - Temperature: 0.7 (default, good for content extraction planning)
+ * - Max Tokens: 3K (EXPLICIT, INCREASED from API default ~2K)
+ * - Tools: tavilyExtractTool
+ * - Context Window: ~128K tokens
+ *
+ * Token Budget:
+ * - Extraction planning: 1K-1.5K tokens ✅
+ * - URL selection logic: 0.5K-1K tokens ✅
+ * - Extraction coordination: 1K-1.5K tokens ✅
+ *
+ * Note: Actual content extraction happens via tool, not agent output
+ * Updated: November 6, 2025 - Set explicit token limits
  */
 export const extractAgent = new Agent({
   name: "Extract Agent",

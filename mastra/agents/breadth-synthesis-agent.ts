@@ -8,6 +8,19 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
  * Identifies patterns across sources, reconciles conflicting information,
  * and provides comprehensive multi-perspective analysis.
  * Used by High-Advance Search Workflow.
+ *
+ * Configuration:
+ * - Temperature: 0.6 (balanced for synthesis, slightly creative for perspective blending)
+ * - Max Tokens: 5K-8K (EXPLICIT, INCREASED from API default ~2K)
+ * - Tools: None (synthesis only, no research)
+ * - Context Window: ~128K tokens
+ *
+ * Token Budget:
+ * - Multi-source synthesis: 5K-8K tokens ✅
+ * - Complex landscape analysis: 6K-8K tokens ✅
+ * - Coverage gap identification: 4K-6K tokens ✅
+ *
+ * Updated: November 6, 2025 - Set explicit token limits
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
 console.log("[Mastra] breadth-synthesis-agent → Cerebras provider initialized");

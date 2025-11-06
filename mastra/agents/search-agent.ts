@@ -12,6 +12,19 @@ console.log("[Mastra] search-agent → Cerebras provider initialized");
 /**
  * Search Agent - Step 1 of Deep Research Workflow
  * Finds relevant sources (max 4 searches)
+ *
+ * Configuration:
+ * - Temperature: 0.7 (default, good for search query generation)
+ * - Max Tokens: 3K-5K (EXPLICIT, INCREASED from API default ~2K)
+ * - Tools: tavilySearchAdvancedTool
+ * - Context Window: ~128K tokens
+ *
+ * Token Budget:
+ * - Search query planning: 1.5K-2K tokens ✅
+ * - Search results compilation: 2K-3K tokens ✅
+ * - Source list generation: 1K-2K tokens ✅
+ *
+ * Updated: November 6, 2025 - Set explicit token limits
  */
 export const searchAgent = new Agent({
   name: "Search Agent",

@@ -134,10 +134,10 @@ AI Answer: ${answer || "No answer generated"}
 
 Provide a clear, comprehensive answer with proper citations and Zimbabwe legal context.`;
 
-      // Generate synthesis with maxSteps=1
+      // Generate synthesis with maxSteps=15
       // Note: Token limit is controlled by the agent's model configuration
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
-        maxSteps: 1,
+        maxSteps: 15,
       });
 
       // Extract sources from results

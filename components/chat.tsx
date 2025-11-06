@@ -111,8 +111,9 @@ export function Chat({
             message: request.messages.at(-1),
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibilityType,
-              // Read latest value from ref to avoid stale state
-              comprehensiveWorkflowEnabled: comprehensiveWorkflowEnabledRef.current,
+            // Read latest value from ref to avoid stale state
+            comprehensiveWorkflowEnabled:
+              comprehensiveWorkflowEnabledRef.current,
             ...request.body,
           },
         };
@@ -284,8 +285,10 @@ export function Chat({
             <MultimodalInput
               attachments={attachments}
               chatId={id}
+              comprehensiveWorkflowEnabled={comprehensiveWorkflowEnabled}
               input={input}
               messages={messages}
+              onComprehensiveWorkflowChange={setComprehensiveWorkflowEnabled}
               onModelChange={setCurrentModelId}
               selectedModelId={currentModelId}
               selectedVisibilityType={visibilityType}
@@ -296,8 +299,6 @@ export function Chat({
               status={status}
               stop={stop}
               usage={usage}
-              comprehensiveWorkflowEnabled={comprehensiveWorkflowEnabled}
-              onComprehensiveWorkflowChange={setComprehensiveWorkflowEnabled}
             />
           )}
         </div>

@@ -23,8 +23,27 @@ const cerebrasProvider = getBalancedCerebrasProvider();
  *
  * Also includes document creation and update capabilities.
  *
- * Model: Cerebras gpt-oss-120b (used across all workflows)
- * Tool Choice: auto (agent decides when to use tools)
+ * Configuration:
+ * - Model: Cerebras gpt-oss-120b
+ * - Temperature: 0.7 (default, good for conversational tone)
+ * - Max Tokens: 4K-6K (EXPLICIT, INCREASED from API default ~2K)
+ * - Tool Choice: auto (agent decides when to use tools)
+ * - Context Window: ~128K tokens
+ *
+ * Token Budget:
+ * - Quick fact searches: 1K-2.5K per response ✅
+ * - Standard research: 2K-4K per response ✅
+ * - Deep research: 4K-8K per response ✅
+ * - Comprehensive research: 5K-10K per response ✅
+ * - Chat responses: 2K-4K per response ✅
+ *
+ * Usage Example:
+ * ```typescript
+ * const stream = await chatAgent.stream(messages, {
+ *   format: "aisdk",
+ *   maxSteps: 15,
+ * });
+ * ```
  */
 export const chatAgent = new Agent({
   name: "chat-agent",

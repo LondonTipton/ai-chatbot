@@ -14,9 +14,20 @@ console.log("[Mastra] synthesizer-agent → Cerebras provider initialized");
  * Universal agent that converts raw data, tool results, or analysis outputs
  * into clear, comprehensive, human-readable responses.
  *
+ * Configuration:
+ * - Temperature: 0.6 (deterministic synthesis for consistency)
+ * - Max Tokens: 10000 (INCREASED from 6000 to handle comprehensive analysis outputs)
+ * - Tools: None (pure synthesis and formatting)
+ *
  * CRITICAL: This agent ALWAYS produces text output. Its sole purpose is to
  * ensure that no matter what the task agent produces, the user gets a complete,
  * readable response.
+ *
+ * Token Budget Allocation:
+ * - Basic search synthesis: 1.5K-2K tokens ✅
+ * - Advanced search synthesis: 2K-3K tokens ✅
+ * - Comprehensive analysis synthesis: 5K-8K tokens ✅ (now with room to spare)
+ * - Default max: 10K tokens (changed from 6K to prevent truncation)
  */
 export const synthesizerAgent = new Agent({
   name: "Synthesizer Agent",

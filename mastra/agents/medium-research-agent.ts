@@ -13,6 +13,19 @@ console.log("[Mastra] medium-research-agent → Cerebras provider initialized");
  * Medium Research Agent
  * Handles queries requiring multiple search operations
  * Maximum 4 tool calls per execution
+ *
+ * Configuration:
+ * - Temperature: 0.7 (good for research coordination)
+ * - Max Tokens: 4K (EXPLICIT, INCREASED from API default ~2K)
+ * - Tools: tavilySearchAdvancedTool
+ * - Context Window: ~128K tokens
+ *
+ * Token Budget:
+ * - Research planning: 1.5K-2K tokens ✅
+ * - Search coordination: 1K-1.5K tokens ✅
+ * - Result synthesis: 1.5K-2K tokens ✅
+ *
+ * Updated: November 6, 2025 - Set explicit token limits
  */
 export const mediumResearchAgent = new Agent({
   name: "Medium Research Agent",

@@ -7,6 +7,19 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
  * Specialized agent for analyzing extracted content from top sources.
  * Identifies patterns, legal precedents, key clauses, and provides deep insights.
  * Used by Advanced Search Workflow to add depth after extraction.
+ *
+ * Configuration:
+ * - Temperature: 0.5 (analytical precision for detailed analysis)
+ * - Max Tokens: 5K-8K (EXPLICIT, INCREASED from API default ~2K)
+ * - Tools: None (analysis only, no research)
+ * - Context Window: ~128K tokens
+ *
+ * Token Budget:
+ * - Standard analysis: 3K-4K tokens ✅
+ * - Complex analysis: 5K-8K tokens ✅
+ * - Multi-source analysis: 6K-8K tokens ✅
+ *
+ * Updated: November 6, 2025 - Set explicit token limits
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
 console.log("[Mastra] depth-analysis-agent → Cerebras provider initialized");

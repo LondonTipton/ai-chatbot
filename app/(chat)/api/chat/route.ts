@@ -431,8 +431,8 @@ export async function POST(request: Request) {
                 );
 
                 // Extract createDocument tool results to log document details
-                assistantMessages.forEach((msg: any) => {
-                  msg.parts?.forEach((part: any) => {
+                for (const msg of assistantMessages) {
+                  for (const part of msg.parts || []) {
                     if (
                       part.type === "tool-call" &&
                       part.toolName === "createDocument"
@@ -459,8 +459,8 @@ export async function POST(request: Request) {
                         );
                       }
                     }
-                  });
-                });
+                  }
+                }
               }
 
               // Log all tool calls for analysis
@@ -545,7 +545,7 @@ export async function POST(request: Request) {
       throw error;
     }
   } catch (error) {
-    const vercelId = request.headers.get("x-vercel-id");
+    const vercelId = request.headers.get("x-vercel-id") || "unknown";
 
     if (error instanceof ChatSDKError) {
       return error.toResponse();

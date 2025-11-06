@@ -158,7 +158,7 @@ Remember: You provide legal information, not legal advice. Always recommend cons
   // Don't pass memory config or context - just the messages
   const stream = await agent.stream([{ role: "user", content: query }], {
     format: "aisdk", // AI SDK v5 format
-    maxSteps: 5, // Allow multiple tool calls
+    maxSteps: 15, // Allow multiple tool calls
   } as any);
 
   logger.log("[Mastra SDK] ✅ Stream created successfully");
@@ -369,7 +369,7 @@ Remember: You provide legal information, not legal advice. Always recommend cons
   // Don't pass memory config or context - just the messages
   const stream = await agent.stream(mastraMessages, {
     format: "aisdk", // AI SDK v5 format
-    maxSteps: 5, // Allow multiple tool calls
+    maxSteps: 15, // Allow multiple tool calls
   } as any);
 
   logger.log("[Mastra SDK] ✅ Stream created successfully");

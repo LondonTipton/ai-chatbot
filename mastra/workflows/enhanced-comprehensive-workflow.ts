@@ -258,8 +258,9 @@ const analyzeGapsStep = createStep({
     budgetReport: z.any(),
   }),
   execute: async ({ inputData, getInitData }) => {
-    const { context, tokenCount, truncated, query, budgetReport } = inputData;
-    const { jurisdiction } = getInitData();
+    const { context, tokenCount, truncated, query, summarized, budgetReport } =
+      inputData;
+    const { jurisdiction } = await Promise.resolve(getInitData());
 
     try {
       console.log("[Enhanced Comprehensive] Analyzing research gaps");
@@ -293,6 +294,7 @@ const analyzeGapsStep = createStep({
         tokenCount,
         truncated,
         query,
+        summarized,
         gaps,
         gapSummary,
         shouldDeepDive,
@@ -307,6 +309,7 @@ const analyzeGapsStep = createStep({
         tokenCount,
         truncated,
         query,
+        summarized,
         gaps: [],
         gapSummary: "Gap analysis failed",
         shouldDeepDive: false,

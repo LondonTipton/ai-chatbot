@@ -297,9 +297,9 @@ ${JSON.stringify(extractions, null, 2)}`;
 
 Provide detailed answer with proper citations and Zimbabwe legal context.`;
 
-      // Generate synthesis with maxSteps=1
+      // Generate synthesis with maxSteps=15
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
-        maxSteps: 1,
+        maxSteps: 15,
       });
 
       // Extract sources from results

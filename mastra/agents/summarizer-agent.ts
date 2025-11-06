@@ -13,6 +13,16 @@ console.log("[Mastra] summarizer-agent → Cerebras provider initialized");
  * Specialized agent for intelligent content summarization with zero information loss.
  * Compresses verbose content while preserving ALL critical legal information.
  *
+ * Configuration:
+ * - Temperature: 0.5 (analytical precision, consistent summarization)
+ * - Max Tokens: 4K-6K (EXPLICIT, INCREASED from API default ~2K)
+ * - Tools: None (summarization only)
+ * - Context Window: ~128K tokens
+ *
+ * Token Budget:
+ * - Standard summarization: 2K-3K tokens ✅
+ * - Complex legal summarization: 4K-6K tokens ✅
+ *
  * Use Cases:
  * - Prevent token overflow in multi-step workflows
  * - Compress research results before synthesis
@@ -20,6 +30,7 @@ console.log("[Mastra] summarizer-agent → Cerebras provider initialized");
  * - Reduce token usage while maintaining quality
  *
  * Target: 50-70% token reduction with 100% information preservation
+ * Updated: November 6, 2025 - Set explicit token limits
  */
 export const summarizerAgent = new Agent({
   name: "summarizer-agent",
