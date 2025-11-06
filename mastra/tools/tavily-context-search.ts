@@ -36,7 +36,6 @@ import { estimateTokens } from "@/lib/utils/token-estimation";
  *   query: "recent legal reforms",
  *   maxTokens: 8000,
  *   jurisdiction: "Zimbabwe",
- *   timeRange: "year",
  *   includeDomains: ["gov.zw", "zimlii.org"]
  * })
  */
@@ -71,11 +70,6 @@ export const tavilyContextSearchTool = createTool({
         "Jurisdiction to add to query for location-specific context (e.g., 'Zimbabwe')"
       ),
 
-    timeRange: z
-      .enum(["day", "week", "month", "year"])
-      .optional()
-      .describe("Time range filter for search results"),
-
     includeDomains: z
       .array(z.string())
       .optional()
@@ -102,8 +96,7 @@ export const tavilyContextSearchTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, maxTokens, jurisdiction, timeRange, includeDomains } =
-      context;
+    const { query, maxTokens, jurisdiction, includeDomains } = context;
 
     // Validate environment
     if (!process.env.TAVILY_API_KEY) {
@@ -135,10 +128,6 @@ export const tavilyContextSearchTool = createTool({
         };
 
         // Add optional parameters if provided
-        if (timeRange) {
-          requestBody.time_range = timeRange;
-        }
-
         if (includeDomains && includeDomains.length > 0) {
           requestBody.include_domains = includeDomains;
         }

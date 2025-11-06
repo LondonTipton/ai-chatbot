@@ -63,7 +63,6 @@ const initialResearchStep = createStep({
           query,
           maxTokens: 8000,
           jurisdiction,
-          timeRange: "year",
         },
         runtimeContext,
       });
@@ -258,7 +257,6 @@ const enhanceOrDeepDiveStep = createStep({
               query: query1,
               maxTokens: 7000,
               jurisdiction,
-              timeRange: "year",
             },
             runtimeContext,
           }),
@@ -267,7 +265,6 @@ const enhanceOrDeepDiveStep = createStep({
               query: query2,
               maxTokens: 7000,
               jurisdiction,
-              timeRange: "year",
             },
             runtimeContext,
           }),
@@ -317,7 +314,6 @@ const enhanceOrDeepDiveStep = createStep({
             query: enhanceQuery,
             maxTokens: 6000,
             jurisdiction,
-            timeRange: "year",
           },
           runtimeContext,
         });

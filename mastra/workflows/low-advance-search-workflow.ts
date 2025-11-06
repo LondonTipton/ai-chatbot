@@ -62,7 +62,6 @@ const searchStep = createStep({
           maxResults: 5,
           domainStrategy: "strict",
           researchDepth: "standard",
-          timeRange: "year",
           country: "ZW",
           jurisdiction,
           includeRawContent: true,

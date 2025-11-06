@@ -49,11 +49,6 @@ export const tavilySearchAdvancedTool = createTool({
       .optional()
       .default("ZW")
       .describe("Country code to boost results from (e.g., 'ZW' for Zimbabwe)"),
-    timeRange: z
-      .enum(["day", "week", "month", "year"])
-      .optional()
-      .default("year")
-      .describe("Time range for search results (day, week, month, year)"),
     jurisdiction: z
       .string()
       .default("Zimbabwe")
@@ -100,7 +95,6 @@ export const tavilySearchAdvancedTool = createTool({
       domainStrategy = "prioritized",
       researchDepth = "deep",
       country = "ZW",
-      timeRange = "year",
       includeRawContent = false,
     } = context as {
       query: string;
@@ -108,7 +102,6 @@ export const tavilySearchAdvancedTool = createTool({
       domainStrategy?: DomainStrategy;
       researchDepth?: ResearchDepth;
       country?: string;
-      timeRange?: "day" | "week" | "month" | "year";
       jurisdiction?: string;
       includeRawContent?: boolean;
     };
@@ -130,7 +123,6 @@ export const tavilySearchAdvancedTool = createTool({
         include_raw_content: includeRawContent,
         max_results: validMaxResults,
         country,
-        time_range: timeRange,
       };
 
       // Apply domain strategy

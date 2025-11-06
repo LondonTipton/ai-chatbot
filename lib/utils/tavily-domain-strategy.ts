@@ -136,7 +136,6 @@ export function buildTavilyRequestBody(
     include_raw_content: false,
     max_results: 7,
     country: "ZW", // Boost Zimbabwe results
-    time_range: "year",
     topic: "general",
   };
 

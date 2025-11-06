@@ -76,7 +76,6 @@ const initialResearchStep = createStep({
           query,
           maxTokens: 5000,
           jurisdiction,
-          timeRange: "year",
         },
         runtimeContext,
       });
@@ -382,7 +381,6 @@ const enhanceOrDeepDiveStep = createStep({
               query: query1,
               maxTokens: searchBudget,
               jurisdiction,
-              timeRange: "year",
             },
             runtimeContext,
           }),
@@ -391,7 +389,6 @@ const enhanceOrDeepDiveStep = createStep({
               query: query2,
               maxTokens: searchBudget,
               jurisdiction,
-              timeRange: "year",
             },
             runtimeContext,
           }),
@@ -449,7 +446,6 @@ const enhanceOrDeepDiveStep = createStep({
             query: enhanceQuery,
             maxTokens: searchBudget,
             jurisdiction,
-            timeRange: "year",
           },
           runtimeContext,
         });
@@ -701,11 +697,12 @@ WRITING GUIDELINES:
 - Use exact quotations from research where appropriate
 - Conservative with claims - only state what research supports
 - Include confidence qualifiers: "may", "appears to", "according to"
-- Note the research path taken: ${path === "enhance" ? "Enhanced Research" : "Deep Dive Research"}
+- Note the research path taken: ${
+        path === "enhance" ? "Enhanced Research" : "Deep Dive Research"
+      }
 
 ABSOLUTE RULE: 
 Do not claim the research contains information it doesn't. Every fact, statute reference, case name, or legal principle MUST be traceable to the research content above. If you're unsure whether something is in the research, check again before including it.`;
-
 
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
         maxSteps: 1,

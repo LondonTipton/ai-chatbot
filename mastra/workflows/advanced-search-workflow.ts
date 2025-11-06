@@ -22,7 +22,7 @@ import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
 /**
  * Step 1: Advanced Search
- * Performs advanced Tavily search with Zimbabwe domains, timeRange='year', country='ZW'
+ * Performs advanced Tavily search with Zimbabwe domains, country='ZW'
  * Token estimate: 2K-4K tokens
  */
 const advancedSearchStep = createStep({
@@ -67,7 +67,6 @@ const advancedSearchStep = createStep({
           domainStrategy: "prioritized", // Automatically uses Zimbabwe domain prioritization
           researchDepth: "deep",
           country: "ZW",
-          timeRange: "year",
         },
         runtimeContext,
       });
@@ -277,7 +276,7 @@ const synthesizeStep = createStep({
     try {
       // BUILD STRUCTURED PROMPT WITH EXPLICIT GROUNDING RULES
       // This prevents hallucination by enforcing source-only responses
-      
+
       let synthesisPrompt = `You are synthesizing search results for Zimbabwe legal query: "${query}"
 
 🎯 CRITICAL GROUNDING RULES (STRICTLY ENFORCE):
@@ -293,8 +292,10 @@ const synthesizeStep = createStep({
 10. ❌ NEVER add general legal knowledge beyond provided sources
 
 AVAILABLE SOURCES:
-${results.map((r: any, i: number) => 
-  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${results
+  .map(
+    (r: any, i: number) =>
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SOURCE ${i + 1}: "${r.title}"
 URL: ${r.url}
 Relevance Score: ${(r.relevanceScore * 100).toFixed(0)}%
@@ -303,15 +304,18 @@ Published: ${r.publishedDate}
 Content:
 ${r.content}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
-).join('\n\n')}`;
+  )
+  .join("\n\n")}`;
 
       // Add extracted content if available
       if (!skipped && extractions.length > 0) {
         synthesisPrompt += `
 
 DETAILED EXTRACTIONS FROM TOP SOURCES:
-${extractions.map((e: any, i: number) => 
-  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${extractions
+  .map(
+    (e: any, i: number) =>
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EXTRACTION ${i + 1}
 From: ${e.url}
 Tokens: ${e.tokenEstimate}
@@ -319,7 +323,8 @@ Tokens: ${e.tokenEstimate}
 Full Content:
 ${e.rawContent}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
-).join('\n\n')}`;
+  )
+  .join("\n\n")}`;
       }
 
       synthesisPrompt += `
@@ -381,8 +386,10 @@ ABSOLUTE RULE: Accuracy over comprehensiveness. If unsure, say so. Better to adm
 ## Summary
 The following sources were found relevant to your query:
 
-${results.map((r: any, i: number) => 
-  `### ${i + 1}. ${r.title}
+${results
+  .map(
+    (r: any, i: number) =>
+      `### ${i + 1}. ${r.title}
 **URL:** ${r.url}  
 **Relevance:** ${(r.relevanceScore * 100).toFixed(0)}%  
 **Published:** ${r.publishedDate}
@@ -390,25 +397,41 @@ ${results.map((r: any, i: number) =>
 ${r.content}
 
 📎 [Read full article](${r.url})`
-).join('\n\n---\n\n')}
+  )
+  .join("\n\n---\n\n")}
 
-${!skipped && extractions.length > 0 ? `
+${
+  !skipped && extractions.length > 0
+    ? `
 ## Detailed Information
 
-${extractions.map((e: any, i: number) => 
-  `### Detailed Content ${i + 1}
+${extractions
+  .map(
+    (e: any, i: number) =>
+      `### Detailed Content ${i + 1}
 **Source:** ${e.url}
 
-${e.rawContent.length > 1000 ? `${e.rawContent.substring(0, 1000)}...` : e.rawContent}
+${
+  e.rawContent.length > 1000
+    ? `${e.rawContent.substring(0, 1000)}...`
+    : e.rawContent
+}
 
 📎 [Full article](${e.url})`
-).join('\n\n---\n\n')}
-` : ''}
+  )
+  .join("\n\n---\n\n")}
+`
+    : ""
+}
 
-${answer ? `
+${
+  answer
+    ? `
 ## Initial Analysis
 ${answer}
-` : ''}
+`
+    : ""
+}
 
 ---
 
