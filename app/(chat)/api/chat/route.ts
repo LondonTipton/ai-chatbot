@@ -1,39 +1,13 @@
-import { geolocation } from "@vercel/functions";
-import {
-  convertToModelMessages,
-  createUIMessageStream,
-  JsonToSseTransformStream,
-  smoothStream,
-  streamText,
-} from "ai";
-import { unstable_cache as cache } from "next/cache";
 import { after } from "next/server";
 import {
   createResumableStreamContext,
   type ResumableStreamContext,
 } from "resumable-stream";
-import type { ModelCatalog } from "tokenlens/core";
-import { fetchModels } from "tokenlens/fetch";
-import { getUsage } from "tokenlens/helpers";
 import type { VisibilityType } from "@/components/visibility-selector";
-import {
-  detectQueryComplexity,
-  shouldUseMastra,
-} from "@/lib/ai/complexity-detector";
+import { detectQueryComplexity } from "@/lib/ai/complexity-detector";
 import { streamMastraAgent } from "@/lib/ai/mastra-sdk-integration";
 import type { ChatModel } from "@/lib/ai/models";
-import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
-import { myProvider } from "@/lib/ai/providers";
-import { createDocument } from "@/lib/ai/tools/create-document";
-import { getWeather } from "@/lib/ai/tools/get-weather";
-import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
-import { tavilyAdvancedSearch } from "@/lib/ai/tools/tavily-advanced-search";
-import { tavilyExtract } from "@/lib/ai/tools/tavily-extract";
-import { tavilyQna } from "@/lib/ai/tools/tavily-qna";
-import { tavilySearch } from "@/lib/ai/tools/tavily-search";
-import { updateDocument } from "@/lib/ai/tools/update-document";
 import { auth } from "@/lib/appwrite/server-auth";
-import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
   createUserWithAppwriteId,
@@ -44,7 +18,6 @@ import {
   getUserByAppwriteId,
   saveChat,
   saveMessages,
-  updateChatLastContextById,
   updateUserAppwriteId,
 } from "@/lib/db/queries";
 import {
@@ -55,7 +28,6 @@ import {
 import { ChatSDKError } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
-import type { AppUsage } from "@/lib/usage";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
@@ -65,22 +37,6 @@ const logger = createLogger("chat/route");
 export const maxDuration = 60;
 
 let globalStreamContext: ResumableStreamContext | null = null;
-
-const getTokenlensCatalog = cache(
-  async (): Promise<ModelCatalog | undefined> => {
-    try {
-      return await fetchModels();
-    } catch (err) {
-      logger.warn(
-        "TokenLens: catalog fetch failed, using default catalog",
-        err
-      );
-      return; // tokenlens helpers will fall back to defaultCatalog
-    }
-  },
-  ["tokenlens-catalog"],
-  { revalidate: 24 * 60 * 60 } // 24 hours
-);
 
 export function getStreamContext() {
   if (!globalStreamContext) {
@@ -140,11 +96,12 @@ export async function POST(request: Request) {
     // Check if using simple chat model (no research)
     const useSimpleChat = selectedChatModel === "chat-model";
 
-    // Detect query complexity (skip for simple chat)
+    // Detect query complexity
+    // All queries now use Mastra (no simple/light AI SDK routes)
     const complexityAnalysis = useSimpleChat
       ? {
-          complexity: "simple" as const,
-          reasoning: "Simple chat mode",
+          complexity: "medium" as const, // Use medium (chatAgent) for simple chat
+          reasoning: "Simple chat mode - using chatAgent",
           requiresResearch: false,
           requiresMultiStep: false,
           estimatedSteps: 1,
@@ -230,15 +187,6 @@ export async function POST(request: Request) {
     const messagesFromDb = await getMessagesByChatId({ id });
     const uiMessages = [...convertToUIMessages(messagesFromDb), message];
 
-    const { longitude, latitude, city, country } = geolocation(request);
-
-    const requestHints: RequestHints = {
-      longitude,
-      latitude,
-      city,
-      country,
-    };
-
     await saveMessages({
       messages: [
         {
@@ -255,9 +203,7 @@ export async function POST(request: Request) {
     const streamId = generateUUID();
     await createStreamId({ streamId, chatId: id });
 
-    let finalMergedUsage: AppUsage | undefined;
-
-    // Check if comprehensive workflow is explicitly enabled
+    // Route ALL queries to Mastra (no AI SDK fallback)
     if (comprehensiveWorkflowEnabled) {
       logger.log(
         "[Routing] 🔬 Using Comprehensive Analysis Workflow (user-enabled)"
@@ -371,268 +317,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check if query should use Mastra
-    let shouldFallbackToAiSdk = false;
-
-    if (useSimpleChat || shouldUseMastra(complexityAnalysis.complexity)) {
-      // Log routing decision with workflow capability info
-      if (complexityAnalysis.complexity === "medium") {
-        logger.log(
-          "[Routing] 🤖 Using Mastra chatAgent with workflow tool capability for medium complexity query"
-        );
-        logger.log(
-          "[Routing] 🔧 Chat Agent will invoke advancedSearchWorkflow tool if research is needed"
-        );
-      } else if (useSimpleChat) {
-        logger.log("[Routing] 🤖 Using Mastra for simple chat");
-      } else {
-        logger.log(
-          `[Routing] 🤖 Using Mastra for ${complexityAnalysis.complexity} query`
-        );
-      }
-      logger.log(`[Routing] 📊 Message count: ${uiMessages.length}`);
-
-      // Begin usage transaction for Mastra
-      const { beginTransaction: beginMastraTx } = await import(
-        "@/lib/db/usage-transaction"
-      );
-      const txResult = await beginMastraTx(dbUser.id);
-
-      if (!txResult.allowed) {
-        logger.log(
-          `[Usage] User ${dbUser.id} exceeded daily limit: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit}`
-        );
-        return Response.json(
-          {
-            code: "rate_limit:chat",
-            message: `You've reached your daily limit of ${txResult.currentUsage.dailyLimit} requests. Upgrade to continue.`,
-            cause: "daily_limit_reached",
-            requestsToday: txResult.currentUsage.requestsToday,
-            dailyLimit: txResult.currentUsage.dailyLimit,
-            plan: txResult.currentUsage.plan,
-          },
-          { status: 429 }
-        );
-      }
-
-      const txId = txResult.transaction?.transactionId;
-      if (txId) {
-        logger.log(
-          `[Usage] User ${dbUser.id} usage: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit} (${txResult.currentUsage.plan} plan)`
-        );
-        logger.log(`[Usage] Created transaction ${txId}`);
-
-        try {
-          // Route to Mastra using official @mastra/ai-sdk pattern
-          // This uses agent.stream() with format: "aisdk" for AI SDK v5 compatibility
-          const mastraStream = await streamMastraAgent(
-            complexityAnalysis.complexity,
-            userMessageText,
-            {
-              userId: dbUser.id,
-              chatId: id,
-              sessionId: session.user.id,
-              agentName: useSimpleChat ? "chatAgent" : undefined, // Use simple chat agent if selected
-              memory: {
-                thread: id, // Use chat ID as thread
-                resource: dbUser.id, // Use user ID as resource
-              },
-            }
-          );
-
-          logger.log(
-            "[Mastra] ✅ Mastra stream created (official @mastra/ai-sdk pattern)"
-          );
-
-          // Log workflow tool capability for medium complexity
-          if (complexityAnalysis.complexity === "medium") {
-            logger.log(
-              "[Mastra] 🔧 Chat Agent configured with advancedSearchWorkflow tool"
-            );
-            logger.log(
-              "[Mastra] 📊 Workflow tool will be invoked if research is needed"
-            );
-          }
-
-          // Use AI SDK v5's native toUIMessageStreamResponse()
-          // This is the official pattern from @mastra/ai-sdk documentation
-          const response = mastraStream.toUIMessageStreamResponse({
-            onFinish: async ({ messages }: { messages: any[] }) => {
-              // Save assistant messages to database
-              try {
-                logger.log("[Mastra] 💾 Saving assistant message to database", {
-                  messageCount: messages.length,
-                });
-
-                const assistantMessages = messages.filter(
-                  (msg: any) => msg.role === "assistant"
-                );
-
-                if (assistantMessages.length > 0) {
-                  // Log if workflow tool was used (check for tool calls in messages)
-                  const hasToolCalls = assistantMessages.some((msg: any) =>
-                    msg.parts?.some(
-                      (part: any) =>
-                        part.type === "tool-call" &&
-                        part.toolName === "advancedSearchWorkflow"
-                    )
-                  );
-
-                  if (hasToolCalls) {
-                    logger.log(
-                      "[Mastra] 🔧 Workflow tool 'advancedSearchWorkflow' was invoked during this interaction"
-                    );
-                  }
-
-                  await saveMessages({
-                    messages: assistantMessages.map((currentMessage: any) => ({
-                      id: currentMessage.id,
-                      role: currentMessage.role,
-                      parts: currentMessage.parts,
-                      createdAt: new Date(),
-                      attachments: [],
-                      chatId: id,
-                    })),
-                  });
-
-                  logger.log(
-                    "[Mastra] ✅ Assistant message saved successfully"
-                  );
-                }
-
-                // Commit transaction on success
-                await commitTransaction(txId);
-                logger.log(`[Usage] Committed transaction ${txId}`);
-              } catch (err) {
-                logger.error(
-                  "[Mastra] ❌ Failed to save assistant message:",
-                  err
-                );
-                // Rollback transaction on error
-                await rollbackTransaction(txId);
-                logger.log(
-                  `[Usage] Rolled back transaction ${txId} due to save error`
-                );
-              }
-            },
-            onError: async ({ error }: { error: Error | string }) => {
-              logger.error("[Mastra] ❌ Stream error:", error);
-              // Rollback transaction on error
-              try {
-                await rollbackTransaction(txId);
-                logger.log(
-                  `[Usage] Rolled back transaction ${txId} due to stream error`
-                );
-              } catch (err) {
-                logger.error(
-                  `[Usage] Failed to rollback transaction ${txId}:`,
-                  err
-                );
-              }
-            },
-          });
-
-          return response;
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          logger.error("[Mastra] ❌ Mastra routing failed:", {
-            error: errorMessage,
-            complexity: complexityAnalysis.complexity,
-            stack: error instanceof Error ? error.stack : undefined,
-          });
-
-          // Rollback transaction on error
-          try {
-            await rollbackTransaction(txId);
-            logger.log(
-              `[Usage] Rolled back transaction ${txId} after Mastra failure`
-            );
-          } catch (err) {
-            logger.error(
-              `[Usage] Failed to rollback transaction ${txId}:`,
-              err
-            );
-          }
-
-          // Set flag to fallback to AI SDK
-          shouldFallbackToAiSdk = true;
-          logger.log("[Routing] 🔄 Falling back to AI SDK due to Mastra error");
-        }
-      }
-    }
-
-    // AI SDK flow for simple/light queries or Mastra fallback
-    if (shouldFallbackToAiSdk) {
-      logger.log(
-        `[Routing] 🔄 Using AI SDK as fallback for ${complexityAnalysis.complexity} query`
-      );
-    } else {
-      logger.log(
-        `[Routing] ⚡ Using AI SDK for ${complexityAnalysis.complexity} query`
-      );
-    }
-
-    // Select tools based on complexity
-    let activeTools: string[];
-    let toolsConfig: any;
-
-    if (complexityAnalysis.complexity === "simple") {
-      // Simple Q&A - use QNA search
-      logger.log("[Routing] 🔵 Using AI SDK with QNA search (simple)");
-      activeTools = ["tavilyQna", "createDocument", "updateDocument"];
-      toolsConfig = {
-        tavilyQna,
-        createDocument,
-        updateDocument,
-      };
-    } else if (complexityAnalysis.complexity === "light") {
-      // Light research - use advanced search
-      logger.log("[Routing] 🔵 Using AI SDK with advanced search (light)");
-      activeTools = [
-        "tavilyAdvancedSearch",
-        "createDocument",
-        "updateDocument",
-        "requestSuggestions",
-      ];
-      toolsConfig = {
-        tavilyAdvancedSearch,
-        createDocument,
-        updateDocument,
-        requestSuggestions,
-      };
-    } else {
-      // Medium/Deep/Workflow - use standard tools (fallback from Mastra)
-      logger.log(
-        `[Routing] 🔵 Using AI SDK with standard tools (${complexityAnalysis.complexity})`
-      );
-      activeTools = [
-        "getWeather",
-        "createDocument",
-        "updateDocument",
-        "requestSuggestions",
-        "tavilySearch",
-        "tavilyExtract",
-      ];
-      toolsConfig = {
-        getWeather,
-        tavilySearch,
-        tavilyExtract,
-        createDocument,
-        updateDocument,
-        requestSuggestions,
-      };
-    }
-
-    logger.log(`[Routing] 🚀 Starting stream with model: ${selectedChatModel}`);
-    logger.log(`[Routing] 🛠️  Active tools: ${activeTools.join(", ")}`);
+    // Route ALL queries to Mastra (no AI SDK fallback)
+    logger.log(
+      `[Routing] 🤖 Using Mastra for ${complexityAnalysis.complexity} query`
+    );
     logger.log(`[Routing] 📊 Message count: ${uiMessages.length}`);
 
-    // Begin usage transaction for AI SDK flow
-    const { beginTransaction: beginAiSdkTx } = await import(
-      "@/lib/db/usage-transaction"
-    );
-    const txResult = await beginAiSdkTx(dbUser.id);
+    // Begin usage transaction
+    const txResult = await beginTransaction(dbUser.id);
 
     if (!txResult.allowed) {
       logger.log(
@@ -655,207 +347,140 @@ export async function POST(request: Request) {
     if (!txId) {
       throw new Error("Transaction ID not found");
     }
+
     logger.log(
       `[Usage] User ${dbUser.id} usage: ${txResult.currentUsage.requestsToday}/${txResult.currentUsage.dailyLimit} (${txResult.currentUsage.plan} plan)`
     );
     logger.log(`[Usage] Created transaction ${txId}`);
 
-    // Create stream without retry orchestration (legacy flow)
-    const stream = createUIMessageStream({
-      execute: ({ writer: dataStream }) => {
-        // Update tools with dataStream
-        const updatedTools = {
-          ...(toolsConfig.tavilyQna && { tavilyQna }),
-          ...(toolsConfig.tavilyAdvancedSearch && {
-            tavilyAdvancedSearch,
-          }),
-          ...(toolsConfig.tavilySearch && {
-            tavilySearch: tavilySearch({ dataStream }),
-          }),
-          ...(toolsConfig.tavilyExtract && {
-            tavilyExtract: tavilyExtract({ dataStream }),
-          }),
-          ...(toolsConfig.createDocument && {
-            createDocument: createDocument({ session, dataStream }),
-          }),
-          ...(toolsConfig.updateDocument && {
-            updateDocument: updateDocument({ session, dataStream }),
-          }),
-          ...(toolsConfig.requestSuggestions && {
-            requestSuggestions: requestSuggestions({ session, dataStream }),
-          }),
-          ...(toolsConfig.getWeather && { getWeather }),
-        };
-
-        logger.log(
-          `[Routing] 🔧 Registered tools: ${Object.keys(updatedTools).join(
-            ", "
-          )}`
-        );
-        logger.log(
-          `[Routing] 🎯 Active tools filter: ${activeTools.join(", ")}`
-        );
-
-        // Enforce reasoning for all Cerebras models to help debug empty responses
-        const isCerebrasModel = selectedChatModel !== "chat-model-image";
-        logger.log(
-          `[Routing] 🧠 Model: ${selectedChatModel}, isCerebras: ${isCerebrasModel}, reasoning enforced: ${isCerebrasModel}`
-        );
-
-        const result = streamText({
-          model: myProvider.languageModel(selectedChatModel),
-          system: systemPrompt({ selectedChatModel, requestHints }),
-          messages: convertToModelMessages(uiMessages),
-          maxRetries: 5,
-          experimental_activeTools:
-            selectedChatModel === "chat-model-reasoning" ? [] : activeTools,
-          experimental_transform: smoothStream({ chunking: "word" }),
-          tools: updatedTools,
-          experimental_telemetry: {
-            isEnabled: isProductionEnvironment,
-            functionId: "stream-text",
+    try {
+      // Route to Mastra using official @mastra/ai-sdk pattern
+      // This uses agent.stream() with format: "aisdk" for AI SDK v5 compatibility
+      const mastraStream = await streamMastraAgent(
+        complexityAnalysis.complexity,
+        userMessageText,
+        {
+          userId: dbUser.id,
+          chatId: id,
+          sessionId: session.user.id,
+          agentName: useSimpleChat ? "chatAgent" : undefined, // Use simple chat agent if selected
+          memory: {
+            thread: id, // Use chat ID as thread
+            resource: dbUser.id, // Use user ID as resource
           },
-          onFinish: async ({ usage }) => {
-            try {
-              const providers = await getTokenlensCatalog();
-              const modelId =
-                myProvider.languageModel(selectedChatModel).modelId;
-              if (!modelId) {
-                finalMergedUsage = usage;
-                dataStream.write({
-                  type: "data-usage",
-                  data: finalMergedUsage,
-                });
-                return;
-              }
-
-              if (!providers) {
-                finalMergedUsage = usage;
-                dataStream.write({
-                  type: "data-usage",
-                  data: finalMergedUsage,
-                });
-                return;
-              }
-
-              const summary = getUsage({ modelId, usage, providers });
-              finalMergedUsage = {
-                ...usage,
-                ...summary,
-                modelId,
-              } as AppUsage;
-              dataStream.write({
-                type: "data-usage",
-                data: finalMergedUsage,
-              });
-            } catch (err) {
-              logger.warn("TokenLens enrichment failed", err);
-              finalMergedUsage = usage;
-              dataStream.write({
-                type: "data-usage",
-                data: finalMergedUsage,
-              });
-            }
-          },
-        });
-
-        dataStream.merge(
-          result.toUIMessageStream({
-            sendReasoning: isCerebrasModel, // Send reasoning for Cerebras models to help debug
-          })
-        );
-      },
-      generateId: generateUUID,
-      onFinish: async ({ messages }) => {
-        // Ensure all assistant messages have text content
-        const { postProcessAssistantResponse } = await import(
-          "@/lib/ai/post-processing"
-        );
-        const { changed } = await postProcessAssistantResponse(
-          messages as any,
-          {
-            activeTools,
-            userQueryText: userMessageText,
-          }
-        );
-        if (changed) {
-          logger.log("[AI SDK] ✅ Post-processing produced assistant text");
         }
+      );
 
-        // Save messages (no validation in legacy flow)
-        await saveMessages({
-          messages: messages.map((currentMessage) => ({
-            id: currentMessage.id,
-            role: currentMessage.role,
-            parts: currentMessage.parts,
-            createdAt: new Date(),
-            attachments: [],
-            chatId: id,
-          })),
-        });
+      logger.log(
+        "[Mastra] ✅ Mastra stream created (official @mastra/ai-sdk pattern)"
+      );
 
-        if (finalMergedUsage) {
+      // Log workflow tool capability for medium complexity
+      if (complexityAnalysis.complexity === "medium") {
+        logger.log(
+          "[Mastra] 🔧 Chat Agent configured with advancedSearchWorkflow tool"
+        );
+        logger.log(
+          "[Mastra] 📊 Workflow tool will be invoked if research is needed"
+        );
+      }
+
+      // Use AI SDK v5's native toUIMessageStreamResponse()
+      // This is the official pattern from @mastra/ai-sdk documentation
+      const response = mastraStream.toUIMessageStreamResponse({
+        onFinish: async ({ messages }: { messages: any[] }) => {
+          // Save assistant messages to database
           try {
-            await updateChatLastContextById({
-              chatId: id,
-              context: finalMergedUsage,
+            logger.log("[Mastra] 💾 Saving assistant message to database", {
+              messageCount: messages.length,
             });
-          } catch (err) {
-            logger.warn("Unable to persist last usage for chat", id, err);
-          }
-        }
 
-        // Commit usage transaction for legacy flow
-        try {
-          await commitTransaction(txId);
-          logger.log(`[Usage] Committed transaction ${txId}`);
-        } catch (err) {
-          logger.error(`[Usage] Failed to commit transaction ${txId}:`, err);
-        }
-      },
-      onError: (error) => {
-        logger.error("[Stream] ❌ Stream error:", error);
+            const assistantMessages = messages.filter(
+              (msg: any) => msg.role === "assistant"
+            );
 
-        // Rollback usage transaction for legacy flow (fire and forget)
-        rollbackTransaction(txId)
-          .then(() => logger.log(`[Usage] Rolled back transaction ${txId}`))
-          .catch((err: Error) =>
-            logger.error(`[Usage] Failed to rollback transaction ${txId}:`, err)
-          );
-
-        // Handle Cerebras-specific errors with key rotation
-        if (typeof window === "undefined") {
-          try {
-            const {
-              handleCerebrasError,
-              getCerebrasStats,
-            } = require("@/lib/ai/cerebras-key-balancer");
-
-            // Check if this is a Cerebras model error
-            if (selectedChatModel !== "chat-model-image") {
-              logger.log("[Stream] 🔄 Attempting automatic key rotation...");
-              handleCerebrasError(error);
-
-              // Log current key health status
-              const stats = getCerebrasStats();
-              const healthyKeys = stats.filter(
-                (s: any) => !s.isDisabled
-              ).length;
-              logger.log(
-                `[Stream] 📊 Key Health: ${healthyKeys}/${stats.length} keys available`
+            if (assistantMessages.length > 0) {
+              // Log if workflow tool was used (check for tool calls in messages)
+              const hasToolCalls = assistantMessages.some((msg: any) =>
+                msg.parts?.some(
+                  (part: any) =>
+                    part.type === "tool-call" &&
+                    part.toolName === "advancedSearchWorkflow"
+                )
               );
+
+              if (hasToolCalls) {
+                logger.log(
+                  "[Mastra] 🔧 Workflow tool 'advancedSearchWorkflow' was invoked during this interaction"
+                );
+              }
+
+              await saveMessages({
+                messages: assistantMessages.map((currentMessage: any) => ({
+                  id: currentMessage.id,
+                  role: currentMessage.role,
+                  parts: currentMessage.parts,
+                  createdAt: new Date(),
+                  attachments: [],
+                  chatId: id,
+                })),
+              });
+
+              logger.log("[Mastra] ✅ Assistant message saved successfully");
             }
+
+            // Commit transaction on success
+            await commitTransaction(txId);
+            logger.log(`[Usage] Committed transaction ${txId}`);
           } catch (err) {
-            logger.warn("[Stream] Could not handle Cerebras error:", err);
+            logger.error("[Mastra] ❌ Failed to save assistant message:", err);
+            // Rollback transaction on error
+            await rollbackTransaction(txId);
+            logger.log(
+              `[Usage] Rolled back transaction ${txId} due to save error`
+            );
           }
-        }
+        },
+        onError: async ({ error }: { error: Error | string }) => {
+          logger.error("[Mastra] ❌ Stream error:", error);
+          // Rollback transaction on error
+          try {
+            await rollbackTransaction(txId);
+            logger.log(
+              `[Usage] Rolled back transaction ${txId} due to stream error`
+            );
+          } catch (err) {
+            logger.error(
+              `[Usage] Failed to rollback transaction ${txId}:`,
+              err
+            );
+          }
+        },
+      });
 
-        return "Stream error occurred";
-      },
-    });
+      return response;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error("[Mastra] ❌ Mastra routing failed:", {
+        error: errorMessage,
+        complexity: complexityAnalysis.complexity,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
 
-    // Return the stream (legacy flow)
-    return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
+      // Rollback transaction on error
+      try {
+        await rollbackTransaction(txId);
+        logger.log(
+          `[Usage] Rolled back transaction ${txId} after Mastra failure`
+        );
+      } catch (err) {
+        logger.error(`[Usage] Failed to rollback transaction ${txId}:`, err);
+      }
+
+      // Re-throw error to be caught by outer error handler
+      throw error;
+    }
   } catch (error) {
     const vercelId = request.headers.get("x-vercel-id");
 

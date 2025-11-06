@@ -4,14 +4,29 @@ const logger = createLogger("ai/complexity-detector");
 
 /**
  * Complexity Detection System
- * Routes queries to appropriate AI system based on complexity
+ * Routes queries to appropriate Mastra workflows
+ *
+ * Search Workflows (Single-step, varying depth):
+ * - basic: Quick fact lookup (1 search)
+ * - light: Standard research (2-3 searches)
+ * - medium: Deep research (4-5 searches)
+ * - advanced: Comprehensive research (6+ searches)
+ *
+ * Multi-Agent Workflows:
+ * - deep: Deep Research Workflow (3 agents: Search → Extract → Analyze)
+ * - workflow-review: Document Review Workflow (3 agents)
+ * - workflow-caselaw: Case Law Analysis Workflow (3 agents)
+ * - workflow-drafting: Legal Drafting Workflow (3 agents)
+ *
+ * Note: Comprehensive Analysis Workflow is UI-toggle only, not a complexity level
  */
 
 export type QueryComplexity =
-  | "simple" // Direct Q&A with QNA search
-  | "light" // Single search with answer
-  | "medium" // Multiple searches
-  | "deep" // Multi-step: search → extract → analyze
+  | "basic" // Quick fact lookup (1 search) → quickFactSearch
+  | "light" // Standard research (2-3 searches) → standardResearch
+  | "medium" // Deep research (4-5 searches) → deepResearch
+  | "advanced" // Comprehensive research (6+ searches) → comprehensiveResearch
+  | "deep" // Multi-step: search → extract → analyze → Deep Research Workflow
   | "workflow-review" // Document review workflow
   | "workflow-caselaw" // Case law analysis workflow
   | "workflow-drafting"; // Legal drafting workflow
@@ -26,6 +41,7 @@ export interface ComplexityAnalysis {
 
 /**
  * Detect query complexity based on content and intent
+ * Maps queries to appropriate Mastra workflows
  */
 export function detectQueryComplexity(message: string): ComplexityAnalysis {
   const lowerMessage = message.toLowerCase();
@@ -36,7 +52,10 @@ export function detectQueryComplexity(message: string): ComplexityAnalysis {
     message.substring(0, 100) + (message.length > 100 ? "..." : "")
   );
 
-  // Workflow indicators (multi-agent) - Check first
+  // ============================================================================
+  // PRIORITY 1: Specialized Workflows (Check First)
+  // ============================================================================
+
   const draftingIndicators = [
     "draft a",
     "draft an",
@@ -65,70 +84,6 @@ export function detectQueryComplexity(message: string): ComplexityAnalysis {
     "suggest improvements",
     "check for compliance",
   ];
-
-  // Deep research indicators
-  const deepIndicators = [
-    "compare cases",
-    "compare precedent",
-    "analyze precedent",
-    "analyze case law",
-    "extract key holdings",
-    "extract and analyze",
-    "compare holdings",
-    "across different jurisdictions",
-    "comparative analysis",
-    "legal framework analysis",
-    "comprehensive review",
-  ];
-
-  // Medium research indicators
-  const mediumIndicators = [
-    "find cases about",
-    "find cases on",
-    "search for cases",
-    "what are the cases",
-    "recent developments",
-    "multiple sources",
-    "various aspects",
-    "different perspectives",
-  ];
-
-  // Light research indicators
-  const lightIndicators = [
-    "explain",
-    "tell me about",
-    "how does",
-    "describe",
-    "overview of",
-  ];
-
-  // Simple indicators (most specific, check last)
-  const simpleIndicators = ["what is", "define", "meaning of", "definition of"];
-
-  // Greeting indicators (ultra-simple, no research needed)
-  const greetingIndicators = ["hi", "hello", "hey", "greetings"];
-
-  // Check for greetings first
-  if (
-    greetingIndicators.some(
-      (indicator) =>
-        lowerMessage.trim() === indicator ||
-        lowerMessage.trim().startsWith(`${indicator} `) ||
-        lowerMessage.trim().startsWith(`${indicator}!`)
-    )
-  ) {
-    const result = {
-      complexity: "simple" as QueryComplexity,
-      reasoning: "Simple greeting, no research needed",
-      requiresResearch: false,
-      requiresMultiStep: false,
-      estimatedSteps: 1,
-    };
-    logger.log("[Complexity] ✅ Detected: simple (greeting)");
-    logger.log("[Complexity] Reasoning:", result.reasoning);
-    logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
-    return result;
-  }
 
   // Check for drafting workflow
   if (
@@ -178,16 +133,105 @@ export function detectQueryComplexity(message: string): ComplexityAnalysis {
     return result;
   }
 
-  // Check for deep research
+  // ============================================================================
+  // PRIORITY 2: Deep Research Workflow (Multi-agent)
+  // ============================================================================
+
+  const deepIndicators = [
+    "compare across jurisdictions",
+    "comparative analysis",
+    "legal framework analysis",
+    "comprehensive review",
+    "extract key holdings",
+    "extract and analyze",
+    "multi-jurisdictional",
+    "cross-jurisdictional",
+  ];
+
+  // Check for deep research workflow (multi-agent)
   if (deepIndicators.some((indicator) => lowerMessage.includes(indicator))) {
     const result = {
       complexity: "deep" as QueryComplexity,
-      reasoning: "Requires multi-step research with extraction and analysis",
+      reasoning: "Requires multi-agent workflow: search → extract → analyze",
       requiresResearch: true,
       requiresMultiStep: true,
-      estimatedSteps: 4,
+      estimatedSteps: 9,
     };
-    logger.log("[Complexity] ✅ Detected: deep");
+    logger.log("[Complexity] ✅ Detected: deep (multi-agent workflow)");
+    logger.log("[Complexity] Reasoning:", result.reasoning);
+    logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
+    return result;
+  }
+
+  // ============================================================================
+  // PRIORITY 3: Search Workflows (Single-step, varying depth)
+  // ============================================================================
+
+  // Advanced research indicators (6+ searches)
+  const advancedIndicators = [
+    "comprehensive analysis",
+    "detailed analysis",
+    "exhaustive research",
+    "full analysis",
+    "in-depth analysis",
+    "thorough analysis",
+  ];
+
+  // Medium research indicators (4-5 searches)
+  const mediumIndicators = [
+    "analyze",
+    "analysis of",
+    "find cases about",
+    "find cases on",
+    "search for cases",
+    "research on",
+    "what are the cases",
+    "recent developments",
+    "legal requirements for",
+    "framework for",
+    "laws governing",
+  ];
+
+  // Light research indicators (2-3 searches)
+  const lightIndicators = [
+    "explain",
+    "tell me about",
+    "how does",
+    "describe",
+    "overview of",
+    "what are the",
+    "compare",
+    "difference between",
+    "similarities between",
+  ];
+
+  // Basic indicators (1 search)
+  const basicIndicators = [
+    "what is",
+    "define",
+    "meaning of",
+    "definition of",
+    "current",
+    "latest",
+    "recent",
+    "when was",
+    "who is",
+    "where is",
+  ];
+
+  // Check for advanced research (user explicitly wants comprehensive)
+  if (
+    advancedIndicators.some((indicator) => lowerMessage.includes(indicator))
+  ) {
+    const result = {
+      complexity: "advanced" as QueryComplexity,
+      reasoning:
+        "Requires comprehensive research workflow with 6+ searches for exhaustive analysis",
+      requiresResearch: true,
+      requiresMultiStep: true,
+      estimatedSteps: 8,
+    };
+    logger.log("[Complexity] ✅ Detected: advanced (comprehensive research)");
     logger.log("[Complexity] Reasoning:", result.reasoning);
     logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
     return result;
@@ -198,12 +242,12 @@ export function detectQueryComplexity(message: string): ComplexityAnalysis {
     const result = {
       complexity: "medium" as QueryComplexity,
       reasoning:
-        "Requires multiple search queries to gather comprehensive information",
+        "Requires deep research workflow with 4-5 searches for comprehensive understanding",
       requiresResearch: true,
       requiresMultiStep: true,
-      estimatedSteps: 3,
+      estimatedSteps: 6,
     };
-    logger.log("[Complexity] ✅ Detected: medium");
+    logger.log("[Complexity] ✅ Detected: medium (deep research)");
     logger.log("[Complexity] Reasoning:", result.reasoning);
     logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
     return result;
@@ -213,86 +257,62 @@ export function detectQueryComplexity(message: string): ComplexityAnalysis {
   if (lightIndicators.some((indicator) => lowerMessage.includes(indicator))) {
     const result = {
       complexity: "light" as QueryComplexity,
-      reasoning: "Requires single search with detailed answer",
+      reasoning:
+        "Requires standard research workflow with 2-3 searches for balanced context",
+      requiresResearch: true,
+      requiresMultiStep: true,
+      estimatedSteps: 4,
+    };
+    logger.log("[Complexity] ✅ Detected: light (standard research)");
+    logger.log("[Complexity] Reasoning:", result.reasoning);
+    logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
+    return result;
+  }
+
+  // Check for basic fact lookup
+  if (basicIndicators.some((indicator) => lowerMessage.includes(indicator))) {
+    const result = {
+      complexity: "basic" as QueryComplexity,
+      reasoning:
+        "Requires quick fact lookup workflow with single search for specific information",
       requiresResearch: true,
       requiresMultiStep: false,
-      estimatedSteps: 1,
+      estimatedSteps: 2,
     };
-    logger.log("[Complexity] ✅ Detected: light");
+    logger.log("[Complexity] ✅ Detected: basic (quick fact lookup)");
     logger.log("[Complexity] Reasoning:", result.reasoning);
     logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
     return result;
   }
 
-  // Check for simple Q&A
-  if (simpleIndicators.some((indicator) => lowerMessage.includes(indicator))) {
-    const result = {
-      complexity: "simple" as QueryComplexity,
-      reasoning: "Direct question answering with quick search",
-      requiresResearch: false,
-      requiresMultiStep: false,
-      estimatedSteps: 1,
-    };
-    logger.log("[Complexity] ✅ Detected: simple");
-    logger.log("[Complexity] Reasoning:", result.reasoning);
-    logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
-    return result;
-  }
+  // ============================================================================
+  // DEFAULT: Light research (safer default for general queries)
+  // ============================================================================
 
-  // Default to light (safer than simple)
   const result = {
     complexity: "light" as QueryComplexity,
-    reasoning: "General query requiring detailed information",
+    reasoning:
+      "General query defaulting to standard research (2-3 searches) for balanced coverage",
     requiresResearch: true,
-    requiresMultiStep: false,
-    estimatedSteps: 1,
+    requiresMultiStep: true,
+    estimatedSteps: 4,
   };
-  logger.log("[Complexity] ✅ Detected: light (default)");
+  logger.log("[Complexity] ✅ Detected: light (default - standard research)");
   logger.log("[Complexity] Reasoning:", result.reasoning);
   logger.log("[Complexity] Estimated steps:", result.estimatedSteps);
   return result;
 }
 
 /**
- * Determine if query should use Mastra or AI SDK
- * Updated: Route medium+ complexity queries through Mastra
- * Medium queries use chatAgent with workflow tool capability
- */
-export function shouldUseMastra(complexity: QueryComplexity): boolean {
-  // Route medium and higher complexity queries through Mastra
-  // Medium uses chatAgent with advancedSearchWorkflow tool
-  // Deep and workflow types use searchAgent
-  const useMastra =
-    complexity === "medium" ||
-    complexity === "deep" ||
-    complexity === "workflow-review" ||
-    complexity === "workflow-caselaw" ||
-    complexity === "workflow-drafting";
-
-  logger.log(
-    `[Complexity] 🤖 Route decision: ${
-      useMastra ? "Mastra" : "AI SDK"
-    } for complexity: ${complexity}`
-  );
-
-  if (complexity === "medium") {
-    logger.log(
-      "[Complexity] 📋 Medium complexity will use chatAgent with workflow tool capability"
-    );
-  }
-
-  return useMastra;
-}
-
-/**
  * Get appropriate workflow/agent for complexity level
+ * All queries now route through Mastra
  */
 export function getWorkflowType(complexity: QueryComplexity): string {
   let workflowType: string;
 
   switch (complexity) {
     case "medium":
-      workflowType = "mediumResearchAgent";
+      workflowType = "chatAgent"; // Use chatAgent for medium complexity
       break;
     case "deep":
       workflowType = "deepResearchWorkflow";
@@ -307,7 +327,7 @@ export function getWorkflowType(complexity: QueryComplexity): string {
       workflowType = "legalDraftingWorkflow";
       break;
     default:
-      workflowType = "none";
+      workflowType = "chatAgent"; // Default to chatAgent
   }
 
   logger.log(

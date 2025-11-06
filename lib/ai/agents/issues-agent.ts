@@ -82,7 +82,7 @@ Ready for recommendations.`,
 
   model: () => {
     const provider = getBalancedCerebrasProvider();
-    return provider("llama-3.3-70b");
+    return provider("gpt-oss-120b");
   },
 
   // All agents have access to all tools (Requirement 11.8)

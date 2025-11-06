@@ -1,16 +1,22 @@
 /**
  * Mastra Router
  *
- * Routes queries to appropriate Mastra agents and workflows based on complexity.
- * This router handles medium, deep, and workflow-level queries that require
- * multi-step processing or specialized workflows.
+ * Routes queries to appropriate Mastra workflows based on complexity.
+ * This router handles all 8 complexity levels:
+ * - basic: Quick Fact Search (1 search)
+ * - light: Standard Research (2-3 searches)
+ * - medium: Deep Research (4-5 searches)
+ * - advanced: Comprehensive Research (6+ searches)
+ * - deep: Multi-agent Deep Research Workflow (3 agents)
+ * - workflow-review: Document Review Workflow (3 agents)
+ * - workflow-caselaw: Case Law Analysis Workflow (3 agents)
+ * - workflow-drafting: Legal Drafting Workflow (3 agents)
  *
  * Requirements:
- * - 7.1: Route simple/light queries to AI SDK
- * - 7.2: Route medium queries to Medium Research Agent
- * - 7.3: Route deep queries to Deep Research Workflow
- * - 7.4: Route workflow queries to appropriate workflows
- * - 7.5: Log routing decisions
+ * - Route basic/light/medium/advanced to single-step search workflows
+ * - Route deep/workflow-* to multi-agent workflows
+ * - Log all routing decisions
+ * - Track metrics for performance monitoring
  *
  * Usage:
  * ```typescript
@@ -22,13 +28,6 @@
  * ```
  */
 
-import {
-  orchestrateLegal,
-  orchestrateLegalStream,
-  orchestrateLegalDirect,
-  orchestrateResearch,
-  orchestrateResearchStream,
-} from "./agent-orchestrator";
 import type { QueryComplexity } from "./complexity-detector";
 import { MastraMetricsTracker } from "./mastra-metrics";
 import { validateMastraResponse } from "./mastra-validation";
@@ -36,10 +35,6 @@ import { executeCaseLawAnalysis } from "./workflows/case-law-analysis";
 import { executeDeepResearch } from "./workflows/deep-research";
 import { executeDocumentReview } from "./workflows/document-review";
 import { executeLegalDrafting } from "./workflows/legal-drafting";
-import {
-  getOptimalRoute,
-  logRoutingDecision,
-} from "./cerebras-router";
 
 /**
  * Context for Mastra routing
@@ -100,56 +95,69 @@ export async function routeToMastra(
     let result: MastraResult;
 
     switch (complexity) {
-      case "medium": {
+      case "basic": {
         console.log(
-          "[Mastra Router] 🔍 Routing to Medium Research Agent with Synthesizer (dual-agent orchestration)"
+          "[Mastra Router] ⚡ Routing to Quick Fact Search (1 search, fast lookup)"
         );
 
         try {
-          // Use orchestrated dual-agent pattern: task agent → synthesizer
-          const orchestrationResult = await orchestrateResearch(query, {
-            userId: context?.userId,
+          // Import and execute the quick fact search workflow
+          const { basicSearchWorkflow } = await import(
+            "@/mastra/workflows/basic-search-workflow"
+          );
+
+          const run = await basicSearchWorkflow.createRunAsync();
+          const workflowResult = await run.start({
+            inputData: {
+              query,
+              jurisdiction: "Zimbabwe",
+            },
           });
 
           const duration = Date.now() - startTime;
 
-          // Check if orchestration succeeded
-          const success =
-            orchestrationResult.metadata.taskSuccess &&
-            orchestrationResult.metadata.synthesisSuccess;
+          if (workflowResult.status === "success") {
+            const synthesizeStep = workflowResult.steps.synthesize;
 
-          if (success) {
-            result = {
-              success: true,
-              response: orchestrationResult.synthesizedResponse,
-              duration,
-              agentsUsed: 2, // Task agent + synthesizer
-            };
+            // Type guard to check if step was successful
+            if (synthesizeStep && synthesizeStep.status === "success") {
+              const output = synthesizeStep.output as {
+                response: string;
+                sources: Array<{ title: string; url: string }>;
+                totalTokens: number;
+              };
 
-            console.log(
-              "[Mastra Router] ✅ Medium Research orchestration completed",
-              {
+              result = {
+                success: true,
+                response: output.response,
+                duration,
+                agentsUsed: 1,
+              };
+
+              console.log("[Mastra Router] ✅ Quick Fact Search completed", {
                 duration: `${duration}ms`,
-                taskDuration: `${orchestrationResult.metadata.taskDuration}ms`,
-                synthesisDuration: `${orchestrationResult.metadata.synthesisDuration}ms`,
-                responseLength: result.response.length,
-                hasUserContext: !!context?.userId,
-              }
-            );
+                responseLength: output.response.length,
+                sources: output.sources.length,
+                tokens: output.totalTokens,
+              });
+            } else {
+              console.error("[Mastra Router] ❌ Synthesize step failed", {
+                status: synthesizeStep?.status,
+                duration: `${duration}ms`,
+              });
+
+              result = {
+                success: false,
+                response: "",
+                duration,
+                agentsUsed: 0,
+              };
+            }
           } else {
-            const errorReason = orchestrationResult.metadata.taskSuccess
-              ? "Synthesizer failed"
-              : "Task agent failed";
-
-            console.error(
-              "[Mastra Router] ❌ Medium Research orchestration failed",
-              {
-                error: errorReason,
-                duration: `${duration}ms`,
-                taskSuccess: orchestrationResult.metadata.taskSuccess,
-                synthesisSuccess: orchestrationResult.metadata.synthesisSuccess,
-              }
-            );
+            console.error("[Mastra Router] ❌ Quick Fact Search failed", {
+              status: workflowResult.status,
+              duration: `${duration}ms`,
+            });
 
             result = {
               success: false,
@@ -164,7 +172,289 @@ export async function routeToMastra(
             error instanceof Error ? error.message : String(error);
 
           console.error(
-            "[Mastra Router] ❌ Medium Research orchestration threw exception",
+            "[Mastra Router] ❌ Quick Fact Search threw exception",
+            {
+              error: errorMessage,
+              duration: `${duration}ms`,
+            }
+          );
+
+          result = {
+            success: false,
+            response: "",
+            duration,
+            agentsUsed: 0,
+          };
+        }
+        break;
+      }
+
+      case "light": {
+        console.log(
+          "[Mastra Router] 📚 Routing to Standard Research (2-3 searches, balanced depth)"
+        );
+
+        try {
+          // Import and execute the standard research workflow
+          const { lowAdvanceSearchWorkflow } = await import(
+            "@/mastra/workflows/low-advance-search-workflow"
+          );
+
+          const run = await lowAdvanceSearchWorkflow.createRunAsync();
+          const workflowResult = await run.start({
+            inputData: {
+              query,
+              jurisdiction: "Zimbabwe",
+            },
+          });
+
+          const duration = Date.now() - startTime;
+
+          if (workflowResult.status === "success") {
+            const synthesizeStep = workflowResult.steps.synthesize;
+
+            // Type guard to check if step was successful
+            if (synthesizeStep && synthesizeStep.status === "success") {
+              const output = synthesizeStep.output as {
+                response: string;
+                sources: Array<{ title: string; url: string }>;
+                totalTokens: number;
+              };
+
+              result = {
+                success: true,
+                response: output.response,
+                duration,
+                agentsUsed: 1,
+              };
+
+              console.log("[Mastra Router] ✅ Standard Research completed", {
+                duration: `${duration}ms`,
+                responseLength: output.response.length,
+                sources: output.sources.length,
+                tokens: output.totalTokens,
+              });
+            } else {
+              console.error("[Mastra Router] ❌ Synthesize step failed", {
+                status: synthesizeStep?.status,
+                duration: `${duration}ms`,
+              });
+
+              result = {
+                success: false,
+                response: "",
+                duration,
+                agentsUsed: 0,
+              };
+            }
+          } else {
+            console.error("[Mastra Router] ❌ Standard Research failed", {
+              status: workflowResult.status,
+              duration: `${duration}ms`,
+            });
+
+            result = {
+              success: false,
+              response: "",
+              duration,
+              agentsUsed: 0,
+            };
+          }
+        } catch (error) {
+          const duration = Date.now() - startTime;
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
+          console.error(
+            "[Mastra Router] ❌ Standard Research threw exception",
+            {
+              error: errorMessage,
+              duration: `${duration}ms`,
+            }
+          );
+
+          result = {
+            success: false,
+            response: "",
+            duration,
+            agentsUsed: 0,
+          };
+        }
+        break;
+      }
+
+      case "medium": {
+        console.log(
+          "[Mastra Router] 🔬 Routing to Deep Research (4-5 searches, analytical depth)"
+        );
+
+        try {
+          // Import and execute the deep research workflow
+          const { advancedSearchWorkflow } = await import(
+            "@/mastra/workflows/advanced-search-workflow"
+          );
+
+          const run = await advancedSearchWorkflow.createRunAsync();
+          const workflowResult = await run.start({
+            inputData: {
+              query,
+              jurisdiction: "Zimbabwe",
+            },
+          });
+
+          const duration = Date.now() - startTime;
+
+          if (workflowResult.status === "success") {
+            const synthesizeStep = workflowResult.steps.synthesize;
+
+            // Type guard to check if step was successful
+            if (synthesizeStep && synthesizeStep.status === "success") {
+              const output = synthesizeStep.output as {
+                response: string;
+                sources: Array<{ title: string; url: string }>;
+                totalTokens: number;
+              };
+
+              result = {
+                success: true,
+                response: output.response,
+                duration,
+                agentsUsed: 1,
+              };
+
+              console.log("[Mastra Router] ✅ Deep Research completed", {
+                duration: `${duration}ms`,
+                responseLength: output.response.length,
+                sources: output.sources.length,
+                tokens: output.totalTokens,
+              });
+            } else {
+              console.error("[Mastra Router] ❌ Synthesize step failed", {
+                status: synthesizeStep?.status,
+                duration: `${duration}ms`,
+              });
+
+              result = {
+                success: false,
+                response: "",
+                duration,
+                agentsUsed: 0,
+              };
+            }
+          } else {
+            console.error("[Mastra Router] ❌ Deep Research failed", {
+              status: workflowResult.status,
+              duration: `${duration}ms`,
+            });
+
+            result = {
+              success: false,
+              response: "",
+              duration,
+              agentsUsed: 0,
+            };
+          }
+        } catch (error) {
+          const duration = Date.now() - startTime;
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
+          console.error("[Mastra Router] ❌ Deep Research threw exception", {
+            error: errorMessage,
+            duration: `${duration}ms`,
+          });
+
+          result = {
+            success: false,
+            response: "",
+            duration,
+            agentsUsed: 0,
+          };
+        }
+        break;
+      }
+
+      case "advanced": {
+        console.log(
+          "[Mastra Router] 📖 Routing to Comprehensive Research (6+ searches, maximum coverage)"
+        );
+
+        try {
+          // Import and execute the comprehensive research workflow
+          const { highAdvanceSearchWorkflow } = await import(
+            "@/mastra/workflows/high-advance-search-workflow"
+          );
+
+          const run = await highAdvanceSearchWorkflow.createRunAsync();
+          const workflowResult = await run.start({
+            inputData: {
+              query,
+              jurisdiction: "Zimbabwe",
+            },
+          });
+
+          const duration = Date.now() - startTime;
+
+          if (workflowResult.status === "success") {
+            const synthesizeStep = workflowResult.steps.synthesize;
+
+            // Type guard to check if step was successful
+            if (synthesizeStep && synthesizeStep.status === "success") {
+              const output = synthesizeStep.output as {
+                response: string;
+                sources: Array<{ title: string; url: string }>;
+                totalTokens: number;
+              };
+
+              result = {
+                success: true,
+                response: output.response,
+                duration,
+                agentsUsed: 1,
+              };
+
+              console.log(
+                "[Mastra Router] ✅ Comprehensive Research completed",
+                {
+                  duration: `${duration}ms`,
+                  responseLength: output.response.length,
+                  sources: output.sources.length,
+                  tokens: output.totalTokens,
+                }
+              );
+            } else {
+              console.error("[Mastra Router] ❌ Synthesize step failed", {
+                status: synthesizeStep?.status,
+                duration: `${duration}ms`,
+              });
+
+              result = {
+                success: false,
+                response: "",
+                duration,
+                agentsUsed: 0,
+              };
+            }
+          } else {
+            console.error("[Mastra Router] ❌ Comprehensive Research failed", {
+              status: workflowResult.status,
+              duration: `${duration}ms`,
+            });
+
+            result = {
+              success: false,
+              response: "",
+              duration,
+              agentsUsed: 0,
+            };
+          }
+        } catch (error) {
+          const duration = Date.now() - startTime;
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
+          console.error(
+            "[Mastra Router] ❌ Comprehensive Research threw exception",
             {
               error: errorMessage,
               duration: `${duration}ms`,
@@ -276,124 +566,6 @@ export async function routeToMastra(
         break;
       }
 
-      case "simple":
-      case "light": {
-        console.log(
-          `[Mastra Router] 💡 Routing ${complexity} query to Legal Agent with Synthesizer (dual-agent orchestration)`
-        );
-
-        // Special case for greetings - no need for agents
-        const greetings = [
-          "hi",
-          "hello",
-          "hey",
-          "greetings",
-          "good morning",
-          "good afternoon",
-        ];
-        const isGreeting = greetings.some(
-          (g) =>
-            query.toLowerCase().trim() === g ||
-            query.toLowerCase().trim().startsWith(`${g} `) ||
-            query.toLowerCase().trim().startsWith(`${g}!`)
-        );
-
-        if (isGreeting) {
-          const duration = Date.now() - startTime;
-          result = {
-            success: true,
-            response:
-              "Hello! I'm DeepCounsel, your AI legal assistant. I specialize in Zimbabwean and South African law, but I can help with legal research across various jurisdictions. How can I assist you today?",
-            duration,
-            agentsUsed: 0, // No agents needed for greeting
-          };
-
-          console.log(
-            `[Mastra Router] ✅ ${complexity} query handled as greeting`,
-            {
-              duration: `${duration}ms`,
-              responseLength: result.response.length,
-            }
-          );
-          break;
-        }
-
-        try {
-          // Use orchestrated dual-agent pattern: legal agent → synthesizer
-          const orchestrationResult = await orchestrateLegal(query, {
-            userId: context?.userId,
-          });
-
-          const duration = Date.now() - startTime;
-
-          // Check if orchestration succeeded
-          const success =
-            orchestrationResult.metadata.taskSuccess &&
-            orchestrationResult.metadata.synthesisSuccess;
-
-          if (success) {
-            result = {
-              success: true,
-              response: orchestrationResult.synthesizedResponse,
-              duration,
-              agentsUsed: 2, // Legal agent + synthesizer
-            };
-
-            console.log(
-              `[Mastra Router] ✅ ${complexity} query orchestration completed`,
-              {
-                duration: `${duration}ms`,
-                taskDuration: `${orchestrationResult.metadata.taskDuration}ms`,
-                synthesisDuration: `${orchestrationResult.metadata.synthesisDuration}ms`,
-                responseLength: result.response.length,
-                hasUserContext: !!context?.userId,
-              }
-            );
-          } else {
-            const errorReason = orchestrationResult.metadata.taskSuccess
-              ? "Synthesizer failed"
-              : "Legal agent failed";
-
-            console.error(
-              `[Mastra Router] ❌ ${complexity} query orchestration failed`,
-              {
-                error: errorReason,
-                duration: `${duration}ms`,
-                taskSuccess: orchestrationResult.metadata.taskSuccess,
-                synthesisSuccess: orchestrationResult.metadata.synthesisSuccess,
-              }
-            );
-
-            result = {
-              success: false,
-              response: "",
-              duration,
-              agentsUsed: 0,
-            };
-          }
-        } catch (error) {
-          const duration = Date.now() - startTime;
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-
-          console.error(
-            `[Mastra Router] ❌ ${complexity} query orchestration threw exception`,
-            {
-              error: errorMessage,
-              duration: `${duration}ms`,
-            }
-          );
-
-          result = {
-            success: false,
-            response: "",
-            duration,
-            agentsUsed: 0,
-          };
-        }
-        break;
-      }
-
       default: {
         const duration = Date.now() - startTime;
         const errorMessage = `Unsupported complexity level for Mastra: ${complexity}`;
@@ -457,179 +629,40 @@ export async function routeToMastra(
 }
 
 /**
- * Stream query to appropriate Mastra agent or workflow (AI SDK v5 format)
+ * Stream query to appropriate Mastra workflow (AI SDK v5 format)
  *
  * This function provides streaming support for Mastra routing with AI SDK v5
  * compatibility. Returns streams that can use toUIMessageStreamResponse().
+ *
+ * NOTE: Streaming is not currently implemented for workflow-based routing.
+ * All workflows execute as complete units and return final results.
  *
  * @param complexity - The query complexity level
  * @param query - The user's query text
  * @param context - Optional context (userId, chatId, sessionId)
  * @returns AI SDK v5 compatible stream
- * @throws Error if complexity is not supported by Mastra
+ * @throws Error - Streaming not implemented for workflow routing
  */
-export async function streamMastraRoute(
+export function streamMastraRoute(
   complexity: QueryComplexity,
   query: string,
   context?: MastraContext
-) {
-  console.log("[Mastra Router] Streaming query (AI SDK v5 format)", {
+): never {
+  console.log("[Mastra Router] Streaming query request (not implemented)", {
     complexity,
     query: query.substring(0, 100),
     context,
   });
 
-  try {
-    switch (complexity) {
-      case "medium": {
-        console.log(
-          "[Mastra Router] 🔍 Streaming Medium Research Agent with Synthesizer (AI SDK v5)"
-        );
+  // Streaming is not implemented for workflow-based routing
+  // All complexity levels use workflows which complete in single execution
+  const errorMessage = `Streaming not yet implemented for ${complexity} complexity. Workflows execute as complete units.`;
 
-        const result = await orchestrateResearchStream(query, {
-          userId: context?.userId,
-        });
+  console.error("[Mastra Router] ❌ Streaming not implemented", {
+    complexity,
+    error: errorMessage,
+    suggestion: "Use routeToMastra() for non-streaming execution",
+  });
 
-        console.log(
-          "[Mastra Router] ✅ Medium Research stream created (AI SDK v5 format)"
-        );
-
-        return result.stream;
-      }
-
-      case "simple":
-      case "light": {
-        console.log(
-          `[Mastra Router] 💡 Streaming ${complexity} query with smart routing (Cerebras optimized)`
-        );
-
-        // Determine optimal route based on query characteristics
-        const routeDecision = getOptimalRoute(query, complexity);
-        const routeStartTime = Date.now();
-
-        // Expected latency map
-        const expectedLatency: Record<string, string> = {
-          "cerebras-direct": "100-500ms",
-          "tavily-qna": "1-2s",
-          "full-workflow": "5-20s",
-        };
-
-        // Log routing decision for monitoring
-        logRoutingDecision(
-          routeDecision,
-          query,
-          complexity,
-          expectedLatency[routeDecision] || "unknown"
-        );
-
-        // Handle different routing strategies
-        switch (routeDecision) {
-          case "cerebras-direct": {
-            // Fast path: Direct to Cerebras without synthesis or tools
-            // Expected: 100-500ms TTFB
-            console.log(
-              `[Mastra Router] ⚡ ${complexity} query → CEREBRAS DIRECT (ultra-fast path, no tools)`
-            );
-
-            const result = await orchestrateLegalDirect(query, {
-              userId: context?.userId,
-            });
-
-            const routeDuration = Date.now() - routeStartTime;
-            console.log(
-              `[Mastra Router] ✅ Cerebras direct stream created in ${routeDuration}ms (expected: 100-500ms)`
-            );
-
-            return result.stream;
-          }
-
-          case "tavily-qna": {
-            // Optimized path: Tavily QNA for current info, then direct Cerebras
-            // Expected: 1-2s TTFB
-            console.log(
-              `[Mastra Router] 🔍 ${complexity} query → TAVILY QNA + CEREBRAS (optimized search path)`
-            );
-
-            // Use the existing legal agent with tools (it will call Tavily QNA)
-            const result = await orchestrateLegalDirect(query, {
-              userId: context?.userId,
-            });
-
-            const routeDuration = Date.now() - routeStartTime;
-            console.log(
-              `[Mastra Router] ✅ Tavily QNA + Cerebras stream created in ${routeDuration}ms (expected: 1-2s)`
-            );
-
-            return result.stream;
-          }
-
-          case "full-workflow": {
-            // Full workflow: Task agent → synthesizer with all tools
-            // Expected: 5-20s depending on tool usage
-            console.log(
-              `[Mastra Router] 🔄 ${complexity} query → FULL WORKFLOW (task agent + synthesizer)`
-            );
-
-            const result = await orchestrateLegalStream(query, {
-              userId: context?.userId,
-            });
-
-            const routeDuration = Date.now() - routeStartTime;
-            console.log(
-              `[Mastra Router] ✅ Full workflow stream created in ${routeDuration}ms (expected: 5-20s)`
-            );
-
-            return result.stream;
-          }
-
-          default: {
-            // Fallback to full workflow if routing decision is unclear
-            console.warn(
-              `[Mastra Router] ⚠️ Unknown route decision: ${routeDecision}, falling back to full workflow`
-            );
-
-            const result = await orchestrateLegalStream(query, {
-              userId: context?.userId,
-            });
-
-            return result.stream;
-          }
-        }
-      }
-
-      case "deep":
-      case "workflow-review":
-      case "workflow-caselaw":
-      case "workflow-drafting": {
-        const errorMessage = `Streaming not yet implemented for ${complexity} complexity. Use AI SDK fallback.`;
-
-        console.error("[Mastra Router] ❌ Streaming not implemented", {
-          complexity,
-          error: errorMessage,
-        });
-
-        throw new Error(errorMessage);
-      }
-
-      default: {
-        const errorMessage = `Unsupported complexity level for Mastra: ${complexity}`;
-
-        console.error("[Mastra Router] ❌ Invalid streaming routing", {
-          complexity,
-          error: errorMessage,
-        });
-
-        throw new Error(errorMessage);
-      }
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    console.error("[Mastra Router] ❌ Streaming routing failed", {
-      complexity,
-      error: errorMessage,
-    });
-
-    throw error;
-  }
+  throw new Error(errorMessage);
 }

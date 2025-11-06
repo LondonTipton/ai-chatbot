@@ -105,7 +105,7 @@ QUALITY STANDARDS:
 - Conclusions must be well-supported by analysis
 - Zimbabwe context must be prominent throughout`,
 
-  model: () => cerebrasProvider("llama-3.3-70b"),
+  model: () => cerebrasProvider("gpt-oss-120b"),
 
   // Tools available to the agent
   tools: {

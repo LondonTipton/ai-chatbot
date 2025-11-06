@@ -62,10 +62,11 @@ const advancedSearchStep = createStep({
         context: {
           query: `${query} ${jurisdiction}`,
           maxResults: 7,
-          includeDomains: getZimbabweLegalDomains(),
-          timeRange: "year",
-          country: "ZW",
           jurisdiction,
+          includeRawContent: true, // Required for content extraction
+          includeDomains: getZimbabweLegalDomains(),
+          country: "ZW",
+          timeRange: "year",
         },
         runtimeContext,
       });

@@ -174,20 +174,23 @@ Remember: You provide legal information, not legal advice. Always recommend cons
  */
 function selectAgentForComplexity(complexity: QueryComplexity): string {
   switch (complexity) {
-    case "simple":
-      return "chatAgent"; // Simple chat with document tools
+    case "basic":
+      return "chatAgent"; // Quick queries - agent decides: direct answer OR quickFactSearch tool
 
     case "light":
-      return "chatAgent"; // Fast, direct responses with chat agent
+      return "chatAgent"; // Fast queries - agent decides: direct answer OR standardResearch tool
 
     case "medium":
-      return "chatAgent"; // Chat agent with workflow tool for research
+      return "chatAgent"; // Research queries - agent has all 4 workflow tools available
+
+    case "advanced":
+      return "chatAgent"; // Comprehensive queries - agent can use comprehensiveResearch tool
 
     case "deep":
     case "workflow-review":
     case "workflow-drafting":
     case "workflow-caselaw":
-      return "searchAgent"; // Deep research workflows
+      return "searchAgent"; // Multi-agent deep research workflows (forced execution)
 
     default:
       logger.warn(
