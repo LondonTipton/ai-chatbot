@@ -11,7 +11,7 @@ import { tavilySearchTool } from "../tools/tavily-search";
  * Latency: 3-5s
  *
  * This workflow provides fast, token-efficient research by:
- * 1. Performing a basic search with 3 results
+ * 1. Performing a basic search with 5 results
  * 2. Synthesizing the results into a clear answer
  *
  * Requirements: 6.1
@@ -19,7 +19,7 @@ import { tavilySearchTool } from "../tools/tavily-search";
 
 /**
  * Step 1: Search
- * Performs a basic Tavily search with maxResults=3
+ * Performs a basic Tavily search with maxResults=5
  * Token estimate: 500-1000 tokens
  */
 const searchStep = createStep({
@@ -51,11 +51,11 @@ const searchStep = createStep({
     const { query, jurisdiction } = inputData;
 
     try {
-      // Execute search with maxResults=3 for token efficiency
+      // Execute search with maxResults=5 for token efficiency
       const searchResults = await tavilySearchTool.execute({
         context: {
           query: `${query} ${jurisdiction} law`,
-          maxResults: 3,
+          maxResults: 5,
           filterZimbabweDomains: jurisdiction.toLowerCase() === "zimbabwe",
         },
         runtimeContext,

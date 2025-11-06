@@ -41,9 +41,12 @@ export const tavilySearchAdvancedTool = createTool({
       .describe("Time range for search results (day, week, month, year)"),
     jurisdiction: z
       .string()
-      .optional()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for domain filtering (default: Zimbabwe)"),
+    includeRawContent: z
+      .boolean()
+      .default(false)
+      .describe("Whether to include raw content in search results"),
   }),
 
   outputSchema: z.object({
@@ -76,6 +79,7 @@ export const tavilySearchAdvancedTool = createTool({
       country,
       timeRange,
       jurisdiction = "Zimbabwe",
+      includeRawContent = false,
     } = context;
 
     if (!process.env.TAVILY_API_KEY) {
@@ -92,7 +96,7 @@ export const tavilySearchAdvancedTool = createTool({
         query,
         search_depth: "advanced",
         include_answer: true,
-        include_raw_content: false,
+        include_raw_content: includeRawContent,
         max_results: validMaxResults,
       };
 

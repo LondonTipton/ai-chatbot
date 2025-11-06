@@ -12,7 +12,7 @@ import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
  * Latency: 4-7s
  *
  * This workflow provides balanced research with moderate depth by:
- * 1. Performing advanced search with 5 results (no raw content)
+ * 1. Performing advanced search with 5 results (including raw content)
  * 2. Synthesizing results into a comprehensive answer
  *
  * Use when:
@@ -65,6 +65,7 @@ const searchStep = createStep({
           timeRange: "year",
           country: "ZW",
           jurisdiction,
+          includeRawContent: true,
         },
         runtimeContext,
       });
