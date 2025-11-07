@@ -7,6 +7,7 @@ Applied the smooth fade animation effect consistently across all assistant messa
 ## Animation Effect
 
 **Smooth Fade Animation:**
+
 ```tsx
 animate={{ opacity: [0.5, 1, 0.5] }}
 transition={{
@@ -17,6 +18,7 @@ transition={{
 ```
 
 This creates a gentle pulsing effect that:
+
 - Fades from 50% opacity → 100% opacity → 50% opacity
 - Takes 2 seconds per cycle
 - Uses easeInOut for smooth transitions
@@ -27,15 +29,19 @@ This creates a gentle pulsing effect that:
 ### 1. Regular Assistant Messages (`PreviewMessage` in `components/message.tsx`)
 
 **Before:**
+
 - ✅ Mobile: Smooth fade on "DeepCounsel" text
 - ❌ Desktop: Static icon (no animation)
 
 **After:**
+
 - ✅ Mobile: Smooth fade on "DeepCounsel" text
 - ✅ Desktop: Smooth fade on icon
 
 ```tsx
-{/* Mobile: Animated text - fades in/out while streaming */}
+{
+  /* Mobile: Animated text - fades in/out while streaming */
+}
 <motion.div
   animate={{ opacity: isLoading ? [0.5, 1, 0.5] : 1 }}
   className="flex px-2 md:hidden"
@@ -46,9 +52,11 @@ This creates a gentle pulsing effect that:
   }}
 >
   <span className="font-semibold text-sm">DeepCounsel</span>
-</motion.div>
+</motion.div>;
 
-{/* Desktop: Icon with fade animation while loading */}
+{
+  /* Desktop: Icon with fade animation while loading */
+}
 <motion.div
   animate={{ opacity: isLoading ? [0.5, 1, 0.5] : 1 }}
   className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex"
@@ -59,21 +67,25 @@ This creates a gentle pulsing effect that:
   }}
 >
   <SparklesIcon size={14} />
-</motion.div>
+</motion.div>;
 ```
 
 ### 2. Processing Message (`components/processing-message.tsx`)
 
 **Before:**
+
 - ✅ Mobile: Smooth fade on "DeepCounsel" text
 - ❌ Desktop: Spinning icon (rotate animation)
 
 **After:**
-- ✅ Mobile: Smooth fade on "DeepCounsel" text  
+
+- ✅ Mobile: Smooth fade on "DeepCounsel" text
 - ✅ Desktop: Smooth fade on icon (consistent with other layouts)
 
 ```tsx
-{/* Mobile: Animated text - fades in/out while processing */}
+{
+  /* Mobile: Animated text - fades in/out while processing */
+}
 <motion.div
   animate={{ opacity: [0.5, 1, 0.5] }}
   className="flex px-2 md:hidden"
@@ -84,9 +96,11 @@ This creates a gentle pulsing effect that:
   }}
 >
   <span className="font-semibold text-sm">DeepCounsel</span>
-</motion.div>
+</motion.div>;
 
-{/* Desktop: Icon with fade animation */}
+{
+  /* Desktop: Icon with fade animation */
+}
 <motion.div
   animate={{ opacity: [0.5, 1, 0.5] }}
   className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex"
@@ -97,21 +111,25 @@ This creates a gentle pulsing effect that:
   }}
 >
   <SparklesIcon size={14} />
-</motion.div>
+</motion.div>;
 ```
 
 ### 3. Thinking Message (`ThinkingMessage` in `components/message.tsx`)
 
 **Before:**
+
 - ❌ Mobile: CSS `animate-pulse` (less smooth, faster, jarring)
 - ❌ Desktop: Static icon (no animation)
 
 **After:**
+
 - ✅ Mobile: Smooth Framer Motion fade (consistent)
 - ✅ Desktop: Smooth fade on icon
 
 ```tsx
-{/* Mobile: Text with smooth fade animation */}
+{
+  /* Mobile: Text with smooth fade animation */
+}
 <motion.div
   animate={{ opacity: [0.5, 1, 0.5] }}
   className="flex px-2 md:hidden"
@@ -122,9 +140,11 @@ This creates a gentle pulsing effect that:
   }}
 >
   <span className="font-semibold text-sm">DeepCounsel</span>
-</motion.div>
+</motion.div>;
 
-{/* Desktop: Icon with fade animation */}
+{
+  /* Desktop: Icon with fade animation */
+}
 <motion.div
   animate={{ opacity: [0.5, 1, 0.5] }}
   className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex"
@@ -135,12 +155,13 @@ This creates a gentle pulsing effect that:
   }}
 >
   <SparklesIcon size={14} />
-</motion.div>
+</motion.div>;
 ```
 
 ## Key Improvements
 
 ### Consistency
+
 - **All loading states** now use the same animation
 - **Both mobile and desktop** have matching effects
 - **No jarring transitions** between different message types
@@ -148,16 +169,19 @@ This creates a gentle pulsing effect that:
 ### UX Benefits
 
 1. **Smooth and Professional**
+
    - Framer Motion provides smooth, hardware-accelerated animations
    - 2-second duration is slow enough to be calming, not distracting
    - easeInOut creates natural motion
 
 2. **Replaced Jarring Elements**
+
    - Removed CSS `animate-pulse` (1s fast pulse)
    - Removed spinning icon (can cause dizziness/distraction)
    - All replaced with gentle fade
 
 3. **Visual Clarity**
+
    - Fade animation clearly indicates "AI is working"
    - Icon pulses on desktop provide same feedback as mobile text
    - Consistent across all viewports
@@ -169,14 +193,14 @@ This creates a gentle pulsing effect that:
 
 ## Animation Comparison
 
-| Element | Old Animation | New Animation |
-|---------|--------------|---------------|
-| **PreviewMessage Mobile** | ✅ Smooth fade | ✅ Smooth fade (unchanged) |
-| **PreviewMessage Desktop** | ❌ Static | ✅ Smooth fade |
-| **ProcessingMessage Mobile** | ✅ Smooth fade | ✅ Smooth fade (unchanged) |
-| **ProcessingMessage Desktop** | ❌ Spinning (360° rotate) | ✅ Smooth fade |
-| **ThinkingMessage Mobile** | ❌ CSS pulse (fast) | ✅ Smooth fade |
-| **ThinkingMessage Desktop** | ❌ Static | ✅ Smooth fade |
+| Element                       | Old Animation             | New Animation              |
+| ----------------------------- | ------------------------- | -------------------------- |
+| **PreviewMessage Mobile**     | ✅ Smooth fade            | ✅ Smooth fade (unchanged) |
+| **PreviewMessage Desktop**    | ❌ Static                 | ✅ Smooth fade             |
+| **ProcessingMessage Mobile**  | ✅ Smooth fade            | ✅ Smooth fade (unchanged) |
+| **ProcessingMessage Desktop** | ❌ Spinning (360° rotate) | ✅ Smooth fade             |
+| **ThinkingMessage Mobile**    | ❌ CSS pulse (fast)       | ✅ Smooth fade             |
+| **ThinkingMessage Desktop**   | ❌ Static                 | ✅ Smooth fade             |
 
 ## Technical Implementation
 
@@ -185,11 +209,11 @@ This creates a gentle pulsing effect that:
 ```tsx
 // Pattern used across all components
 <motion.div
-  animate={{ opacity: [0.5, 1, 0.5] }}  // Array defines keyframes
+  animate={{ opacity: [0.5, 1, 0.5] }} // Array defines keyframes
   transition={{
-    duration: 2,                          // 2 seconds per cycle
-    repeat: Number.POSITIVE_INFINITY,    // Loop forever (or 0 for no repeat)
-    ease: "easeInOut",                   // Smooth acceleration/deceleration
+    duration: 2, // 2 seconds per cycle
+    repeat: Number.POSITIVE_INFINITY, // Loop forever (or 0 for no repeat)
+    ease: "easeInOut", // Smooth acceleration/deceleration
   }}
 >
   {/* Content */}
@@ -210,6 +234,7 @@ This ensures the animation only plays while streaming, and stops when complete.
 ## Files Changed
 
 1. **`components/message.tsx`**
+
    - Updated `PreviewMessage` desktop icon to fade
    - Updated `ThinkingMessage` mobile from CSS pulse to Motion fade
    - Updated `ThinkingMessage` desktop from static to fade

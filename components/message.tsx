@@ -73,8 +73,7 @@ const PurePreviewMessage = ({
         className={cn("flex w-full", {
           "flex-row items-start justify-end gap-2 md:gap-3":
             message.role === "user" && mode !== "edit",
-          "flex-col gap-2":
-            message.role === "assistant",
+          "flex-col gap-2": message.role === "assistant",
         })}
       >
         {message.role === "assistant" && (
