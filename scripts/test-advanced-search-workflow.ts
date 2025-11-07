@@ -1,15 +1,20 @@
 /**
- * Manual test script for Advanced Search Workflow
+ * Manual test script for Advanced Search Workflow V2
  * Run with: npx tsx scripts/test-advanced-search-workflow.ts
+ *
+ * V2 Changes:
+ * - Uses simplified Tavily integration (raw results → Chat Agent)
+ * - No entity extraction/validation
+ * - Includes conversation history support
  */
 
-import { advancedSearchWorkflow } from "../mastra/workflows/advanced-search-workflow";
+import { advancedSearchWorkflowV2 } from "../mastra/workflows/advanced-search-workflow-v2";
 
 async function testAdvancedSearchWorkflow() {
-  console.log("Testing Advanced Search Workflow...\n");
+  console.log("Testing Advanced Search Workflow V2...\n");
 
   try {
-    const run = await advancedSearchWorkflow.createRunAsync();
+    const run = await advancedSearchWorkflowV2.createRunAsync();
 
     console.log("Starting workflow with test query...");
     const startTime = Date.now();
@@ -18,6 +23,7 @@ async function testAdvancedSearchWorkflow() {
       inputData: {
         query: "What are the requirements for company registration?",
         jurisdiction: "Zimbabwe",
+        conversationHistory: [], // Empty for standalone test
       },
     });
 
@@ -29,50 +35,52 @@ async function testAdvancedSearchWorkflow() {
     console.log(`Duration: ${duration.toFixed(2)}s`);
 
     if (result.status === "success") {
-      // Check advanced-search step
-      const searchOutput = result.steps["advanced-search"]?.output;
-      console.log("\n--- Advanced Search Step ---");
-      console.log(`Results: ${searchOutput.totalResults}`);
-      console.log(`Token Estimate: ${searchOutput.tokenEstimate}`);
+      // Check search step
+      const searchStep = result.steps.search;
 
-      // Check extract-top-sources step
-      const extractOutput = result.steps["extract-top-sources"]?.output;
-      console.log("\n--- Extract Top Sources Step ---");
-      console.log(`Skipped: ${extractOutput.skipped}`);
-      console.log(`Extractions: ${extractOutput.extractions.length}`);
-      console.log(`Extraction Tokens: ${extractOutput.extractionTokens}`);
+      if (searchStep && searchStep.status === "success") {
+        const searchOutput = searchStep.output as {
+          response: string;
+          sources: Array<{ title: string; url: string }>;
+          totalTokens: number;
+        };
 
-      // Check synthesize step
-      const synthesisOutput = result.steps.synthesize?.output;
-      console.log("\n--- Synthesize Step ---");
-      console.log(`Response Length: ${synthesisOutput.response.length} chars`);
-      console.log(`Sources: ${synthesisOutput.sources.length}`);
-      console.log(`Total Tokens: ${synthesisOutput.totalTokens}`);
+        console.log("\n--- Search Step ---");
+        console.log(`Response Length: ${searchOutput.response.length} chars`);
+        console.log(`Sources: ${searchOutput.sources.length}`);
+        console.log(`Total Tokens: ${searchOutput.totalTokens}`);
 
-      // Verify token budget (4K-8K)
-      if (
-        synthesisOutput.totalTokens >= 4000 &&
-        synthesisOutput.totalTokens <= 8000
-      ) {
-        console.log("\n✅ Token budget within range (4K-8K)");
+        // Verify token budget (3K-5K for V2)
+        if (
+          searchOutput.totalTokens >= 3000 &&
+          searchOutput.totalTokens <= 5000
+        ) {
+          console.log("\n✅ Token budget within range (3K-5K)");
+        } else {
+          console.log(
+            `\n⚠️  Token budget outside range: ${searchOutput.totalTokens} tokens`
+          );
+        }
+
+        console.log("✅ Search step executed successfully");
+
+        // Show first 200 chars of response
+        console.log("\n--- Response Preview ---");
+        console.log(`${searchOutput.response.substring(0, 200)}...`);
+
+        // Show sources
+        console.log("\n--- Sources ---");
+        searchOutput.sources.slice(0, 3).forEach((source, i) => {
+          console.log(`${i + 1}. ${source.title}`);
+          console.log(`   ${source.url}`);
+        });
+        if (searchOutput.sources.length > 3) {
+          console.log(`   ... and ${searchOutput.sources.length - 3} more`);
+        }
       } else {
-        console.log(
-          `\n⚠️  Token budget outside range: ${synthesisOutput.totalTokens} tokens`
-        );
+        console.error("\n❌ Search step failed");
+        console.error(searchStep);
       }
-
-      // Verify all steps executed
-      if (
-        result.steps["advanced-search"] &&
-        result.steps["extract-top-sources"] &&
-        result.steps.synthesize
-      ) {
-        console.log("✅ All three steps executed successfully");
-      }
-
-      // Show first 200 chars of response
-      console.log("\n--- Response Preview ---");
-      console.log(synthesisOutput.response.substring(0, 200) + "...");
     } else {
       console.error("\n❌ Workflow failed");
       console.error(result);

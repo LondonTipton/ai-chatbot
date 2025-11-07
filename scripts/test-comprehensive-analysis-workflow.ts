@@ -1,18 +1,24 @@
 /**
- * Manual Test Script for Comprehensive Analysis Workflow
+ * Manual Test Script for Comprehensive Analysis Workflow V2
  *
- * This script tests the comprehensive analysis workflow with various queries
+ * This script tests the comprehensive analysis workflow V2 with various queries
  * to verify:
- * - Both enhance and deep-dive paths work correctly
- * - Token budgets are respected (18K-20K range)
+ * - Initial search + gap analysis + follow-up searches work correctly
+ * - Token budgets are reasonable (5K-10K range)
  * - Response quality is high
  * - Zimbabwe legal context is included
+ *
+ * V2 Changes:
+ * - Uses simplified Tavily integration (raw results → Chat Agent)
+ * - No entity extraction/validation
+ * - Includes conversation history support
+ * - More efficient token usage
  *
  * Usage:
  *   pnpm tsx scripts/test-comprehensive-analysis-workflow.ts
  */
 
-import { comprehensiveAnalysisWorkflow } from "@/mastra/workflows/comprehensive-analysis-workflow";
+import { comprehensiveAnalysisWorkflowV2 } from "../mastra/workflows/comprehensive-analysis-workflow-v2";
 
 // ANSI color codes for better output
 const colors = {
@@ -30,20 +36,16 @@ function log(message: string, color: string = colors.reset) {
 }
 
 function logSection(title: string) {
-  console.log("\n" + "=".repeat(80));
+  console.log(`\n${"=".repeat(80)}`);
   log(title, colors.bright + colors.cyan);
-  console.log("=".repeat(80) + "\n");
+  console.log(`${"=".repeat(80)}\n`);
 }
 
 function logResult(label: string, value: any) {
   console.log(`${colors.blue}${label}:${colors.reset} ${value}`);
 }
 
-async function testWorkflow(
-  query: string,
-  jurisdiction = "Zimbabwe",
-  expectedPath?: "enhance" | "deep-dive"
-) {
+async function testWorkflow(query: string, jurisdiction = "Zimbabwe") {
   logSection(`Testing: ${query}`);
 
   try {
@@ -51,12 +53,13 @@ async function testWorkflow(
 
     log("Executing workflow...", colors.yellow);
 
-    const run = await comprehensiveAnalysisWorkflow.createRunAsync();
+    const run = await comprehensiveAnalysisWorkflowV2.createRunAsync();
 
     const result = await run.start({
       inputData: {
         query,
         jurisdiction,
+        conversationHistory: [], // Empty for standalone test
       },
     });
 
@@ -66,36 +69,34 @@ async function testWorkflow(
       throw new Error(`Workflow failed with status: ${result.status}`);
     }
 
-    const output = result.steps.document?.output;
+    const followUpStep = result.steps["follow-up-searches"];
 
-    if (!output) {
-      throw new Error("No output from document step");
+    if (!followUpStep || followUpStep.status !== "success") {
+      throw new Error("Follow-up-searches step failed or not found");
     }
+
+    const output = followUpStep.output as {
+      response: string;
+      sources: Array<{ title: string; url: string }>;
+      totalTokens: number;
+    };
 
     log("\n✓ Workflow completed successfully", colors.green);
 
-    logResult("Path Taken", output.path);
     logResult("Duration", `${(duration / 1000).toFixed(2)}s`);
     logResult("Total Tokens", output.totalTokens);
     logResult(
       "Within Budget",
-      output.totalTokens <= 20_000 ? "✓ Yes" : "✗ No (EXCEEDED)"
+      output.totalTokens <= 10_000 ? "✓ Yes" : "✗ No (EXCEEDED)"
     );
     logResult(
-      "In Target Range (18K-20K)",
-      output.totalTokens >= 18_000 && output.totalTokens <= 20_000
+      "In Target Range (5K-10K)",
+      output.totalTokens >= 5000 && output.totalTokens <= 10_000
         ? "✓ Yes"
         : "○ No (but acceptable)"
     );
     logResult("Response Length", `${output.response.length} characters`);
-
-    // Check if expected path matches
-    if (expectedPath && output.path !== expectedPath) {
-      log(
-        `\n⚠ Warning: Expected ${expectedPath} path but got ${output.path}`,
-        colors.yellow
-      );
-    }
+    logResult("Sources", output.sources.length);
 
     // Check for Zimbabwe context
     const hasZimbabweContext = output.response
@@ -110,18 +111,18 @@ async function testWorkflow(
     const hasCitations =
       output.response.includes("http://") ||
       output.response.includes("https://") ||
-      output.response.includes("Source:");
+      output.response.includes("[");
     logResult("Citations", hasCitations ? "✓ Present" : "✗ Missing");
 
     // Show response preview
     log("\nResponse Preview (first 500 chars):", colors.blue);
-    console.log(output.response.substring(0, 500) + "...\n");
+    console.log(`${output.response.substring(0, 500)}...\n`);
 
     return {
       success: true,
-      path: output.path,
       tokens: output.totalTokens,
       duration,
+      sources: output.sources.length,
     };
   } catch (error) {
     log("\n✗ Workflow failed", colors.red);
@@ -156,22 +157,20 @@ async function runTests() {
 
   const results: any[] = [];
 
-  // Test 1: Well-covered topic (should take enhance path)
-  results.push(
-    await testWorkflow("contract law basic principles", "Zimbabwe", "enhance")
-  );
+  // Test 1: Well-covered topic
+  results.push(await testWorkflow("contract law basic principles", "Zimbabwe"));
 
-  // Test 2: Specific topic (could take either path)
+  // Test 2: Specific topic
   results.push(
     await testWorkflow("employment law termination procedures", "Zimbabwe")
   );
 
-  // Test 3: Niche topic (more likely to take deep-dive path)
+  // Test 3: Niche topic
   results.push(
     await testWorkflow("cryptocurrency regulation legal framework", "Zimbabwe")
   );
 
-  // Test 4: Complex topic (more likely to take deep-dive path)
+  // Test 4: Complex topic
   results.push(
     await testWorkflow(
       "intellectual property rights enforcement mechanisms",
@@ -199,27 +198,20 @@ async function runTests() {
     const avgDuration =
       results.filter((r) => r.success).reduce((sum, r) => sum + r.duration, 0) /
       successful;
+    const avgSources =
+      results.filter((r) => r.success).reduce((sum, r) => sum + r.sources, 0) /
+      successful;
 
     logResult("Average Tokens", avgTokens.toFixed(0));
     logResult("Average Duration", `${(avgDuration / 1000).toFixed(2)}s`);
-
-    // Path distribution
-    const enhancePaths = results.filter(
-      (r) => r.success && r.path === "enhance"
-    ).length;
-    const deepDivePaths = results.filter(
-      (r) => r.success && r.path === "deep-dive"
-    ).length;
-
-    logResult("Enhance Paths", enhancePaths);
-    logResult("Deep Dive Paths", deepDivePaths);
+    logResult("Average Sources", avgSources.toFixed(1));
 
     // Budget compliance
     const withinBudget = results.filter(
-      (r) => r.success && r.tokens <= 20_000
+      (r) => r.success && r.tokens <= 10_000
     ).length;
     logResult(
-      "Within Budget (≤20K)",
+      "Within Budget (≤10K)",
       `${withinBudget}/${successful} (${(
         (withinBudget / successful) *
         100
