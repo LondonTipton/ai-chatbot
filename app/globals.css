@@ -209,6 +209,55 @@
     /* Use dynamic viewport height for mobile keyboard support */
     height: 100dvh;
   }
+
+  /* Tighter prose spacing for chat messages */
+  .prose-sm {
+    --tw-prose-body: theme(colors.foreground);
+    --tw-prose-headings: theme(colors.foreground);
+    --tw-prose-links: theme(colors.primary);
+    --tw-prose-bold: theme(colors.foreground);
+    --tw-prose-code: theme(colors.foreground);
+    --tw-prose-pre-bg: theme(colors.muted);
+  }
+
+  /* Reduce paragraph spacing */
+  .prose-sm p {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+  }
+
+  /* Reduce heading spacing */
+  .prose-sm h1,
+  .prose-sm h2,
+  .prose-sm h3,
+  .prose-sm h4 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  /* Reduce list spacing */
+  .prose-sm ul,
+  .prose-sm ol {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+  }
+
+  .prose-sm li {
+    margin-top: 0.25em;
+    margin-bottom: 0.25em;
+  }
+
+  /* Reduce code block spacing */
+  .prose-sm pre {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+  }
+
+  /* Reduce blockquote spacing */
+  .prose-sm blockquote {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+  }
 }
 
 .skeleton {
@@ -340,5 +389,41 @@
       background: linear-gradient(to top, var(--background) 70%, transparent);
       padding-top: 1rem;
     }
+  }
+}
+
+/* Responsive table handling for mobile */
+@media (max-width: 768px) {
+  /* Make tables scrollable horizontally on mobile */
+  .prose table,
+  [class*="prose"] table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scrolling on iOS */
+    scroll-behavior: smooth;
+  }
+  
+  /* Ensure table content doesn't break layout */
+  .prose table thead,
+  .prose table tbody,
+  [class*="prose"] table thead,
+  [class*="prose"] table tbody {
+    display: table;
+    width: 100%;
+  }
+  
+  .prose table tr,
+  [class*="prose"] table tr {
+    display: table-row;
+  }
+  
+  .prose table th,
+  .prose table td,
+  [class*="prose"] table th,
+  [class*="prose"] table td {
+    display: table-cell;
+    white-space: nowrap;
   }
 }
