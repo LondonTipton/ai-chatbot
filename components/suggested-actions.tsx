@@ -58,12 +58,15 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
     <motion.div
       animate={{
         opacity: isKeyboardVisible ? 0 : 1,
-        y: isKeyboardVisible ? 20 : 0,
-        pointerEvents: isKeyboardVisible ? "none" : "auto",
+        height: isKeyboardVisible ? 0 : "auto",
+        marginBottom: isKeyboardVisible ? 0 : undefined,
+        overflow: "hidden",
       }}
       className="grid w-full gap-2 sm:grid-cols-2"
       data-testid="suggested-actions"
-      transition={{ duration: 0.2 }}
+      initial={{ opacity: 1, height: "auto" }}
+      style={{ pointerEvents: isKeyboardVisible ? "none" : "auto" }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
     >
       {suggestedActions.map((suggestedAction, index) => (
         <motion.div

@@ -92,23 +92,47 @@ function PureMultimodalInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
 
-  // Handle mobile keyboard visibility
+  // Handle mobile keyboard visibility and scrolling
   useEffect(() => {
+    let scrollTimeout: NodeJS.Timeout;
+
     const handleFocus = () => {
-      // Scroll the textarea into view when keyboard appears
-      setTimeout(() => {
-        textareaRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }, 300); // Delay to allow keyboard animation
+      // Multiple scroll attempts to handle keyboard animation timing
+      const scrollIntoView = () => {
+        if (textareaRef.current) {
+          textareaRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+            inline: "nearest",
+          });
+        }
+      };
+
+      // Immediate scroll
+      scrollIntoView();
+
+      // Delayed scrolls to catch keyboard animation
+      scrollTimeout = setTimeout(scrollIntoView, 100);
+      setTimeout(scrollIntoView, 300);
+      setTimeout(scrollIntoView, 500);
+    };
+
+    const handleBlur = () => {
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
     };
 
     const textarea = textareaRef.current;
     textarea?.addEventListener("focus", handleFocus);
+    textarea?.addEventListener("blur", handleBlur);
 
     return () => {
       textarea?.removeEventListener("focus", handleFocus);
+      textarea?.removeEventListener("blur", handleBlur);
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
     };
   }, []);
 

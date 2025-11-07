@@ -69,9 +69,9 @@ Applied this class to both:
 - `components/chat.tsx` - Main chat input container
 - `components/artifact.tsx` - Artifact chat input container
 
-### 4. Suggested Actions Fade-Out
+### 4. Suggested Actions Collapse
 
-Added keyboard detection in `components/suggested-actions.tsx` that fades out the suggested actions when the keyboard appears, prioritizing the hero text visibility:
+Added keyboard detection in `components/suggested-actions.tsx` that collapses the suggested actions when the keyboard appears, freeing up space for the hero text:
 
 ```typescript
 const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -190,3 +190,33 @@ Test login/register pages on mobile:
 - `dvh` units are supported in all modern mobile browsers (iOS Safari 15.4+, Chrome 108+)
 - Visual Viewport API is supported in all modern browsers (iOS Safari 13+, Chrome 61+)
 - Graceful fallback for older browsers (they'll use the original sticky positioning without the fade effects)
+
+## V2 Improvements (Collapse & Scroll)
+
+### Issues Fixed:
+
+1. **Empty space after fade** - Suggested actions now collapse completely (height: 0) instead of just fading out
+2. **Hero text doesn't move** - Greeting component now detects keyboard and scrolls into view
+3. **Inconsistent scroll** - Multiple scroll attempts at different timings to handle keyboard animation
+
+### Changes:
+
+**Suggested Actions (`components/suggested-actions.tsx`):**
+
+- Changed from opacity-only fade to full height collapse
+- Animates `height: 0`, `marginBottom: 0`, and `overflow: hidden`
+- Duration increased to 0.3s with easeInOut for smoother transition
+- Space is now reclaimed, allowing content to move up
+
+**Greeting (`components/greeting.tsx`):**
+
+- Now client component with keyboard detection
+- Scrolls itself into view when keyboard appears
+- Reduces top margin when keyboard is visible
+- Uses `scrollIntoView({ block: "start" })` for better positioning
+
+**Multimodal Input (`components/multimodal-input.tsx`):**
+
+- Multiple scroll attempts (immediate, 100ms, 300ms, 500ms) to catch keyboard animation
+- Changed to `block: "nearest"` for more natural scrolling
+- Cleans up timeouts on blur to prevent memory leaks
