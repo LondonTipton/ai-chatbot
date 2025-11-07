@@ -126,7 +126,37 @@ Added `scrollMarginTop` to the greeting component to ensure proper spacing when 
 <div style={{ scrollMarginTop: "2rem" }}>
 ```
 
+## Auth Pages Centering
+
+Applied the same keyboard detection logic to all auth pages with form inputs:
+
+### Pages Updated:
+
+- `app/(auth)/login/page.tsx` - Login form
+- `app/(auth)/register/page.tsx` - Registration form
+- `app/(auth)/verify/page.tsx` - Email verification status
+- `app/(auth)/verify-pending/page.tsx` - Verification pending with resend option
+
+### Behavior:
+
+- On mobile without keyboard: Content is vertically centered (`justify-center`)
+- On mobile with keyboard: Content moves to top with minimal padding (`justify-start pt-4`)
+- On desktop: Always positioned at top (`md:justify-start md:pt-16`)
+- Logo margin adjusts dynamically based on keyboard state (`mb-12` → `mb-4`)
+- Smooth transitions with `transition-all duration-300`
+
+### Pages Not Modified:
+
+- `app/(auth)/checkout/page.tsx` - Uses full-page layout with header
+- `app/(auth)/pricing/page.tsx` - Uses full-page layout with header
+- `app/(auth)/payment/status/page.tsx` - Uses full-page layout with header
+- `app/(auth)/payment/setup/page.tsx` - Uses full-page layout with header
+
+These pages already have proper layouts and don't need the centering behavior.
+
 ## Testing
+
+### Chat Interface
 
 Test on mobile devices by:
 
@@ -140,6 +170,20 @@ Test on mobile devices by:
    - The input container has a gradient fade effect
 5. Type some text to ensure it's visible while typing
 6. Dismiss the keyboard and verify suggested actions fade back in
+
+### Auth Pages
+
+Test login/register pages on mobile:
+
+1. Open login or register page on mobile
+2. Verify content is vertically centered on the screen
+3. Tap an input field (email or password)
+4. Verify:
+   - Content smoothly transitions to top of screen
+   - Logo margin reduces to save space
+   - All form fields remain accessible
+   - No content is cut off
+5. Dismiss keyboard and verify content returns to center
 
 ## Browser Support
 

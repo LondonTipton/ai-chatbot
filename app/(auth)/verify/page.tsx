@@ -69,8 +69,41 @@ function VerifyContent() {
     verifyEmail();
   }, [searchParams, router, errorMessage]);
 
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const viewportHeight =
+        window.visualViewport?.height || window.innerHeight;
+      const windowHeight = window.innerHeight;
+      const heightDiff = windowHeight - viewportHeight;
+
+      setIsKeyboardVisible(heightDiff > 150);
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleResize);
+      window.visualViewport.addEventListener("scroll", handleResize);
+    } else {
+      window.addEventListener("resize", handleResize);
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleResize);
+        window.visualViewport.removeEventListener("scroll", handleResize);
+      } else {
+        window.removeEventListener("resize", handleResize);
+      }
+    };
+  }, []);
+
   return (
-    <div className="relative flex h-dvh w-screen flex-col items-center justify-start bg-background pt-8 md:pt-16">
+    <div
+      className={`relative flex h-dvh w-screen flex-col items-center bg-background transition-all duration-300 ${
+        isKeyboardVisible ? "justify-start pt-4" : "justify-center"
+      } md:justify-start md:pt-16`}
+    >
       {/* Theme Toggle - Top Right */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />
@@ -78,7 +111,9 @@ function VerifyContent() {
 
       {/* Large Logo at Top */}
       <Link
-        className="mb-12 transition-opacity hover:opacity-80 md:mb-16"
+        className={`transition-all duration-300 hover:opacity-80 ${
+          isKeyboardVisible ? "mb-4" : "mb-12 md:mb-16"
+        }`}
         href="https://deep-counsel.org"
         rel="noopener noreferrer"
         target="_blank"
@@ -88,7 +123,7 @@ function VerifyContent() {
         </span>
       </Link>
 
-      <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8">
+      <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8 px-4">
         <div className="flex flex-col items-center justify-center gap-4 text-center">
           {status === "verifying" && (
             <>
@@ -171,7 +206,7 @@ export default function VerifyPage() {
   return (
     <Suspense
       fallback={
-        <div className="relative flex h-dvh w-screen flex-col items-center justify-start bg-background pt-8 md:pt-16">
+        <div className="relative flex h-dvh w-screen flex-col items-center justify-center bg-background md:justify-start md:pt-16">
           <div className="absolute top-4 right-4">
             <ThemeToggle />
           </div>
@@ -185,7 +220,7 @@ export default function VerifyPage() {
               DeepCounsel
             </span>
           </Link>
-          <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8">
+          <div className="flex w-full max-w-md flex-col gap-8 overflow-hidden rounded-2xl p-8 px-4">
             <div className="flex flex-col items-center justify-center gap-4 text-center">
               <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900 dark:border-zinc-700 dark:border-t-zinc-50" />
               <h3 className="font-semibold text-xl dark:text-zinc-50">
