@@ -150,7 +150,7 @@ const advancedSearchStep = createStep({
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
           query: `${query} ${jurisdiction}`,
-          maxResults: 10, // Increased from 7 to capture more landmark cases
+          maxResults: 20, // Maximum results for comprehensive coverage
           jurisdiction,
           includeRawContent: true, // Required for content extraction
           domainStrategy: "prioritized", // Automatically uses Zimbabwe domain prioritization

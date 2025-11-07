@@ -82,7 +82,7 @@ const searchStep = createStep({
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
           query: `${query} ${jurisdiction}`,
-          maxResults: 10,
+          maxResults: 20,
           domainStrategy: "prioritized",
           researchDepth: "comprehensive",
           jurisdiction,

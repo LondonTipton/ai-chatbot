@@ -60,7 +60,7 @@ export const tavilyQnaTool = createTool({
         search_depth: "basic",
         include_answer: true,
         include_raw_content: false,
-        max_results: 3,
+        max_results: 20,
       };
 
       // Apply domain strategy

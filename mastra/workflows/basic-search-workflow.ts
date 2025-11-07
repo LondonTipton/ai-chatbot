@@ -100,7 +100,7 @@ function classifySourceType(
 
 /**
  * Step 1: Search
- * Performs a basic Tavily search with maxResults=5
+ * Performs a basic Tavily search with maxResults=20
  * Token estimate: 500-1000 tokens
  */
 const searchStep = createStep({
@@ -139,11 +139,11 @@ const searchStep = createStep({
     const { query, jurisdiction } = inputData;
 
     try {
-      // Execute search with maxResults=5 for token efficiency
+      // Execute search with maxResults=20 for comprehensive results
       const searchResults = await tavilySearchTool.execute({
         context: {
           query: `${query} ${jurisdiction} law`,
-          maxResults: 5,
+          maxResults: 20,
           domainStrategy:
             jurisdiction.toLowerCase() === "zimbabwe" ? "prioritized" : "open",
           researchDepth: "standard",

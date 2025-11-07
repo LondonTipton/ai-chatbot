@@ -21,15 +21,15 @@ import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 export const tavilySearchTool = createTool({
   id: "tavily-search",
   description:
-    "Search the web for current information. Returns relevant search results with intelligent Zimbabwe domain prioritization. Optimized for token efficiency with default 5 results.",
+    "Search the web for current information. Returns relevant search results with intelligent Zimbabwe domain prioritization. Optimized for token efficiency with default 20 results.",
 
   inputSchema: z.object({
     query: z.string().describe("The search query"),
     maxResults: z
       .number()
       .optional()
-      .default(5)
-      .describe("Maximum number of results to return (default: 5)"),
+      .default(20)
+      .describe("Maximum number of results to return (default: 20)"),
     domainStrategy: z
       .enum(["strict", "prioritized", "open"])
       .optional()
@@ -72,7 +72,7 @@ export const tavilySearchTool = createTool({
   execute: async ({ context }) => {
     const {
       query,
-      maxResults = 5,
+      maxResults = 20,
       domainStrategy = "prioritized",
       researchDepth = "standard",
     } = context as {

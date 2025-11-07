@@ -21,7 +21,7 @@ import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 export const tavilySearchAdvancedTool = createTool({
   id: "tavily-search-advanced",
   description:
-    "Advanced search for legal information with comprehensive results and AI-generated answer. Use for queries needing detailed information with domain prioritization. Optimized for token efficiency with default 10 results.",
+    "Advanced search for legal information with comprehensive results and AI-generated answer. Use for queries needing detailed information with domain prioritization. Optimized for token efficiency with default 20 results.",
 
   inputSchema: z.object({
     query: z
@@ -30,8 +30,8 @@ export const tavilySearchAdvancedTool = createTool({
     maxResults: z
       .number()
       .optional()
-      .default(10)
-      .describe("Maximum number of results (1-10, default: 10)"),
+      .default(20)
+      .describe("Maximum number of results (1-20, default: 20)"),
     domainStrategy: z
       .enum(["strict", "prioritized", "open"])
       .optional()
@@ -86,7 +86,7 @@ export const tavilySearchAdvancedTool = createTool({
   execute: async ({ context }) => {
     const {
       query,
-      maxResults = 10,
+      maxResults = 20,
       domainStrategy = "prioritized",
       researchDepth = "deep",
       includeRawContent = false,
@@ -105,7 +105,7 @@ export const tavilySearchAdvancedTool = createTool({
 
     try {
       // Validate maxResults
-      const validMaxResults = Math.min(Math.max(maxResults, 1), 10);
+      const validMaxResults = Math.min(Math.max(maxResults, 1), 20);
 
       // Build request body
       const requestBody: Record<string, unknown> = {
