@@ -2,7 +2,7 @@
 
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { motion } from "framer-motion";
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { Suggestion } from "./elements/suggestion";
 import type { VisibilityType } from "./visibility-selector";
@@ -14,6 +14,39 @@ type SuggestedActionsProps = {
 };
 
 function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    // Detect when keyboard appears on mobile by monitoring viewport height changes
+    const handleResize = () => {
+      // On mobile, if viewport height shrinks significantly, keyboard is likely visible
+      const viewportHeight =
+        window.visualViewport?.height || window.innerHeight;
+      const windowHeight = window.innerHeight;
+      const heightDiff = windowHeight - viewportHeight;
+
+      // If height difference is more than 150px, assume keyboard is visible
+      setIsKeyboardVisible(heightDiff > 150);
+    };
+
+    // Use visualViewport API if available (better for mobile)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleResize);
+      window.visualViewport.addEventListener("scroll", handleResize);
+    } else {
+      window.addEventListener("resize", handleResize);
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleResize);
+        window.visualViewport.removeEventListener("scroll", handleResize);
+      } else {
+        window.removeEventListener("resize", handleResize);
+      }
+    };
+  }, []);
+
   const suggestedActions = [
     "What are the key differences between customary and general law in Zimbabwe?",
     "Explain the constitutional provisions for property rights under the 2013 Constitution",
@@ -22,9 +55,15 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
   ];
 
   return (
-    <div
+    <motion.div
+      animate={{
+        opacity: isKeyboardVisible ? 0 : 1,
+        y: isKeyboardVisible ? 20 : 0,
+        pointerEvents: isKeyboardVisible ? "none" : "auto",
+      }}
       className="grid w-full gap-2 sm:grid-cols-2"
       data-testid="suggested-actions"
+      transition={{ duration: 0.2 }}
     >
       {suggestedActions.map((suggestedAction, index) => (
         <motion.div
@@ -49,7 +88,7 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
           </Suggestion>
         </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }
 
