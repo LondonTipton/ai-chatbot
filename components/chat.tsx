@@ -62,7 +62,7 @@ export function Chat({
   });
 
   const { mutate } = useSWRConfig();
-  const { mutate: mutateUsage } = useUsage();
+  const { usage: currentUsageData, mutate: mutateUsage } = useUsage();
   const { setDataStream } = useDataStream();
   const keyboardHeight = useKeyboardHeight();
 
@@ -228,16 +228,14 @@ export function Chat({
         let dailyLimit = Number(errorData.dailyLimit);
         let currentPlan = String(errorData.plan || "Free");
 
-        // If we couldn't parse the numbers, try to get from current usage state
+        // If we couldn't parse the numbers, use the current usage data from the hook
         if (!requestsToday || !dailyLimit) {
           logger.warn(
-            "[Client] Could not parse usage data from error, trying current usage state"
+            "[Client] Could not parse usage data from error, using hook data"
           );
-          // The usage object might have these properties even if not in AppUsage type
-          const usageData = usage as any;
-          requestsToday = usageData?.requestsToday || 0;
-          dailyLimit = usageData?.dailyLimit || 5;
-          currentPlan = usageData?.plan || "Free";
+          requestsToday = currentUsageData?.requestsToday || 0;
+          dailyLimit = currentUsageData?.dailyLimit || 5;
+          currentPlan = currentUsageData?.plan || "Free";
         }
 
         logger.log(
