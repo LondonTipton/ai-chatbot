@@ -166,7 +166,8 @@ export const register = async (
         process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       }/verify`;
 
-      await createVerification(session.$id, verificationUrl);
+      // Use session.secret (the actual session token), not session.$id
+      await createVerification(session.secret, verificationUrl);
       logger.log("[REGISTER] Verification email sent successfully");
     } catch (verificationError) {
       // Log the error but don't fail registration
@@ -232,18 +233,35 @@ export const resendVerification =
     try {
       logger.log("[RESEND_VERIFICATION] Starting resend verification process");
 
-      // Get the current session
-      const sessionId = await getSessionCookie();
+      // Get the Appwrite session secret from cookie
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 
-      if (!sessionId) {
-        logger.error("[RESEND_VERIFICATION] No session cookie found");
+      if (!projectId) {
+        logger.error("[RESEND_VERIFICATION] Missing project ID");
+        return {
+          status: "failed",
+          error: "Configuration error. Please contact support.",
+        };
+      }
+
+      const appwriteSessionCookieName = `a_session_${projectId}`;
+      const sessionSecret =
+        cookieStore.get(appwriteSessionCookieName)?.value || null;
+
+      if (!sessionSecret) {
+        logger.error("[RESEND_VERIFICATION] No Appwrite session cookie found");
         return {
           status: "failed",
           error: "No active session. Please log in again.",
         };
       }
 
-      logger.log("[RESEND_VERIFICATION] Session ID found:", sessionId);
+      logger.log(
+        "[RESEND_VERIFICATION] Appwrite session cookie found, length:",
+        sessionSecret.length
+      );
 
       // Import the createVerification function
       const { createVerification } = await import("@/lib/appwrite/auth");
@@ -255,7 +273,7 @@ export const resendVerification =
 
       logger.log("[RESEND_VERIFICATION] Verification URL:", verificationUrl);
 
-      const token = await createVerification(sessionId, verificationUrl);
+      const token = await createVerification(sessionSecret, verificationUrl);
 
       logger.log(
         "[RESEND_VERIFICATION] Verification email sent successfully, token:",
