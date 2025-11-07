@@ -48,9 +48,9 @@ export const Greeting = () => {
   return (
     <motion.div
       animate={{
-        marginTop: isKeyboardVisible ? "1rem" : undefined,
+        marginTop: isKeyboardVisible ? "1rem" : "4rem",
       }}
-      className="mx-auto mt-4 flex size-full max-w-3xl flex-col justify-center px-4 md:mt-16 md:px-8"
+      className="mx-auto flex max-w-3xl flex-col px-4 md:px-8"
       key="overview"
       ref={greetingRef}
       style={{ scrollMarginTop: "1rem" }}
