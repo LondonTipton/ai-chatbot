@@ -5,6 +5,8 @@ import {
   createAccount,
   createEmailSession,
   deleteSession,
+  getSession,
+  createVerification,
 } from "@/lib/appwrite/auth";
 import { type AuthError, AuthErrorCode } from "@/lib/appwrite/errors";
 import {
@@ -176,7 +178,6 @@ export const register = async (
         session.secret?.length || 0
       );
 
-      const { createVerification } = await import("@/lib/appwrite/auth");
       const verificationUrl = `${
         process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       }/verify`;
@@ -257,38 +258,11 @@ export const resendVerification =
     try {
       logger.log("[RESEND_VERIFICATION] Starting resend verification process");
 
-      // Get the Appwrite session secret from cookie
-      const { cookies } = await import("next/headers");
-      const cookieStore = await cookies();
-      const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+      // Use the same approach as login - get session from our custom cookie
+      const sessionId = await getSessionCookie();
 
-      if (!projectId) {
-        logger.error("[RESEND_VERIFICATION] Missing project ID");
-        return {
-          status: "failed",
-          error: "Configuration error. Please contact support.",
-        };
-      }
-
-      // Debug: Log all available cookies
-      const allCookies = cookieStore.getAll();
-      logger.log(
-        "[RESEND_VERIFICATION] All available cookies:",
-        allCookies.map((c) => c.name).join(", ")
-      );
-
-      const appwriteSessionCookieName = `a_session_${projectId}`;
-      const sessionSecret =
-        cookieStore.get(appwriteSessionCookieName)?.value || null;
-
-      logger.log(
-        "[RESEND_VERIFICATION] Looking for cookie:",
-        appwriteSessionCookieName
-      );
-      logger.log("[RESEND_VERIFICATION] Cookie found:", !!sessionSecret);
-
-      if (!sessionSecret) {
-        logger.error("[RESEND_VERIFICATION] No Appwrite session cookie found");
+      if (!sessionId) {
+        logger.error("[RESEND_VERIFICATION] No session cookie found");
         return {
           status: "failed",
           error: "No active session. Please log in again.",
@@ -296,21 +270,34 @@ export const resendVerification =
       }
 
       logger.log(
-        "[RESEND_VERIFICATION] Appwrite session cookie found, length:",
-        sessionSecret.length
+        "[RESEND_VERIFICATION] Session ID found:",
+        `${sessionId.substring(0, 8)}...`
       );
 
-      // Import the createVerification function
-      const { createVerification } = await import("@/lib/appwrite/auth");
+      // Get the session details from Appwrite using the session ID
+      const session = await getSession(sessionId);
 
-      // Create verification email
+      if (!session) {
+        logger.error("[RESEND_VERIFICATION] Invalid session");
+        return {
+          status: "failed",
+          error: "Invalid session. Please log in again.",
+        };
+      }
+
+      logger.log(
+        "[RESEND_VERIFICATION] Session validated, has secret:",
+        !!session.secret
+      );
+
+      // Create verification email using the session secret
       const verificationUrl = `${
         process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       }/verify`;
 
       logger.log("[RESEND_VERIFICATION] Verification URL:", verificationUrl);
 
-      const token = await createVerification(sessionSecret, verificationUrl);
+      const token = await createVerification(session.secret, verificationUrl);
 
       logger.log(
         "[RESEND_VERIFICATION] Verification email sent successfully, token:",
