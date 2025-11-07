@@ -6,6 +6,7 @@ import {
   createEntityExtractionStep,
   createEntityValidationStep,
 } from "@/lib/utils/workflow-entity-steps";
+import { enhanceSearchQuery } from "../agents/query-enhancer-agent";
 import { synthesizerAgent } from "../agents/synthesizer-agent";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
@@ -33,13 +34,24 @@ import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
  */
 const searchStep = createStep({
   id: "search",
-  description: "Perform advanced web search with 10 results",
+  description:
+    "Perform advanced web search with AI-enhanced query and 10 results",
   inputSchema: z.object({
     query: z.string().describe("The search query"),
     jurisdiction: z
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for query enhancement"),
   }),
   outputSchema: z.object({
     answer: z.string().describe("AI-generated answer"),
@@ -75,13 +87,19 @@ const searchStep = createStep({
     skipped: z.boolean(),
   }),
   execute: async ({ inputData, runtimeContext }) => {
-    const { query, jurisdiction } = inputData;
+    const { query, jurisdiction, conversationHistory } = inputData;
 
     try {
-      // Execute advanced search with 10 results, no raw content
+      // Enhance query using LLM with conversation context
+      const enhancedQuery = await enhanceSearchQuery(
+        query,
+        conversationHistory || []
+      );
+
+      // Execute advanced search with enhanced query
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
-          query: `${query} ${jurisdiction}`,
+          query: `${enhancedQuery} ${jurisdiction}`,
           maxResults: 20,
           domainStrategy: "prioritized",
           researchDepth: "comprehensive",
@@ -255,6 +273,16 @@ export const highAdvanceSearchWorkflow = createWorkflow({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for query enhancement"),
   }),
   outputSchema: z.object({
     response: z.string().describe("Synthesized comprehensive response"),

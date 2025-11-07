@@ -34,6 +34,7 @@ import {
   buildEntityExtractionPrompt,
   entityExtractorAgent,
 } from "../agents/entity-extractor-agent";
+import { enhanceSearchQuery } from "../agents/query-enhancer-agent";
 import { synthesizerAgent } from "../agents/synthesizer-agent";
 import { tavilyContextSearchTool } from "../tools/tavily-context-search";
 
@@ -59,7 +60,8 @@ import { tavilyContextSearchTool } from "../tools/tavily-context-search";
  */
 const initialResearchStep = createStep({
   id: "initial-research",
-  description: "Perform initial comprehensive research with token tracking",
+  description:
+    "Perform initial comprehensive research with AI-enhanced query and token tracking",
   inputSchema: z.object({
     query: z.string().describe("The research query"),
     jurisdiction: z
@@ -70,6 +72,16 @@ const initialResearchStep = createStep({
       .number()
       .default(20_000)
       .describe("Total token budget for workflow"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for query enhancement"),
   }),
   outputSchema: z.object({
     context: z.string().describe("Research context from initial search"),
@@ -79,7 +91,7 @@ const initialResearchStep = createStep({
     budgetReport: z.any().describe("Token budget tracking report"),
   }),
   execute: async ({ inputData, runtimeContext }) => {
-    const { query, jurisdiction, tokenBudget } = inputData;
+    const { query, jurisdiction, tokenBudget, conversationHistory } = inputData;
 
     // Initialize token budget tracker
     const tracker = createTokenBudgetTracker(tokenBudget, 0.7);
@@ -94,10 +106,16 @@ const initialResearchStep = createStep({
     );
 
     try {
-      // Execute context search with 5K token budget
+      // Enhance query using LLM with conversation context
+      const enhancedQuery = await enhanceSearchQuery(
+        query,
+        conversationHistory || []
+      );
+
+      // Execute context search with enhanced query and 5K token budget
       const searchResults = await tavilyContextSearchTool.execute({
         context: {
-          query,
+          query: enhancedQuery,
           maxTokens: 5000,
           jurisdiction,
         },
@@ -1070,6 +1088,16 @@ export const enhancedComprehensiveWorkflow = createWorkflow({
       .number()
       .default(20_000)
       .describe("Total token budget for workflow"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for query enhancement"),
   }),
   outputSchema: z.object({
     response: z.string().describe("Comprehensive synthesized document"),

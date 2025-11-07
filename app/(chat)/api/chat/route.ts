@@ -4,6 +4,7 @@ import {
   type ResumableStreamContext,
 } from "resumable-stream";
 import type { VisibilityType } from "@/components/visibility-selector";
+import { isCerebrasRateLimitError } from "@/lib/ai/cerebras-retry-handler";
 import { detectQueryComplexity } from "@/lib/ai/complexity-detector";
 import type { ChatModel } from "@/lib/ai/models";
 import { auth } from "@/lib/appwrite/server-auth";
@@ -28,7 +29,6 @@ import { ChatSDKError } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
-import { isCerebrasRateLimitError } from "@/lib/ai/cerebras-retry-handler";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
@@ -246,12 +246,29 @@ export async function POST(request: Request) {
           "[Routing] 🚀 Starting enhanced comprehensive analysis workflow"
         );
 
+        // Extract recent conversation history (last 5 messages for context)
+        const conversationHistory = uiMessages
+          .slice(-6, -1) // Get last 5 messages before current one
+          .map((msg) => ({
+            role: msg.role,
+            content:
+              typeof msg.parts[0] === "object" && "text" in msg.parts[0]
+                ? msg.parts[0].text
+                : "",
+          }))
+          .filter((msg) => msg.content.length > 0);
+
+        logger.log(
+          `[Routing] 📜 Conversation history: ${conversationHistory.length} messages`
+        );
+
         const run = await enhancedComprehensiveWorkflow.createRunAsync();
         const result = await run.start({
           inputData: {
             query: userMessageText,
             jurisdiction: "Zimbabwe",
             tokenBudget: 20_000,
+            conversationHistory,
           },
         });
 
