@@ -39,16 +39,19 @@ export async function setSessionCookie(
 ): Promise<void> {
   const cookieStore = await cookies();
 
-  // First, clear any existing session cookies to avoid conflicts
+  logger.log("[session] setSessionCookie called with:", {
+    sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : "null",
+    hasSecret: !!sessionSecret,
+    secretLength: sessionSecret?.length || 0,
+    userId: userId ? `${userId.substring(0, 8)}...` : "null",
+  });
+
   const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
-  if (projectId) {
-    const appwriteSessionCookieName = `a_session_${projectId}`;
-    cookieStore.delete(appwriteSessionCookieName);
-    logger.log("[session] Cleared existing Appwrite session cookie");
-  }
+  logger.log("[session] Project ID:", projectId);
 
   // Set our custom session cookie for tracking
   cookieStore.set(SESSION_COOKIE_NAME, sessionId, SESSION_COOKIE_OPTIONS);
+  logger.log("[session] Custom session cookie set:", SESSION_COOKIE_NAME);
 
   // Persist user id for admin validation fallback in middleware
   if (userId) {
@@ -56,30 +59,50 @@ export async function setSessionCookie(
       ...SESSION_COOKIE_OPTIONS,
       httpOnly: true,
     });
+    logger.log("[session] User ID cookie set");
   }
 
-  // Also set the Appwrite session cookie if we have the secret
-  // This is required for the middleware to validate the session
-  if (sessionSecret) {
-    if (projectId) {
-      const appwriteSessionCookieName = `a_session_${projectId}`;
-      logger.log(
-        "[session] Setting Appwrite session cookie:",
-        appwriteSessionCookieName
-      );
-      logger.log("[session] Session secret length:", sessionSecret.length);
-      cookieStore.set(appwriteSessionCookieName, sessionSecret, {
-        ...SESSION_COOKIE_OPTIONS,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax", // Changed from "strict" to "lax" for cross-domain Appwrite setup
-        path: "/",
-      });
-    }
-  } else {
-    logger.warn(
-      "[session] No session secret provided, Appwrite cookie not set"
+  // Set the Appwrite session cookie if we have the secret
+  // This is CRITICAL for verification emails to work
+  if (sessionSecret && projectId) {
+    const appwriteSessionCookieName = `a_session_${projectId}`;
+
+    logger.log(
+      "[session] Setting Appwrite session cookie:",
+      appwriteSessionCookieName
     );
+    logger.log(
+      "[session] Session secret (first 10 chars):",
+      sessionSecret.substring(0, 10)
+    );
+
+    // Set the cookie with the session secret (the actual JWT token)
+    cookieStore.set(appwriteSessionCookieName, sessionSecret, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    });
+
+    logger.log("[session] ✓ Appwrite session cookie SET");
+
+    // Verify it was set
+    const verifySet = cookieStore.get(appwriteSessionCookieName);
+    logger.log("[session] Verification - cookie exists:", !!verifySet);
+    logger.log(
+      "[session] Verification - cookie value length:",
+      verifySet?.value.length || 0
+    );
+  } else {
+    if (!sessionSecret) {
+      logger.error(
+        "[session] ❌ No session secret provided - Appwrite cookie NOT set"
+      );
+    }
+    if (!projectId) {
+      logger.error("[session] ❌ No project ID - Appwrite cookie NOT set");
+    }
   }
 }
 
@@ -97,6 +120,17 @@ export async function getSessionCookie(): Promise<string | null> {
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete("appwrite_user_id");
+
+  // Also clear the Appwrite session cookie
+  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+  if (projectId) {
+    const appwriteSessionCookieName = `a_session_${projectId}`;
+    cookieStore.delete(appwriteSessionCookieName);
+    logger.log(
+      "[session] Cleared all session cookies including Appwrite cookie"
+    );
+  }
 }
 
 /**

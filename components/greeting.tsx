@@ -41,7 +41,7 @@ export const Greeting = () => {
   return (
     <motion.div
       animate={{
-        marginTop: isKeyboardVisible ? "1rem" : "4rem",
+        marginTop: isKeyboardVisible ? "1rem" : "2rem",
       }}
       className="mx-auto flex max-w-3xl flex-col px-4 md:px-8"
       key="overview"

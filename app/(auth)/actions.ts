@@ -155,26 +155,50 @@ export const register = async (
     );
 
     logger.log("[REGISTER] Session created:", session.$id);
+    logger.log("[REGISTER] Session details:", {
+      id: session.$id,
+      hasSecret: !!session.secret,
+      secretLength: session.secret?.length || 0,
+      userId: session.userId,
+      provider: session.provider,
+    });
 
     // Set session cookie with the session secret (not the ID!)
     await setSessionCookie(session.$id, session.secret, session.userId);
+    logger.log("[REGISTER] Session cookie set");
 
     // Send verification email
     try {
+      logger.log("[REGISTER] Attempting to send verification email...");
+      logger.log("[REGISTER] Session secret available:", !!session.secret);
+      logger.log(
+        "[REGISTER] Session secret length:",
+        session.secret?.length || 0
+      );
+
       const { createVerification } = await import("@/lib/appwrite/auth");
       const verificationUrl = `${
         process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       }/verify`;
 
+      logger.log("[REGISTER] Verification URL:", verificationUrl);
+
       // Use session.secret (the actual session token), not session.$id
-      await createVerification(session.secret, verificationUrl);
-      logger.log("[REGISTER] Verification email sent successfully");
-    } catch (verificationError) {
+      const token = await createVerification(session.secret, verificationUrl);
+      logger.log("[REGISTER] Verification email sent successfully!");
+      logger.log("[REGISTER] Verification token ID:", token.$id);
+    } catch (verificationError: any) {
       // Log the error but don't fail registration
       logger.error(
         "[REGISTER] Failed to send verification email:",
         verificationError
       );
+      logger.error("[REGISTER] Error details:", {
+        message: verificationError?.message,
+        code: verificationError?.code,
+        type: verificationError?.type,
+        response: verificationError?.response,
+      });
       // User can still resend verification email later
     }
 
@@ -246,9 +270,22 @@ export const resendVerification =
         };
       }
 
+      // Debug: Log all available cookies
+      const allCookies = cookieStore.getAll();
+      logger.log(
+        "[RESEND_VERIFICATION] All available cookies:",
+        allCookies.map((c) => c.name).join(", ")
+      );
+
       const appwriteSessionCookieName = `a_session_${projectId}`;
       const sessionSecret =
         cookieStore.get(appwriteSessionCookieName)?.value || null;
+
+      logger.log(
+        "[RESEND_VERIFICATION] Looking for cookie:",
+        appwriteSessionCookieName
+      );
+      logger.log("[RESEND_VERIFICATION] Cookie found:", !!sessionSecret);
 
       if (!sessionSecret) {
         logger.error("[RESEND_VERIFICATION] No Appwrite session cookie found");

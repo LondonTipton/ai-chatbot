@@ -31,8 +31,8 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
       setIsKeyboardVisible(heightDiff > 150);
 
       // Check if viewport is tall enough to show both greeting and suggestions
-      // Need ~600px minimum: greeting (200px) + suggestions (250px) + input (150px)
-      setHasEnoughSpace(viewportHeight >= 600);
+      // Need ~500px minimum: greeting (150px) + suggestions (250px) + input (100px)
+      setHasEnoughSpace(viewportHeight >= 500);
     };
 
     // Run on mount
