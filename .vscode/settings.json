@@ -34,5 +34,7 @@
   },
   "[powershell]": {
     "editor.defaultFormatter": "ms-vscode.powershell"
-  }
+  },
+  "css.validate": false,
+  "css.lint.unknownAtRules": "ignore"
 }
