@@ -330,7 +330,7 @@ function PureArtifact({
                   votes={votes}
                 />
 
-                <div className="relative flex w-full flex-row items-end gap-2 px-4 pb-4">
+                <div className="mobile-input-container relative flex w-full flex-row items-end gap-2 px-4 pb-4">
                   <MultimodalInput
                     attachments={attachments}
                     chatId={chatId}

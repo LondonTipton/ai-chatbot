@@ -200,10 +200,14 @@
     @apply bg-background text-foreground;
     overflow-x: hidden;
     position: relative;
+    /* Use dynamic viewport height for mobile keyboard support */
+    min-height: 100dvh;
   }
 
   html {
     overflow-x: hidden;
+    /* Use dynamic viewport height for mobile keyboard support */
+    height: 100dvh;
   }
 }
 
@@ -325,5 +329,18 @@
   }
   100% {
     background-position: 0% 50%;
+  }
+}
+
+/* Mobile keyboard support - ensures input stays visible */
+@supports (height: 100dvh) {
+  @media (max-width: 768px) {
+    .mobile-input-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+    }
   }
 }

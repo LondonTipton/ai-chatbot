@@ -92,6 +92,26 @@ function PureMultimodalInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
 
+  // Handle mobile keyboard visibility
+  useEffect(() => {
+    const handleFocus = () => {
+      // Scroll the textarea into view when keyboard appears
+      setTimeout(() => {
+        textareaRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 300); // Delay to allow keyboard animation
+    };
+
+    const textarea = textareaRef.current;
+    textarea?.addEventListener("focus", handleFocus);
+
+    return () => {
+      textarea?.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
   const adjustHeight = useCallback(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "44px";
@@ -355,8 +375,8 @@ function PureMultimodalInput({
               {comprehensiveWorkflowEnabled !== undefined &&
                 onComprehensiveWorkflowChange && (
                   <ComprehensiveWorkflowToggle
-                    key={`toggle-${comprehensiveWorkflowEnabled}`}
                     enabled={comprehensiveWorkflowEnabled}
+                    key={`toggle-${comprehensiveWorkflowEnabled}`}
                     onChange={onComprehensiveWorkflowChange}
                   />
                 )}
