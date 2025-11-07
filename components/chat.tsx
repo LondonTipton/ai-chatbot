@@ -201,7 +201,7 @@ export function Chat({
 
         // Show user-friendly toast
         toast({
-          type: "info",
+          type: "success",
           description: `High traffic detected. Retrying in ${retryAfter} seconds...`,
         });
 
