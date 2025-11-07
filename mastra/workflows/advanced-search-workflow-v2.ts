@@ -53,6 +53,7 @@ const searchStep = createStep({
       )
       .describe("Source citations"),
     totalTokens: z.number().describe("Estimated tokens used"),
+    summarized: z.boolean().describe("Whether content was summarized"),
     rawResults: z.any().optional().describe("Raw Tavily results for debugging"),
   }),
   execute: async ({ inputData, runtimeContext }) => {
@@ -137,14 +138,58 @@ I recommend:
         url: r.url,
       }));
 
+      // Check if summarization is needed (>50K tokens)
+      const { estimateTokens, shouldSummarize } = await import(
+        "@/lib/utils/token-estimation"
+      );
+
+      const totalTokens = estimateTokens(response);
+      let summarized = false;
+
+      if (shouldSummarize(totalTokens, 50_000)) {
+        console.log(
+          "[Advanced Search V2] Content exceeds 50K tokens, triggering summarization"
+        );
+        console.log("[Advanced Search V2] Original tokens:", totalTokens);
+
+        const { summarizeLegalContent } = await import(
+          "../agents/content-summarizer-agent"
+        );
+
+        const summarizationResult = await summarizeLegalContent(response, {
+          query,
+          jurisdiction: jurisdiction || "Zimbabwe",
+          sourceCount: searchResults.results.length,
+        });
+
+        response = summarizationResult.summarizedContent;
+        summarized = true;
+
+        console.log("[Advanced Search V2] Summarization complete", {
+          originalTokens: summarizationResult.originalTokens,
+          summarizedTokens: summarizationResult.summarizedTokens,
+          compressionRatio: summarizationResult.compressionRatio.toFixed(2),
+          tokensSaved:
+            summarizationResult.originalTokens -
+            summarizationResult.summarizedTokens,
+        });
+      } else {
+        console.log(
+          "[Advanced Search V2] Content within limits, no summarization needed"
+        );
+        console.log("[Advanced Search V2] Total tokens:", totalTokens);
+      }
+
       console.log("[Advanced Search V2] Search completed");
       console.log("[Advanced Search V2] Response length:", response.length);
       console.log("[Advanced Search V2] Sources:", sources.length);
+      console.log("[Advanced Search V2] Summarized:", summarized);
 
       return {
         response,
         sources,
-        totalTokens: searchResults.tokenEstimate,
+        totalTokens,
+        summarized,
         rawResults: searchResults,
       };
     } catch (error) {
@@ -155,6 +200,7 @@ I recommend:
           "I encountered an error while searching. Please try rephrasing your query or try again later.",
         sources: [],
         totalTokens: 0,
+        summarized: false,
       };
     }
   },
@@ -190,6 +236,7 @@ export const advancedSearchWorkflowV2 = createWorkflow({
       )
       .describe("Source citations"),
     totalTokens: z.number().describe("Estimated tokens used"),
+    summarized: z.boolean().describe("Whether content was summarized"),
     rawResults: z.any().optional().describe("Raw Tavily results for debugging"),
   }),
 })

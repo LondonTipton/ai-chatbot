@@ -331,6 +331,7 @@ const followUpSearchesStep = createStep({
         url: z.string(),
       })
     ),
+    summarized: z.boolean().describe("Whether content was summarized"),
   }),
   execute: async ({ inputData, runtimeContext }) => {
     const {
@@ -401,12 +402,55 @@ const followUpSearchesStep = createStep({
       allSources.length
     );
 
+    // Check if summarization is needed (>50K tokens)
+    const { estimateTokens, shouldSummarize } = await import(
+      "@/lib/utils/token-estimation"
+    );
+
+    const totalTokens = estimateTokens(combinedResults);
+    let summarized = false;
+
+    if (shouldSummarize(totalTokens, 50_000)) {
+      console.log(
+        "[Enhanced Comprehensive V2] Content exceeds 50K tokens, triggering summarization"
+      );
+      console.log("[Enhanced Comprehensive V2] Original tokens:", totalTokens);
+
+      const { summarizeLegalContent } = await import(
+        "../agents/content-summarizer-agent"
+      );
+
+      const summarizationResult = await summarizeLegalContent(combinedResults, {
+        query,
+        jurisdiction: jurisdiction || "Zimbabwe",
+        sourceCount: allSources.length,
+      });
+
+      combinedResults = summarizationResult.summarizedContent;
+      summarized = true;
+
+      console.log("[Enhanced Comprehensive V2] Summarization complete", {
+        originalTokens: summarizationResult.originalTokens,
+        summarizedTokens: summarizationResult.summarizedTokens,
+        compressionRatio: summarizationResult.compressionRatio.toFixed(2),
+        tokensSaved:
+          summarizationResult.originalTokens -
+          summarizationResult.summarizedTokens,
+      });
+    } else {
+      console.log(
+        "[Enhanced Comprehensive V2] Content within limits, no summarization needed"
+      );
+      console.log("[Enhanced Comprehensive V2] Total tokens:", totalTokens);
+    }
+
     return {
       query,
       jurisdiction,
       conversationHistory,
       combinedResults,
       allSources,
+      summarized,
     };
   },
 });
@@ -433,6 +477,7 @@ const chatAgentStep = createStep({
         url: z.string(),
       })
     ),
+    summarized: z.boolean(),
   }),
   outputSchema: z.object({
     response: z.string().describe("Final synthesized response"),

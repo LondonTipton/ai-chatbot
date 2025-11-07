@@ -1,135 +1,121 @@
 /**
  * Token Estimation Utilities
  *
- * Provides functions to estimate token usage for LLM operations.
- * Uses the rough approximation: 1 token ≈ 4 characters
+ * Provides utilities for estimating token counts and managing token budgets
  */
 
 /**
- * Estimates the number of tokens in a given text or object.
- *
- * @param text - The text string or object to estimate tokens for
- * @returns Estimated number of tokens
- *
- * @example
- * estimateTokens("Hello world") // Returns ~3 tokens
- * estimateTokens({ key: "value" }) // Returns ~4 tokens
+ * Estimate token count from text
+ * Rule of thumb: ~4 characters per token for English text
  */
-export function estimateTokens(text: string | object): number {
-  let content: string;
-
-  if (typeof text === "object") {
-    content = JSON.stringify(text);
-  } else {
-    content = text;
-  }
-
-  // Rough estimation: 1 token ≈ 4 characters
-  return Math.ceil(content.length / 4);
-}
-
-/**
- * Represents a search result from Tavily or similar search APIs
- */
-type SearchResult = {
-  title?: string;
-  content?: string;
-  url?: string;
-  score?: number;
-  publishedDate?: string;
-  [key: string]: any;
-};
-
-/**
- * Estimates the total number of tokens in an array of search results.
- *
- * @param results - Array of search results
- * @returns Estimated total tokens across all results
- *
- * @example
- * const results = [
- *   { title: "Result 1", content: "Some content..." },
- *   { title: "Result 2", content: "More content..." }
- * ];
- * estimateSearchResultTokens(results) // Returns estimated token count
- */
-export function estimateSearchResultTokens(results: SearchResult[]): number {
-  if (!results || results.length === 0) {
+export function estimateTokens(text: string): number {
+  if (!text) {
     return 0;
   }
-
-  let totalTokens = 0;
-
-  for (const result of results) {
-    // Estimate tokens for each field
-    if (result.title) {
-      totalTokens += estimateTokens(result.title);
-    }
-    if (result.content) {
-      totalTokens += estimateTokens(result.content);
-    }
-    if (result.url) {
-      totalTokens += estimateTokens(result.url);
-    }
-
-    // Add small overhead for JSON structure (brackets, commas, etc.)
-    totalTokens += 5;
-  }
-
-  return totalTokens;
+  return Math.ceil(text.length / 4);
 }
 
 /**
- * Token tracker for monitoring cumulative token usage during query execution
+ * Check if content should be summarized based on token threshold
  */
-export class TokenTracker {
-  private cumulative = 0;
-  private breakdown: Record<string, number> = {};
+export function shouldSummarize(
+  totalTokens: number,
+  threshold = 50_000
+): boolean {
+  return totalTokens > threshold;
+}
 
-  /**
-   * Adds tokens to the tracker for a specific component
-   *
-   * @param component - Name of the component (e.g., "search", "synthesis")
-   * @param tokens - Number of tokens to add
-   */
-  add(component: string, tokens: number): void {
-    this.cumulative += tokens;
-    this.breakdown[component] = (this.breakdown[component] || 0) + tokens;
+/**
+ * Calculate compression ratio
+ */
+export function calculateCompressionRatio(
+  originalTokens: number,
+  compressedTokens: number
+): number {
+  if (originalTokens === 0) {
+    return 1.0;
+  }
+  return compressedTokens / originalTokens;
+}
+
+/**
+ * Format token count for logging
+ */
+export function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(2)}M`;
+  }
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}K`;
+  }
+  return `${tokens}`;
+}
+
+/**
+ * Token Budget Tracker
+ * Tracks token usage across workflow steps
+ */
+export class TokenBudgetTracker {
+  private readonly budget: number;
+  private used = 0;
+  private readonly steps: Array<{
+    step: string;
+    tokens: number;
+    timestamp: number;
+  }> = [];
+
+  constructor(budget: number) {
+    this.budget = budget;
   }
 
-  /**
-   * Gets the total cumulative token count
-   *
-   * @returns Total tokens used
-   */
-  getTotal(): number {
-    return this.cumulative;
+  addUsage(step: string, tokens: number): void {
+    this.used += tokens;
+    this.steps.push({
+      step,
+      tokens,
+      timestamp: Date.now(),
+    });
   }
 
-  /**
-   * Gets the token breakdown by component
-   *
-   * @returns Object mapping component names to token counts
-   */
-  getBreakdown(): Record<string, number> {
-    return { ...this.breakdown };
+  getRemaining(): number {
+    return Math.max(0, this.budget - this.used);
   }
 
-  /**
-   * Checks if the current usage exceeds a given budget
-   *
-   * @param budget - Token budget to check against
-   * @returns True if budget is exceeded
-   */
-  exceedsBudget(budget: number): boolean {
-    return this.cumulative > budget;
+  getUtilization(): number {
+    return this.used / this.budget;
   }
 
-  /**
-   * Resets the tracker to zero
-   */
-  reset(): void {
-    this.cumulative = 0;
-    this.breakdown = {};
+  shouldSummarize(threshold = 0.7): boolean {
+    return this.getUtilization() > threshold;
+  }
+
+  getReport(): string {
+    const utilizationPercent = (this.getUtilization() * 100).toFixed(1);
+
+    return `Token Budget Report:
+  Total Budget: ${formatTokenCount(this.budget)}
+  Used: ${formatTokenCount(this.used)} (${utilizationPercent}%)
+  Remaining: ${formatTokenCount(this.getRemaining())}
+  
+  Steps:
+${this.steps
+  .map((s) => `    - ${s.step}: ${formatTokenCount(s.tokens)}`)
+  .join("\n")}`;
+  }
+
+  getSummary(): {
+    budget: number;
+    used: number;
+    remaining: number;
+    utilization: number;
+    steps: Array<{ step: string; tokens: number }>;
+  } {
+    return {
+      budget: this.budget,
+      used: this.used,
+      remaining: this.getRemaining(),
+      utilization: this.getUtilization(),
+      steps: this.steps.map(({ step, tokens }) => ({ step, tokens })),
+    };
   }
 }
