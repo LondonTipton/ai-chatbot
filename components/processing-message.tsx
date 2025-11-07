@@ -49,7 +49,21 @@ export const ProcessingMessage = () => {
       initial={{ opacity: 0 }}
     >
       <div className="flex items-start justify-start gap-3">
-        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
+        {/* Mobile: Animated text - fades in/out while processing */}
+        <motion.div
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          className="flex px-2 md:hidden"
+          transition={{
+            duration: 2,
+            repeat: Number.POSITIVE_INFINITY,
+            ease: "easeInOut",
+          }}
+        >
+          <span className="font-semibold text-sm">DeepCounsel</span>
+        </motion.div>
+
+        {/* Desktop: Spinning icon */}
+        <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
           <motion.div
             animate={{ rotate: 360 }}
             transition={{

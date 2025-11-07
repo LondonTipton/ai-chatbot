@@ -72,7 +72,7 @@ const PurePreviewMessage = ({
     >
       <div
         className={cn("flex w-full", {
-          "flex-row items-start gap-2 justify-end md:gap-3":
+          "flex-row items-start justify-end gap-2 md:gap-3":
             message.role === "user" && mode !== "edit",
           "flex-col gap-2 md:flex-row md:items-start md:gap-3":
             message.role === "assistant",
@@ -80,17 +80,18 @@ const PurePreviewMessage = ({
       >
         {message.role === "assistant" && (
           <>
-            {/* Mobile: Text only with pulse animation while streaming */}
-            <div className="px-2 md:hidden">
-              <span
-                className={cn(
-                  "text-sm font-semibold",
-                  isLoading && "animate-pulse"
-                )}
-              >
-                DeepCounsel
-              </span>
-            </div>
+            {/* Mobile: Animated text - fades in/out while streaming */}
+            <motion.div
+              animate={{ opacity: isLoading ? [0.5, 1, 0.5] : 1 }}
+              className="flex px-2 md:hidden"
+              transition={{
+                duration: 2,
+                repeat: isLoading ? Number.POSITIVE_INFINITY : 0,
+                ease: "easeInOut",
+              }}
+            >
+              <span className="font-semibold text-sm">DeepCounsel</span>
+            </motion.div>
             {/* Desktop: Icon only */}
             <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
               <SparklesIcon size={14} />
@@ -436,9 +437,11 @@ export const ThinkingMessage = () => {
       initial={{ opacity: 0 }}
     >
       <div className="flex flex-col gap-2 px-2 md:flex-row md:items-start md:gap-3 md:px-0">
-        {/* Mobile: Text only */}
-        <div className="md:hidden">
-          <span className="text-sm font-semibold">DeepCounsel</span>
+        {/* Mobile: Text only with CSS fade animation */}
+        <div className="flex md:hidden">
+          <span className="animate-pulse font-semibold text-sm">
+            DeepCounsel
+          </span>
         </div>
         {/* Desktop: Icon only */}
         <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
