@@ -193,10 +193,33 @@ export function Chat({
         return;
       }
 
-      // Handle API rate limit errors (429) with retry logic
+      // Check for usage limit errors FIRST (daily quota exceeded)
+      const errorData = (error as any).data || (error as any);
+      if (
+        errorData.code === "rate_limit:chat" ||
+        errorData.cause === "daily_limit_reached" ||
+        (errorData.requestsToday !== undefined &&
+          errorData.dailyLimit !== undefined)
+      ) {
+        const requestsToday = Number(errorData.requestsToday) || 0;
+        const dailyLimit = Number(errorData.dailyLimit) || 0;
+        const currentPlan = String(errorData.plan || "Free");
+
+        logger.log(
+          `[Client] Daily usage limit reached: ${requestsToday}/${dailyLimit} (${currentPlan} plan)`
+        );
+
+        setUpgradeModalData({ requestsToday, dailyLimit, currentPlan });
+        setShowUpgradeModal(true);
+        stop();
+        return;
+      }
+
+      // Handle Cerebras API rate limit errors (429) with retry logic
       if (
         (error as any).status === 429 ||
-        (error as any).type === "rate_limit" ||
+        ((error as any).type === "rate_limit" &&
+          !(error as any).data?.dailyLimit) ||
         (error as any).error === "rate_limit_exceeded"
       ) {
         const retryAfter = (error as any).retryAfter || 15;
@@ -224,21 +247,7 @@ export function Chat({
 
       // Prefer structured ChatSDKError
       if (error instanceof ChatSDKError) {
-        // Specific handling: usage rate limit (quota exceeded)
-        if (
-          (error as any).type === "rate_limit" ||
-          (error as any).message?.toLowerCase()?.includes("rate limit")
-        ) {
-          const meta = (error as any).meta || {};
-          const requestsToday = Number(meta.requestsToday) || 0;
-          const dailyLimit = Number(meta.dailyLimit) || 0;
-          const currentPlan = String(meta.plan || "Free");
-          setUpgradeModalData({ requestsToday, dailyLimit, currentPlan });
-          setShowUpgradeModal(true);
-          // Ensure UI leaves 'submitted' state after error
-          stop();
-          return;
-        }
+        // Gateway credit card case (already handled usage limits above)
 
         // Gateway credit card case
         if (
