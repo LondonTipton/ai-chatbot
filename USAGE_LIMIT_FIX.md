@@ -102,3 +102,48 @@ To test the fix:
 2. Try to send another message
 3. Should see the upgrade modal, not a retry toast
 4. Modal should show correct usage numbers and plan
+
+## Update: Parsing Error Data
+
+### Issue
+
+The upgrade modal was showing "0 of 0" requests because the error data wasn't being parsed correctly from the API response.
+
+### Debugging Added
+
+1. **Multiple data source checks**: Tries `error.data`, `error.response.data`, `error.body`, and `error` itself
+2. **Console logging**: Logs error object keys, message, and data for debugging
+3. **Message parsing**: Extracts daily limit from error message as fallback
+4. **Usage state fallback**: Uses current usage state if error data is unavailable
+
+### Code Flow
+
+```typescript
+// 1. Try to get error data from multiple locations
+const errorData = errorObj.data || errorObj.response?.data || errorObj.body || errorObj;
+
+// 2. Try to extract from error message
+if (errorObj.message?.match(/daily limit of (\d+)/)) {
+  errorData.dailyLimit = extracted number;
+}
+
+// 3. Parse the numbers
+let requestsToday = Number(errorData.requestsToday);
+let dailyLimit = Number(errorData.dailyLimit);
+
+// 4. Fallback to current usage state
+if (!requestsToday || !dailyLimit) {
+  requestsToday = usage?.requestsToday || 0;
+  dailyLimit = usage?.dailyLimit || 5;
+}
+```
+
+### Next Steps
+
+Check browser console logs to see:
+
+- What keys are in the error object
+- What the error message says
+- What the error data contains
+
+This will help identify where the usage numbers are actually located in the error response.

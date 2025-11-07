@@ -194,16 +194,51 @@ export function Chat({
       }
 
       // Check for usage limit errors FIRST (daily quota exceeded)
-      const errorData = (error as any).data || (error as any);
+      // Try multiple possible locations for error data
+      const errorObj = error as any;
+      const errorData =
+        errorObj.data || errorObj.response?.data || errorObj.body || errorObj;
+
+      // Log the full error for debugging
+      logger.log("[Client] Error object keys:", Object.keys(errorObj));
+      logger.log("[Client] Error message:", errorObj.message);
+      logger.log("[Client] Error data:", errorData);
+
+      // Try to extract from error message if structured data not available
+      if (errorObj.message && typeof errorObj.message === "string") {
+        const limitMatch = errorObj.message.match(/daily limit of (\d+)/);
+        if (limitMatch && !errorData.dailyLimit) {
+          errorData.dailyLimit = Number(limitMatch[1]);
+          logger.log(
+            "[Client] Extracted dailyLimit from message:",
+            errorData.dailyLimit
+          );
+        }
+      }
+
       if (
         errorData.code === "rate_limit:chat" ||
         errorData.cause === "daily_limit_reached" ||
+        errorData.message?.includes("daily limit") ||
         (errorData.requestsToday !== undefined &&
           errorData.dailyLimit !== undefined)
       ) {
-        const requestsToday = Number(errorData.requestsToday) || 0;
-        const dailyLimit = Number(errorData.dailyLimit) || 0;
-        const currentPlan = String(errorData.plan || "Free");
+        // Try to extract usage data, with fallbacks
+        let requestsToday = Number(errorData.requestsToday);
+        let dailyLimit = Number(errorData.dailyLimit);
+        let currentPlan = String(errorData.plan || "Free");
+
+        // If we couldn't parse the numbers, try to get from current usage state
+        if (!requestsToday || !dailyLimit) {
+          logger.warn(
+            "[Client] Could not parse usage data from error, trying current usage state"
+          );
+          // The usage object might have these properties even if not in AppUsage type
+          const usageData = usage as any;
+          requestsToday = usageData?.requestsToday || 0;
+          dailyLimit = usageData?.dailyLimit || 5;
+          currentPlan = usageData?.plan || "Free";
+        }
 
         logger.log(
           `[Client] Daily usage limit reached: ${requestsToday}/${dailyLimit} (${currentPlan} plan)`

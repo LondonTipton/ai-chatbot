@@ -143,7 +143,7 @@ const PurePreviewMessage = ({
                 return (
                   <div key={key}>
                     <MessageContent
-                      className={cn({
+                      className={cn("text-base", {
                         "w-fit break-words rounded-2xl px-3 py-2 text-right text-white":
                           message.role === "user",
                         "bg-transparent px-0 py-0 text-left":
@@ -425,7 +425,7 @@ export const ThinkingMessage = () => {
         </div>
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="p-0 text-muted-foreground text-sm">
+          <div className="p-0 text-base text-muted-foreground">
             <LoadingText>Thinking...</LoadingText>
           </div>
         </div>
