@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { ChatPage } from "../pages/chat";
 
 // This E2E verifies the Deep Research toggle updates immediately and is sent in the next request
@@ -24,14 +24,16 @@ test.describe("Deep Research Toggle", () => {
     await chatPage.expectDeepResearchOnBadgeVisible(false);
   });
 
-  test("switch toggles and next request includes correct flag", async ({ page }) => {
+  test("switch toggles and next request includes correct flag", async ({
+    page,
+  }) => {
     // Turn ON via switch
     await chatPage.toggleDeepResearchViaSwitch();
     await chatPage.expectDeepResearchOnBadgeVisible(true);
 
     // Intercept the next /api/chat request and validate payload
-    const reqPromise = page.waitForRequest((req) =>
-      req.url().includes("/api/chat") && req.method() === "POST"
+    const reqPromise = page.waitForRequest(
+      (req) => req.url().includes("/api/chat") && req.method() === "POST"
     );
 
     await chatPage.sendUserMessage("Test deep research routing");
@@ -44,8 +46,8 @@ test.describe("Deep Research Toggle", () => {
     await chatPage.toggleDeepResearchViaSwitch();
     await chatPage.expectDeepResearchOnBadgeVisible(false);
 
-    const reqPromise2 = page.waitForRequest((r) =>
-      r.url().includes("/api/chat") && r.method() === "POST"
+    const reqPromise2 = page.waitForRequest(
+      (r) => r.url().includes("/api/chat") && r.method() === "POST"
     );
 
     await chatPage.sendUserMessage("Test deep research routing OFF");

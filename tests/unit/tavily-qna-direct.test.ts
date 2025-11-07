@@ -19,7 +19,7 @@ test.describe("Tavily QnA Direct Tool", () => {
           json: async () => ({
             answer: mockAnswer,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyQnaDirectTool.execute({
         context: { query: "What is contract law?" },
@@ -45,7 +45,7 @@ test.describe("Tavily QnA Direct Tool", () => {
           json: async () => ({
             answer: mockAnswer,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyQnaDirectTool.execute({
         context: { query: "Test query" },
@@ -95,7 +95,7 @@ test.describe("Tavily QnA Direct Tool", () => {
           json: async () => ({
             answer: "Valid answer",
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyQnaDirectTool.execute({
         context: { query: "What is the law?" },
@@ -183,7 +183,7 @@ test.describe("Tavily QnA Direct Tool", () => {
           status: 429,
           statusText: "Too Many Requests",
           text: async () => "Rate limit exceeded",
-        } as Response);
+        }) as Response;
 
       await expect(
         tavilyQnaDirectTool.execute({
@@ -202,7 +202,7 @@ test.describe("Tavily QnA Direct Tool", () => {
         ({
           ok: true,
           json: async () => ({}), // No answer field
-        } as Response);
+        }) as Response;
 
       const result = await tavilyQnaDirectTool.execute({
         context: { query: "Test query" },
@@ -265,7 +265,7 @@ test.describe("Tavily QnA Direct Tool", () => {
           json: async () => ({
             answer: mockAnswer,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyQnaDirectTool.execute({
         context: { query: "What is contract law?" },

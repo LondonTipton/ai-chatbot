@@ -51,7 +51,7 @@ test.describe("Tavily Context Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyContextSearchTool.execute({
         context: {
@@ -86,7 +86,7 @@ test.describe("Tavily Context Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyContextSearchTool.execute({
         context: {
@@ -121,7 +121,7 @@ test.describe("Tavily Context Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyContextSearchTool.execute({
         context: {
@@ -182,7 +182,7 @@ test.describe("Tavily Context Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyContextSearchTool.execute({
         context: {
@@ -462,7 +462,7 @@ test.describe("Tavily Context Search Tool", () => {
           status: 429,
           statusText: "Too Many Requests",
           text: async () => "Rate limit exceeded",
-        } as Response);
+        }) as Response;
 
       await expect(
         tavilyContextSearchTool.execute({
@@ -486,7 +486,7 @@ test.describe("Tavily Context Search Tool", () => {
           json: async () => ({
             results: [],
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyContextSearchTool.execute({
         context: {
@@ -562,7 +562,7 @@ test.describe("Tavily Context Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyContextSearchTool.execute({
         context: {
@@ -606,7 +606,7 @@ test.describe("Tavily Context Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyContextSearchTool.execute({
         context: {

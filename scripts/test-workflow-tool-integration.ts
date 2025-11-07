@@ -23,11 +23,10 @@ async function testWorkflowToolRegistration() {
         tools.advancedSearchWorkflow.description
       );
       return true;
-    } else {
-      console.log("❌ Advanced Search Workflow tool is NOT registered");
-      console.log("   Available tools:", Object.keys(tools));
-      return false;
     }
+    console.log("❌ Advanced Search Workflow tool is NOT registered");
+    console.log("   Available tools:", Object.keys(tools));
+    return false;
   } catch (error) {
     console.error("❌ Error checking tool registration:", error);
     return false;
@@ -72,7 +71,7 @@ async function testWorkflowExecution() {
 
         // Verify token usage is within range
         const tokens = synthesizeStep.output.totalTokens || 0;
-        if (tokens >= 3000 && tokens <= 10000) {
+        if (tokens >= 3000 && tokens <= 10_000) {
           console.log("✅ Token usage within acceptable range (3K-10K)");
         } else {
           console.log(`⚠️  Token usage outside expected range: ${tokens}`);
@@ -80,10 +79,9 @@ async function testWorkflowExecution() {
       }
 
       return true;
-    } else {
-      console.log("❌ Workflow failed with status:", result.status);
-      return false;
     }
+    console.log("❌ Workflow failed with status:", result.status);
+    return false;
   } catch (error) {
     console.error("❌ Error executing workflow:", error);
     return false;
@@ -121,9 +119,7 @@ async function testChatAgentWithWorkflowTool() {
         "✅ Agent instructions reference research/workflow capability"
       );
     } else {
-      console.log(
-        "⚠️  Agent instructions may not clearly guide workflow usage"
-      );
+      console.log("⚠️  Agent instructions may not clearly guide workflow usage");
     }
 
     return true;

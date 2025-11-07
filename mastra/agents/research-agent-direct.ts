@@ -6,14 +6,16 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
  * This prevents multiple provider instances during streaming
  */
 const cerebrasProvider = getBalancedCerebrasProvider();
-console.log("[Mastra] research-agent-direct → Cerebras provider initialized (NO TOOLS)");
+console.log(
+  "[Mastra] research-agent-direct → Cerebras provider initialized (NO TOOLS)"
+);
 
 /**
  * Direct Research Agent (NO TOOLS)
- * 
+ *
  * Optimized for ultra-fast responses to general research queries.
  * Uses ONLY Cerebras model knowledge - no web search.
- * 
+ *
  * Use this agent when:
  * - User asks general knowledge questions
  * - Query doesn't require current information

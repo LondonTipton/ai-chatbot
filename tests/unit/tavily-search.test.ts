@@ -126,7 +126,7 @@ test.describe("Tavily Basic Search Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilySearchTool.execute({
         context: {
@@ -165,7 +165,7 @@ test.describe("Tavily Basic Search Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilySearchTool.execute({
         context: {
@@ -198,7 +198,7 @@ test.describe("Tavily Basic Search Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilySearchTool.execute({
         context: {
@@ -302,7 +302,7 @@ test.describe("Tavily Basic Search Tool", () => {
         ({
           ok: false,
           statusText: "Internal Server Error",
-        } as Response);
+        }) as Response;
 
       await expect(
         tavilySearchTool.execute({
@@ -365,7 +365,7 @@ test.describe("Tavily Basic Search Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilySearchTool.execute({
         context: {

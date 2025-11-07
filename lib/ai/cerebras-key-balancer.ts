@@ -401,9 +401,7 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
         retryDelay
       );
     } else {
-      logger.warn(
-        "[Cerebras Balancer] ⚠️  Could not identify which key failed"
-      );
+      logger.warn("[Cerebras Balancer] ⚠️  Could not identify which key failed");
     }
   } else {
     logger.log(

@@ -30,8 +30,8 @@ export function ComprehensiveWorkflowToggle({
       <Switch
         checked={enabled}
         className="relative z-10 scale-75"
-        id="comprehensive-workflow"
         data-testid="deep-research-switch"
+        id="comprehensive-workflow"
         onCheckedChange={handleCheckedChange}
       />
       <TooltipProvider>
@@ -39,11 +39,11 @@ export function ComprehensiveWorkflowToggle({
           <TooltipTrigger asChild>
             <button
               className="flex items-center gap-1 border-0 bg-transparent p-0 text-muted-foreground text-xs transition-colors hover:text-foreground"
+              data-testid="deep-research-label"
               onClick={(e) => {
                 e.preventDefault();
                 handleLabelClick();
               }}
-              data-testid="deep-research-label"
               type="button"
             >
               Deep Research

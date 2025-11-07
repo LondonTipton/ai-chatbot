@@ -213,8 +213,7 @@ async function runTests() {
     logResult(
       "Within Budget (≤10K)",
       `${withinBudget}/${successful} (${(
-        (withinBudget / successful) *
-        100
+        (withinBudget / successful) * 100
       ).toFixed(0)}%)`
     );
   }

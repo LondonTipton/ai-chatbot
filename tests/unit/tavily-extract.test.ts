@@ -30,7 +30,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -78,7 +78,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -104,7 +104,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -138,7 +138,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -167,7 +167,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -202,7 +202,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -235,7 +235,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -289,7 +289,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: false,
           statusText: "Bad Request",
-        } as Response);
+        }) as Response;
 
       await expect(
         tavilyExtractTool.execute({
@@ -329,7 +329,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -355,7 +355,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {
@@ -379,7 +379,7 @@ test.describe("Tavily Extract Tool", () => {
         ({
           ok: true,
           json: async () => mockResponse,
-        } as Response);
+        }) as Response;
 
       const result = await tavilyExtractTool.execute({
         context: {

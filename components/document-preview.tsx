@@ -113,15 +113,15 @@ export function DocumentPreview({
   const document: Document | null = previewDocument
     ? previewDocument
     : artifact.status === "streaming"
-    ? {
-        title: artifact.title,
-        kind: artifact.kind,
-        content: artifact.content,
-        id: artifact.documentId,
-        createdAt: new Date(),
-        userId: "noop",
-      }
-    : null;
+      ? {
+          title: artifact.title,
+          kind: artifact.kind,
+          content: artifact.content,
+          id: artifact.documentId,
+          createdAt: new Date(),
+          userId: "noop",
+        }
+      : null;
 
   if (!document) {
     return <LoadingSkeleton artifactKind={artifact.kind} />;

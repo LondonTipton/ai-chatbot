@@ -86,7 +86,7 @@ test.describe("Tavily News Search Tool", () => {
           json: async () => ({
             results: [],
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "Test query", days: 7 },
@@ -143,7 +143,7 @@ test.describe("Tavily News Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "Zimbabwe news" },
@@ -179,7 +179,7 @@ test.describe("Tavily News Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "Test query" },
@@ -237,7 +237,7 @@ test.describe("Tavily News Search Tool", () => {
               },
             ],
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "What is the latest news?" },
@@ -334,7 +334,7 @@ test.describe("Tavily News Search Tool", () => {
           status: 429,
           statusText: "Too Many Requests",
           text: async () => "Rate limit exceeded",
-        } as Response);
+        }) as Response;
 
       await expect(
         tavilyNewsSearchTool.execute({
@@ -355,7 +355,7 @@ test.describe("Tavily News Search Tool", () => {
           json: async () => ({
             results: [],
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "Test query" },
@@ -469,7 +469,7 @@ test.describe("Tavily News Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "Zimbabwe legal news" },
@@ -514,7 +514,7 @@ test.describe("Tavily News Search Tool", () => {
           json: async () => ({
             results: mockResults,
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "Test query" },
@@ -547,7 +547,7 @@ test.describe("Tavily News Search Tool", () => {
               },
             ],
           }),
-        } as Response);
+        }) as Response;
 
       const result = await tavilyNewsSearchTool.execute({
         context: { query: "Test query", days: 7 },

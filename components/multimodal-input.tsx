@@ -539,7 +539,7 @@ function PureModelSelectorCompact({
         type="button"
       >
         <CpuIcon size={16} />
-        <span className="hidden font-medium text-xs sm:block">
+        <span className="hidden font-medium text-sm sm:block">
           {selectedModel?.name}
         </span>
         <ChevronDownIcon size={16} />
@@ -569,10 +569,10 @@ function PureModelSelectorCompact({
                 )}
                 {model.icon && <span className="text-base">{model.icon}</span>}
                 <div className="flex-1">
-                  <div className="truncate font-medium text-xs">
+                  <div className="truncate font-medium text-sm">
                     {model.name}
                   </div>
-                  <div className="mt-px truncate text-[10px] text-muted-foreground leading-tight">
+                  <div className="mt-px truncate text-muted-foreground text-xs leading-tight">
                     {model.description}
                   </div>
                 </div>
