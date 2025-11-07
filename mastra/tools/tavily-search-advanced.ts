@@ -21,7 +21,7 @@ import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 export const tavilySearchAdvancedTool = createTool({
   id: "tavily-search-advanced",
   description:
-    "Advanced search for legal information with comprehensive results and AI-generated answer. Use for queries needing detailed information with domain prioritization. Optimized for token efficiency with default 7 results.",
+    "Advanced search for legal information with comprehensive results and AI-generated answer. Use for queries needing detailed information with domain prioritization. Optimized for token efficiency with default 10 results.",
 
   inputSchema: z.object({
     query: z
@@ -30,8 +30,8 @@ export const tavilySearchAdvancedTool = createTool({
     maxResults: z
       .number()
       .optional()
-      .default(7)
-      .describe("Maximum number of results (1-10, default: 7)"),
+      .default(10)
+      .describe("Maximum number of results (1-10, default: 10)"),
     domainStrategy: z
       .enum(["strict", "prioritized", "open"])
       .optional()
@@ -44,11 +44,6 @@ export const tavilySearchAdvancedTool = createTool({
       .optional()
       .default("deep")
       .describe("Research depth for domain prioritization"),
-    country: z
-      .string()
-      .optional()
-      .default("ZW")
-      .describe("Country code to boost results from (e.g., 'ZW' for Zimbabwe)"),
     jurisdiction: z
       .string()
       .default("Zimbabwe")
@@ -91,17 +86,15 @@ export const tavilySearchAdvancedTool = createTool({
   execute: async ({ context }) => {
     const {
       query,
-      maxResults = 7,
+      maxResults = 10,
       domainStrategy = "prioritized",
       researchDepth = "deep",
-      country = "ZW",
       includeRawContent = false,
     } = context as {
       query: string;
       maxResults?: number;
       domainStrategy?: DomainStrategy;
       researchDepth?: ResearchDepth;
-      country?: string;
       jurisdiction?: string;
       includeRawContent?: boolean;
     };
@@ -122,17 +115,18 @@ export const tavilySearchAdvancedTool = createTool({
         include_answer: true,
         include_raw_content: includeRawContent,
         max_results: validMaxResults,
-        country,
       };
 
       // Apply domain strategy
       if (domainStrategy === "strict") {
+        // Strict: ONLY search priority domains
         requestBody.include_domains = getPriorityDomains(researchDepth);
       } else if (domainStrategy === "prioritized") {
+        // Prioritized: Exclude spam but search globally
+        // Note: Removed include_domains to allow broader search while still excluding spam
         requestBody.exclude_domains = getExcludeDomains();
-        requestBody.include_domains = getPriorityDomains(researchDepth);
       } else {
-        // open
+        // Open: Just exclude spam, let Tavily find best matches globally
         requestBody.exclude_domains = getExcludeDomains();
       }
 

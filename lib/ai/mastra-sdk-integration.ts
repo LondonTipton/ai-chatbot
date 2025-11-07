@@ -8,6 +8,8 @@
 import { createLogger } from "@/lib/logger";
 import { mastra } from "@/mastra";
 import type { QueryComplexity } from "./complexity-detector";
+import { withCerebrasRetry } from "./cerebras-retry-handler";
+import { handleCerebrasError } from "./cerebras-key-balancer";
 
 const logger = createLogger("ai/mastra-sdk-integration");
 
@@ -156,14 +158,38 @@ Remember: You provide legal information, not legal advice. Always recommend cons
 
   // Stream with AI SDK v5 format
   // Don't pass memory config or context - just the messages
-  const stream = await agent.stream([{ role: "user", content: query }], {
-    format: "aisdk", // AI SDK v5 format
-    maxSteps: 15, // Allow multiple tool calls
-  } as any);
+  // Wrap in retry handler for rate limit protection
+  try {
+    const stream = await withCerebrasRetry(
+      async () => {
+        return await agent.stream([{ role: "user", content: query }], {
+          format: "aisdk", // AI SDK v5 format
+          maxSteps: 15, // Allow multiple tool calls
+        } as any);
+      },
+      {
+        maxRetries: 3,
+        initialDelay: 2000,
+        maxDelay: 15_000,
+        onRetry: (attempt, delay, error) => {
+          logger.warn(
+            `[Mastra SDK] Retry attempt ${attempt} after ${Math.round(delay)}ms due to:`,
+            error.message
+          );
+          // Mark the key as failed for rotation
+          handleCerebrasError(error);
+        },
+      }
+    );
 
-  logger.log("[Mastra SDK] ✅ Stream created successfully");
-
-  return stream;
+    logger.log("[Mastra SDK] ✅ Stream created successfully");
+    return stream;
+  } catch (error) {
+    // Final error after all retries
+    logger.error("[Mastra SDK] ❌ Failed to create stream after retries:", error);
+    handleCerebrasError(error);
+    throw error;
+  }
 }
 
 /**
@@ -367,12 +393,36 @@ Remember: You provide legal information, not legal advice. Always recommend cons
 
   // Stream with AI SDK v5 format
   // Don't pass memory config or context - just the messages
-  const stream = await agent.stream(mastraMessages, {
-    format: "aisdk", // AI SDK v5 format
-    maxSteps: 15, // Allow multiple tool calls
-  } as any);
+  // Wrap in retry handler for rate limit protection
+  try {
+    const stream = await withCerebrasRetry(
+      async () => {
+        return await agent.stream(mastraMessages, {
+          format: "aisdk", // AI SDK v5 format
+          maxSteps: 15, // Allow multiple tool calls
+        } as any);
+      },
+      {
+        maxRetries: 3,
+        initialDelay: 2000,
+        maxDelay: 15_000,
+        onRetry: (attempt, delay, error) => {
+          logger.warn(
+            `[Mastra SDK] Retry attempt ${attempt} after ${Math.round(delay)}ms due to:`,
+            error.message
+          );
+          // Mark the key as failed for rotation
+          handleCerebrasError(error);
+        },
+      }
+    );
 
-  logger.log("[Mastra SDK] ✅ Stream created successfully");
-
-  return stream;
+    logger.log("[Mastra SDK] ✅ Stream created successfully");
+    return stream;
+  } catch (error) {
+    // Final error after all retries
+    logger.error("[Mastra SDK] ❌ Failed to create stream after retries:", error);
+    handleCerebrasError(error);
+    throw error;
+  }
 }

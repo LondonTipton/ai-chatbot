@@ -28,6 +28,7 @@ import { ChatSDKError } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import { isCerebrasRateLimitError } from "@/lib/ai/cerebras-retry-handler";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
@@ -358,12 +359,14 @@ export async function POST(request: Request) {
     try {
       // Route to Mastra using official @mastra/ai-sdk pattern with full message history
       // This uses agent.stream() with format: "aisdk" for AI SDK v5 compatibility
-      logger.log(`[Mastra] 📜 Passing full message history (${uiMessages.length} messages)`);
-      
+      logger.log(
+        `[Mastra] 📜 Passing full message history (${uiMessages.length} messages)`
+      );
+
       const { streamMastraAgentWithHistory } = await import(
         "@/lib/ai/mastra-sdk-integration"
       );
-      
+
       const mastraStream = await streamMastraAgentWithHistory(
         complexityAnalysis.complexity,
         uiMessages, // ✅ FIXED: Pass full message history instead of just latest query
@@ -557,6 +560,32 @@ export async function POST(request: Request) {
 
     if (error instanceof ChatSDKError) {
       return error.toResponse();
+    }
+
+    // Check for Cerebras rate limit errors (429)
+    if (isCerebrasRateLimitError(error)) {
+      logger.warn("[Rate Limit] 429 error from Cerebras API", {
+        statusCode: (error as any).statusCode,
+        code: (error as any).code || (error as any).data?.code,
+        vercelId,
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: "rate_limit_exceeded",
+          message:
+            "Our AI service is experiencing high demand. Your request will be retried automatically.",
+          retryAfter: 15, // seconds
+          type: "rate_limit",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "15",
+          },
+        }
+      );
     }
 
     // Check for Vercel AI Gateway credit card error

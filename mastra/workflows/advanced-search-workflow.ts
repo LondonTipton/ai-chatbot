@@ -1,6 +1,5 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
-import { getZimbabweLegalDomains } from "@/lib/utils/zimbabwe-domains";
 import { synthesizerAgent } from "../agents/synthesizer-agent";
 import { tavilyExtractTool } from "../tools/tavily-extract";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
@@ -21,14 +20,95 @@ import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
  */
 
 /**
+ * Regex patterns for source classification (defined at module level for performance)
+ */
+const CASE_NAME_PATTERN = /\sv\s/; // "X v Y" pattern
+const CITATION_PATTERN = /\[20\d{2}\]/; // Citation like [2023]
+const COURT_CODE_PATTERN = /zwcc|zwhhc|zwsc|sadct/; // Zimbabwe court codes
+
+/**
+ * Helper function to classify source type
+ * Helps distinguish court cases from academic articles and news
+ */
+function classifySourceType(
+  url: string,
+  title: string,
+  content: string
+): "court-case" | "academic" | "news" | "government" | "other" {
+  const urlLower = url.toLowerCase();
+  const titleLower = title.toLowerCase();
+  const contentLower = content.toLowerCase();
+
+  // Court cases - highest priority
+  if (
+    urlLower.includes("zimlii.org") ||
+    urlLower.includes("saflii.org") ||
+    urlLower.includes("africanlii.org") ||
+    CASE_NAME_PATTERN.test(titleLower) ||
+    CITATION_PATTERN.test(titleLower) ||
+    contentLower.includes("judgment") ||
+    contentLower.includes("court of") ||
+    contentLower.includes("justice") ||
+    contentLower.includes("appellant") ||
+    contentLower.includes("respondent") ||
+    COURT_CODE_PATTERN.test(contentLower)
+  ) {
+    return "court-case";
+  }
+
+  // Academic sources
+  if (
+    urlLower.includes("researchgate") ||
+    urlLower.includes("academia.edu") ||
+    urlLower.includes("sciencedirect") ||
+    urlLower.includes("jstor") ||
+    urlLower.includes("springer") ||
+    urlLower.includes("wiley") ||
+    urlLower.includes("tandfonline") ||
+    titleLower.includes("study") ||
+    titleLower.includes("research") ||
+    titleLower.includes("analysis") ||
+    contentLower.includes("abstract:") ||
+    contentLower.includes("methodology") ||
+    contentLower.includes("findings:")
+  ) {
+    return "academic";
+  }
+
+  // Government sources
+  if (
+    urlLower.includes(".gov.zw") ||
+    urlLower.includes("parliament") ||
+    urlLower.includes("ministry")
+  ) {
+    return "government";
+  }
+
+  // News sources
+  if (
+    urlLower.includes("news") ||
+    urlLower.includes("herald") ||
+    urlLower.includes("zimlive") ||
+    urlLower.includes("newsday") ||
+    urlLower.includes("standard") ||
+    contentLower.includes("reported") ||
+    contentLower.includes("journalist")
+  ) {
+    return "news";
+  }
+
+  return "other";
+}
+
+/**
  * Step 1: Advanced Search
- * Performs advanced Tavily search with Zimbabwe domains, country='ZW'
+ * Performs advanced Tavily search with Zimbabwe domains
  * Token estimate: 2K-4K tokens
  */
 const advancedSearchStep = createStep({
   id: "advanced-search",
   description:
-    "Perform advanced web search with Zimbabwe legal domain filtering",
+    "Perform advanced web search with Zimbabwe legal domain filtering and source classification",
   inputSchema: z.object({
     query: z.string().describe("The search query"),
     jurisdiction: z
@@ -47,9 +127,12 @@ const advancedSearchStep = createStep({
           content: z.string(),
           relevanceScore: z.number(),
           publishedDate: z.string(),
+          sourceType: z
+            .enum(["court-case", "academic", "news", "government", "other"])
+            .describe("Classified source type"),
         })
       )
-      .describe("Array of detailed search results"),
+      .describe("Array of detailed search results with source classification"),
     totalResults: z.number(),
     tokenEstimate: z.number(),
   }),
@@ -61,19 +144,36 @@ const advancedSearchStep = createStep({
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
           query: `${query} ${jurisdiction}`,
-          maxResults: 7,
+          maxResults: 10, // Increased from 7 to capture more landmark cases
           jurisdiction,
           includeRawContent: true, // Required for content extraction
           domainStrategy: "prioritized", // Automatically uses Zimbabwe domain prioritization
           researchDepth: "deep",
-          country: "ZW",
         },
         runtimeContext,
       });
 
+      // Classify each result by source type
+      const classifiedResults = searchResults.results.map((result: any) => ({
+        ...result,
+        sourceType: classifySourceType(
+          result.url,
+          result.title,
+          result.content
+        ),
+      }));
+
+      console.log(
+        "[Advanced Search Workflow] Source classification:",
+        classifiedResults.reduce((acc: any, r: any) => {
+          acc[r.sourceType] = (acc[r.sourceType] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      );
+
       return {
         answer: searchResults.answer,
-        results: searchResults.results,
+        results: classifiedResults,
         totalResults: searchResults.totalResults,
         tokenEstimate: searchResults.tokenEstimate,
       };
@@ -109,6 +209,13 @@ const extractTopSourcesStep = createStep({
         content: z.string(),
         relevanceScore: z.number(),
         publishedDate: z.string(),
+        sourceType: z.enum([
+          "court-case",
+          "academic",
+          "news",
+          "government",
+          "other",
+        ]),
       })
     ),
     totalResults: z.number(),
@@ -125,9 +232,16 @@ const extractTopSourcesStep = createStep({
           content: z.string(),
           relevanceScore: z.number(),
           publishedDate: z.string(),
+          sourceType: z.enum([
+            "court-case",
+            "academic",
+            "news",
+            "government",
+            "other",
+          ]),
         })
       )
-      .describe("Search results"),
+      .describe("Search results with source type classification"),
     totalResults: z.number(),
     tokenEstimate: z.number(),
     extractions: z
@@ -235,6 +349,13 @@ const synthesizeStep = createStep({
         content: z.string(),
         relevanceScore: z.number(),
         publishedDate: z.string(),
+        sourceType: z.enum([
+          "court-case",
+          "academic",
+          "news",
+          "government",
+          "other",
+        ]),
       })
     ),
     totalResults: z.number(),
@@ -274,38 +395,128 @@ const synthesizeStep = createStep({
     const { query } = initData;
 
     try {
-      // BUILD STRUCTURED PROMPT WITH EXPLICIT GROUNDING RULES
-      // This prevents hallucination by enforcing source-only responses
+      // BUILD STRUCTURED PROMPT WITH SOURCES FIRST, THEN GROUNDING RULES
+      // This prevents the model from "forgetting" rules in long prompts
+
+      // Organize sources by type for better synthesis
+      const courtCases = results.filter(
+        (r: any) => r.sourceType === "court-case"
+      );
+      const academic = results.filter((r: any) => r.sourceType === "academic");
+      const government = results.filter(
+        (r: any) => r.sourceType === "government"
+      );
+      const news = results.filter((r: any) => r.sourceType === "news");
+      const other = results.filter((r: any) => r.sourceType === "other");
 
       let synthesisPrompt = `You are synthesizing search results for Zimbabwe legal query: "${query}"
 
-🎯 CRITICAL GROUNDING RULES (STRICTLY ENFORCE):
-1. ✅ ONLY use information from the provided sources below
-2. ✅ NEVER add information not explicitly in the sources
-3. ✅ NEVER claim a source says something it doesn't
-4. ✅ Label each major claim with its source URL: [Source: URL]
-5. ✅ If information is not in sources, say "This information was not found in the available sources"
-6. ✅ If sources conflict, note the disagreement clearly
-7. ✅ Qualify uncertain statements with "may", "might", "according to", "some argue"
-8. ✅ Use exact quotations when taking direct statements from sources
-9. ❌ NEVER fabricate statute references, section numbers, or case names
-10. ❌ NEVER add general legal knowledge beyond provided sources
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 AVAILABLE SOURCES (READ THESE FIRST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-AVAILABLE SOURCES:
-${results
+${
+  courtCases.length > 0
+    ? `⚖️ COURT CASES (Primary Legal Authority):
+${courtCases
   .map(
     (r: any, i: number) =>
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SOURCE ${i + 1}: "${r.title}"
+      `
+CASE ${i + 1}: "${r.title}"
 URL: ${r.url}
-Relevance Score: ${(r.relevanceScore * 100).toFixed(0)}%
+Relevance: ${(r.relevanceScore * 100).toFixed(0)}%
 Published: ${r.publishedDate}
 
 Content:
 ${r.content}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
   )
-  .join("\n\n")}`;
+  .join("\n")}
+`
+    : ""
+}
+
+${
+  government.length > 0
+    ? `🏛️ GOVERNMENT SOURCES (Official):
+${government
+  .map(
+    (r: any, i: number) =>
+      `
+GOV ${i + 1}: "${r.title}"
+URL: ${r.url}
+Relevance: ${(r.relevanceScore * 100).toFixed(0)}%
+
+Content:
+${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}
+
+${
+  academic.length > 0
+    ? `📚 ACADEMIC SOURCES (Secondary - Research/Analysis):
+${academic
+  .map(
+    (r: any, i: number) =>
+      `
+STUDY ${i + 1}: "${r.title}"
+URL: ${r.url}
+Relevance: ${(r.relevanceScore * 100).toFixed(0)}%
+Published: ${r.publishedDate}
+
+Content:
+${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}
+
+${
+  news.length > 0
+    ? `📰 NEWS SOURCES (Tertiary - Reporting):
+${news
+  .map(
+    (r: any, i: number) =>
+      `
+NEWS ${i + 1}: "${r.title}"
+URL: ${r.url}
+Relevance: ${(r.relevanceScore * 100).toFixed(0)}%
+Published: ${r.publishedDate}
+
+Content:
+${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}
+
+${
+  other.length > 0
+    ? `📄 OTHER SOURCES:
+${other
+  .map(
+    (r: any, i: number) =>
+      `
+SOURCE ${i + 1}: "${r.title}"
+URL: ${r.url}
+Relevance: ${(r.relevanceScore * 100).toFixed(0)}%
+
+Content:
+${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}`;
 
       // Add extracted content if available
       if (!skipped && extractions.length > 0) {
@@ -329,30 +540,54 @@ ${e.rawContent}
 
       synthesisPrompt += `
 
-INITIAL AI ANSWER (use as reference structure, but verify all facts against sources above):
-${answer || "No initial answer provided"}
+${
+  answer
+    ? `INITIAL AI ANSWER (use as reference structure only, verify all facts):
+${answer}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+    : ""
+}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-YOUR TASK:
+🎯 CRITICAL GROUNDING RULES - READ BEFORE RESPONDING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Create a comprehensive response that:
-1. Directly answers the query: "${query}"
-2. ONLY uses facts from the provided sources (no external knowledge)
-3. Labels each major claim with its source: [Source: URL]
-4. Notes any gaps: "The sources do not address..."
-5. Highlights any conflicts between sources
-6. Uses professional legal language appropriate for Zimbabwe
-7. Provides proper citations with URLs
+✅ MANDATORY REQUIREMENTS:
+1. ONLY use information from the sources above
+2. For EVERY claim, cite the source: [Source: URL]
+3. If a case name appears in sources, use it EXACTLY as written
+4. If a case name does NOT appear in sources, DO NOT mention it
+5. If you're unsure, say "The sources do not provide this information"
+6. Academic articles are NOT court cases - label them as "Study" or "Article"
+7. Court cases have citations like "CCZ 11/23" or "ZWHHC 290" or "[2023] ZWCC 11"
+8. If no citation format is given, it's probably NOT a court case
+9. NEVER fabricate URLs, case names, citations, or statute references
+10. Copy URLs EXACTLY as provided - character for character
 
-STRUCTURE YOUR RESPONSE:
-1. **Direct Answer** - Answer the query directly with citations
-2. **Key Findings** - Bullet points with source labels
-3. **Detailed Explanation** - Comprehensive information from sources
-4. **Source Citations** - List all sources used with URLs
-5. **Limitations** - What the sources don't cover
+❌ STRICTLY FORBIDDEN:
+- Adding information not in sources
+- Creating plausible-sounding case names
+- Inventing citation numbers
+- Mixing academic studies with court cases
+- Fabricating statute sections or legal provisions
+- Using general legal knowledge beyond sources
 
-ABSOLUTE RULE: Accuracy over comprehensiveness. If unsure, say so. Better to admit gaps than to fabricate.`;
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 YOUR TASK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Answer the query: "${query}"
+
+REQUIRED STRUCTURE:
+1. **Summary** - Direct answer with inline citations [Source: URL]
+2. **Key Cases** - ONLY actual court cases from sources (with proper citations)
+3. **Additional Sources** - Academic articles, studies, news (clearly labeled as such)
+4. **Detailed Analysis** - Comprehensive information from sources with citations
+5. **Source List** - All sources used with full URLs
+6. **Limitations** - Explicitly state what the sources don't cover
+
+REMEMBER: Accuracy > Comprehensiveness. If unsure, say so. Better to admit gaps than to fabricate.`;
 
       // Generate synthesis with maxSteps=15
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {

@@ -15,9 +15,13 @@ console.log("[Mastra] synthesizer-agent → Cerebras provider initialized");
  * into clear, comprehensive, human-readable responses.
  *
  * Configuration:
- * - Temperature: 0.6 (deterministic synthesis for consistency)
+ * - Model: Cerebras qwen-3-235b-a22b-instruct-2507 (high accuracy model)
+ * - Temperature: 0.1 (LOW - for factual accuracy and reduced hallucinations)
  * - Max Tokens: 10000 (INCREASED from 6000 to handle comprehensive analysis outputs)
  * - Tools: None (pure synthesis and formatting)
+ *
+ * Note: Temperature is controlled by the model provider, not the Agent config.
+ * The qwen-3-235b model is specifically chosen for its accuracy and grounding capabilities.
  *
  * CRITICAL: This agent ALWAYS produces text output. Its sole purpose is to
  * ensure that no matter what the task agent produces, the user gets a complete,
@@ -149,10 +153,12 @@ CRITICAL: Every fact, every claim, every statement, and every URL must be tracea
 
   model: () => {
     // Reuse the singleton provider instance
+    // Using qwen-3-235b for superior accuracy and grounding capabilities
+    // This model is better at following strict instructions and avoiding hallucinations
     console.log(
-      "[Mastra] synthesizer-agent → Using Cerebras model: gpt-oss-120b (reasoning preferred)"
+      "[Mastra] synthesizer-agent → Using Cerebras model: qwen-3-235b-a22b-instruct-2507 (high accuracy)"
     );
-    return cerebrasProvider("gpt-oss-120b");
+    return cerebrasProvider("qwen-3-235b-a22b-instruct-2507");
   },
 
   // No tools - pure synthesis and text generation

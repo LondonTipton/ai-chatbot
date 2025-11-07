@@ -130,12 +130,38 @@ const synthesizeStep = createStep({
     try {
       const synthesisPrompt = `Create comprehensive answer for Zimbabwe legal query: "${query}"
 
-Search Results:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 SEARCH RESULTS (READ FIRST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${
   results.length > 0 ? JSON.stringify(results, null, 2) : "No results available"
 }
 
-AI Answer: ${answer || "No answer generated"}
+${
+  answer
+    ? `INITIAL AI ANSWER (verify facts):
+${answer}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+    : ""
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 CRITICAL RULES - READ BEFORE RESPONDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ MANDATORY:
+1. ONLY use information from sources above
+2. Cite every claim: [Source: URL]
+3. Use case names EXACTLY as written
+4. If case name not in sources, DO NOT mention it
+5. NEVER fabricate case names, citations, or URLs
+
+❌ FORBIDDEN:
+- Adding information not in sources
+- Creating plausible case names
+- Inventing citations
 
 Provide detailed answer with proper citations and Zimbabwe legal context.`;
 

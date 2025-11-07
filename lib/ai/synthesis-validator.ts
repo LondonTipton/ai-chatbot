@@ -23,13 +23,13 @@ const URL_PATTERN = /https?:\/\/[^\s)]+/g;
 
 /**
  * Validates that synthesized response is grounded in source data
- * 
+ *
  * This validator checks for common hallucination patterns:
  * - Fabricated statute references
  * - Invented URLs
  * - Ungrounded specific numbers
  * - Missing source citations
- * 
+ *
  * @param synthesis - The generated response text
  * @param sources - Array of source objects with title, url, and content
  * @returns ValidationResult with detailed analysis
@@ -236,7 +236,8 @@ export function formatValidationResult(result: ValidationResult): string {
   const { isValid, score, details, hallucinations, ungroundedClaims, warning } =
     result;
 
-  const separator = "\n═══════════════════════════════════════════════════════════════════════════════\n";
+  const separator =
+    "\n═══════════════════════════════════════════════════════════════════════════════\n";
   let output = separator;
   output += "SYNTHESIS VALIDATION REPORT\n";
   output += separator.substring(1);

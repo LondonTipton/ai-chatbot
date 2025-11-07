@@ -387,8 +387,12 @@ const documentStep = createStep({
         totalTokensSoFar: totalTokens,
       });
 
-      // Build comprehensive synthesis prompt
+      // Build comprehensive synthesis prompt with sources first, then rules
       let synthesisPrompt = `Create a comprehensive legal research document for: "${query}"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 RESEARCH CONTENT (READ THIS FIRST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ## Initial Research
 ${initialContext}
@@ -417,17 +421,41 @@ ${deepDiveContext2}
 
       synthesisPrompt += `
 
-## Instructions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 CRITICAL GROUNDING RULES - READ BEFORE RESPONDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ MANDATORY REQUIREMENTS:
+1. ONLY use information from the research content above
+2. For EVERY claim, cite the source with URLs
+3. If a case name appears in research, use it EXACTLY as written
+4. If a case name does NOT appear in research, DO NOT mention it
+5. If you're unsure, say "The research does not provide this information"
+6. Use exact quotations when appropriate
+7. Note any gaps or conflicting information clearly
+8. NEVER fabricate case names, citations, statute references, or URLs
+
+❌ STRICTLY FORBIDDEN:
+- Adding information not in research content
+- Creating plausible-sounding case names
+- Inventing citation numbers or statute sections
+- Using general legal knowledge beyond research
+- Fabricating URLs or legal references
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 YOUR TASK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Create a publication-quality legal research document that:
 1. Provides comprehensive analysis of the topic
-2. Includes all relevant Zimbabwe legal context
+2. Includes all relevant Zimbabwe legal context FROM THE RESEARCH
 3. Cites all sources with proper URLs
 4. Organizes information logically with clear sections
-5. Provides actionable conclusions and recommendations
+5. Provides actionable conclusions based ONLY on research findings
 6. Uses professional legal writing style
 7. Includes executive summary at the beginning
 
-The document should be self-contained and suitable for professional use.`;
+REMEMBER: Accuracy > Comprehensiveness. Only state what research supports.`;
 
       // Generate comprehensive synthesis
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {

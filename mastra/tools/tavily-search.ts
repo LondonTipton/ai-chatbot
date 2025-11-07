@@ -21,15 +21,15 @@ import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 export const tavilySearchTool = createTool({
   id: "tavily-search",
   description:
-    "Search the web for current information. Returns relevant search results with intelligent Zimbabwe domain prioritization. Optimized for token efficiency with default 3 results.",
+    "Search the web for current information. Returns relevant search results with intelligent Zimbabwe domain prioritization. Optimized for token efficiency with default 5 results.",
 
   inputSchema: z.object({
     query: z.string().describe("The search query"),
     maxResults: z
       .number()
       .optional()
-      .default(3)
-      .describe("Maximum number of results to return (default: 3)"),
+      .default(5)
+      .describe("Maximum number of results to return (default: 5)"),
     domainStrategy: z
       .enum(["strict", "prioritized", "open"])
       .optional()
@@ -72,7 +72,7 @@ export const tavilySearchTool = createTool({
   execute: async ({ context }) => {
     const {
       query,
-      maxResults = 3,
+      maxResults = 5,
       domainStrategy = "prioritized",
       researchDepth = "standard",
     } = context as {
@@ -95,28 +95,18 @@ export const tavilySearchTool = createTool({
         include_answer: true,
         include_raw_content: false,
         search_depth: "basic",
-        country: "ZW",
       };
 
       // Apply domain strategy
       if (domainStrategy === "strict") {
+        // Strict: ONLY search priority domains
         requestBody.include_domains = getPriorityDomains(researchDepth);
       } else if (domainStrategy === "prioritized") {
+        // Prioritized: Exclude spam but search globally
+        // Note: Removed include_domains to allow broader search while still excluding spam
         requestBody.exclude_domains = getExcludeDomains();
-        requestBody.include_domains = getPriorityDomains(researchDepth);
       } else {
-        // open
-        requestBody.exclude_domains = getExcludeDomains();
-      }
-
-      // Apply domain strategy
-      if (domainStrategy === "strict") {
-        requestBody.include_domains = getPriorityDomains(researchDepth);
-      } else if (domainStrategy === "prioritized") {
-        requestBody.exclude_domains = getExcludeDomains();
-        requestBody.include_domains = getPriorityDomains(researchDepth);
-      } else {
-        // open
+        // Open: Just exclude spam, let Tavily find best matches globally
         requestBody.exclude_domains = getExcludeDomains();
       }
 

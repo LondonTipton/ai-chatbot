@@ -14,8 +14,8 @@ const sources = [
   {
     title: "Consumer Protection Act Overview",
     url: "https://example.com/consumer-act",
-    content: "The Consumer Protection Act provides remedies for breach..."
-  }
+    content: "The Consumer Protection Act provides remedies for breach...",
+  },
 ];
 
 const synthesizedResponse = "...your synthesized text...";
@@ -35,7 +35,10 @@ Update `mastra/workflows/advanced-search-workflow.ts`:
 
 ```typescript
 // In synthesizeStep execute function, after synthesis
-import { validateSynthesis, formatValidationResult } from "@/lib/ai/synthesis-validator";
+import {
+  validateSynthesis,
+  formatValidationResult,
+} from "@/lib/ai/synthesis-validator";
 
 // ... existing synthesis code ...
 
@@ -46,10 +49,10 @@ const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
 // ✅ ADD VALIDATION HERE
 const validation = validateSynthesis(
   synthesized.text,
-  results.map(r => ({
+  results.map((r) => ({
     title: r.title,
     url: r.url,
-    content: r.content
+    content: r.content,
   }))
 );
 
@@ -100,14 +103,13 @@ const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
 
 // ✅ VALIDATE COMPREHENSIVE SYNTHESIS
 // Note: For comprehensive workflow, we validate against the summarized content
-const validation = validateSynthesis(
-  synthesized.text,
-  [{
+const validation = validateSynthesis(synthesized.text, [
+  {
     title: "Comprehensive Research",
     url: "internal://research",
-    content: summarizedContent
-  }]
-);
+    content: summarizedContent,
+  },
+]);
 
 console.log("[Enhanced Comprehensive] Validation Results", {
   score: validation.score,
@@ -145,20 +147,26 @@ const validation = validateSynthesis(synthesized.text, results);
 // ✅ USE VALIDATION TO DECIDE
 if (validation.score < 60 || validation.hallucinations.length > 0) {
   console.warn("[Workflow] Low validation score - using structured fallback");
-  
+
   // Return structured fallback instead
   const fallbackResponse = `# Research Findings
   
-${results.map((r, i) => `## ${i + 1}. ${r.title}
+${results
+  .map(
+    (r, i) => `## ${i + 1}. ${r.title}
 **URL:** ${r.url}
 ${r.content}
-`).join('\n\n')}
+`
+  )
+  .join("\n\n")}
 
-**Note:** Automatic synthesis did not meet quality thresholds (Score: ${validation.score}/100)`;
+**Note:** Automatic synthesis did not meet quality thresholds (Score: ${
+    validation.score
+  }/100)`;
 
   return {
     response: fallbackResponse,
-    sources: results.map(r => ({ title: r.title, url: r.url })),
+    sources: results.map((r) => ({ title: r.title, url: r.url })),
     totalTokens: tokenEstimate,
     validationScore: validation.score,
     usedFallback: true,
@@ -168,7 +176,7 @@ ${r.content}
 // Validation passed - use synthesis
 return {
   response: synthesized.text,
-  sources: results.map(r => ({ title: r.title, url: r.url })),
+  sources: results.map((r) => ({ title: r.title, url: r.url })),
   totalTokens: tokenEstimate + synthesisTokens,
   validationScore: validation.score,
   usedFallback: false,
@@ -186,7 +194,7 @@ import { quickValidate } from "@/lib/ai/synthesis-validator";
 
 const isValid = quickValidate(
   synthesized.text,
-  sources.map(s => ({ url: s.url }))
+  sources.map((s) => ({ url: s.url }))
 );
 
 if (!isValid) {
@@ -215,7 +223,10 @@ logger.log("[Synthesis Quality Metrics]", {
   confidence: validation.details.confidence,
   citedSources: validation.details.citedSources,
   totalSources: validation.details.totalSources,
-  citationCoverage: (validation.details.citedSources / validation.details.totalSources * 100).toFixed(1),
+  citationCoverage: (
+    (validation.details.citedSources / validation.details.totalSources) *
+    100
+  ).toFixed(1),
   hallucinations: validation.hallucinations.length,
   ungroundedClaims: validation.ungroundedClaims.length,
   isValid: validation.isValid,
@@ -240,7 +251,7 @@ return Response.json({
     confidence: validation.details.confidence,
     citationCoverage: `${validation.details.citedSources}/${validation.details.totalSources}`,
     verified: validation.isValid,
-  }
+  },
 });
 ```
 
@@ -248,16 +259,18 @@ In your UI, you could show a quality indicator:
 
 ```typescript
 // In your React component
-{response.quality.verified ? (
-  <Badge color="green">✅ Verified Response</Badge>
-) : (
-  <Badge color="yellow">⚠️ Unverified</Badge>
-)}
+{
+  response.quality.verified ? (
+    <Badge color="green">✅ Verified Response</Badge>
+  ) : (
+    <Badge color="yellow">⚠️ Unverified</Badge>
+  );
+}
 
 <Text size="sm" color="gray">
-  Quality Score: {response.quality.validationScore}/100
-  ({response.quality.confidence} confidence)
-</Text>
+  Quality Score: {response.quality.validationScore}/100 (
+  {response.quality.confidence} confidence)
+</Text>;
 ```
 
 ---
@@ -292,22 +305,30 @@ export function trackQuality(
     validationScore: validation.score,
     confidence: validation.details.confidence,
     hallucinations: validation.hallucinations.length,
-    citationCoverage: validation.details.citedSources / validation.details.totalSources,
+    citationCoverage:
+      validation.details.citedSources / validation.details.totalSources,
   });
 }
 
 export function getQualityReport() {
-  const avgScore = metrics.reduce((sum, m) => sum + m.validationScore, 0) / metrics.length;
-  const totalHallucinations = metrics.reduce((sum, m) => sum + m.hallucinations, 0);
-  const avgCitation = metrics.reduce((sum, m) => sum + m.citationCoverage, 0) / metrics.length;
-  
+  const avgScore =
+    metrics.reduce((sum, m) => sum + m.validationScore, 0) / metrics.length;
+  const totalHallucinations = metrics.reduce(
+    (sum, m) => sum + m.hallucinations,
+    0
+  );
+  const avgCitation =
+    metrics.reduce((sum, m) => sum + m.citationCoverage, 0) / metrics.length;
+
   return {
     totalSyntheses: metrics.length,
     averageScore: avgScore.toFixed(1),
     totalHallucinations,
-    hallucinationRate: ((totalHallucinations / metrics.length) * 100).toFixed(1),
+    hallucinationRate: ((totalHallucinations / metrics.length) * 100).toFixed(
+      1
+    ),
     averageCitationCoverage: (avgCitation * 100).toFixed(1),
-    highConfidenceCount: metrics.filter(m => m.confidence === 'high').length,
+    highConfidenceCount: metrics.filter((m) => m.confidence === "high").length,
   };
 }
 ```
@@ -317,6 +338,7 @@ export function getQualityReport() {
 ## Example Output
 
 ### Validation Passed
+
 ```
 [Validator] ✅ Synthesis passed validation {
   score: 95,
@@ -325,6 +347,7 @@ export function getQualityReport() {
 ```
 
 ### Validation Failed
+
 ```
 [Validator] ❌ Synthesis failed validation {
   score: 45,
@@ -401,20 +424,25 @@ Sources:
 ## Troubleshooting
 
 ### High False Positive Rate
+
 If validator flags valid responses as invalid:
+
 - Review pattern matching rules
 - Adjust confidence thresholds
 - Check if sources have all necessary content
 
 ### Low Detection Rate
+
 If validator misses hallucinations:
+
 - Add more pattern rules in `statutePatterns`
 - Lower validation score threshold
 - Check `ungroundedClaims` detection
 
 ### Performance Issues
+
 If validation is slow:
+
 - Reduce number of patterns checked
 - Use `quickValidate()` instead of full validation
 - Cache validation results
-

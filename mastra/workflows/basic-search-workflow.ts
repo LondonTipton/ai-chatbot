@@ -4,6 +4,68 @@ import { synthesizerAgent } from "../agents/synthesizer-agent";
 import { tavilySearchTool } from "../tools/tavily-search";
 
 /**
+ * Regex patterns for source classification (defined at module level for performance)
+ */
+const CASE_NAME_PATTERN = /\sv\s/;
+const CITATION_PATTERN = /\[20\d{2}\]/;
+const COURT_CODE_PATTERN = /zwcc|zwhhc|zwsc|sadct/;
+
+/**
+ * Helper function to classify source type
+ */
+function classifySourceType(
+  url: string,
+  title: string,
+  content: string
+): "court-case" | "academic" | "news" | "government" | "other" {
+  const urlLower = url.toLowerCase();
+  const titleLower = title.toLowerCase();
+  const contentLower = content.toLowerCase();
+
+  // Court cases
+  if (
+    urlLower.includes("zimlii.org") ||
+    urlLower.includes("saflii.org") ||
+    urlLower.includes("africanlii.org") ||
+    CASE_NAME_PATTERN.test(titleLower) ||
+    CITATION_PATTERN.test(titleLower) ||
+    contentLower.includes("judgment") ||
+    contentLower.includes("court of") ||
+    contentLower.includes("appellant") ||
+    COURT_CODE_PATTERN.test(contentLower)
+  ) {
+    return "court-case";
+  }
+
+  // Academic
+  if (
+    urlLower.includes("researchgate") ||
+    urlLower.includes("academia.edu") ||
+    urlLower.includes("sciencedirect") ||
+    titleLower.includes("study") ||
+    titleLower.includes("research")
+  ) {
+    return "academic";
+  }
+
+  // Government
+  if (urlLower.includes(".gov.zw") || urlLower.includes("parliament")) {
+    return "government";
+  }
+
+  // News
+  if (
+    urlLower.includes("news") ||
+    urlLower.includes("herald") ||
+    urlLower.includes("zimlive")
+  ) {
+    return "news";
+  }
+
+  return "other";
+}
+
+/**
  * Basic Search Workflow
  *
  * Token Budget: 1K-2.5K tokens
@@ -41,9 +103,16 @@ const searchStep = createStep({
           url: z.string(),
           content: z.string(),
           score: z.number(),
+          sourceType: z.enum([
+            "court-case",
+            "academic",
+            "news",
+            "government",
+            "other",
+          ]),
         })
       )
-      .describe("Search results"),
+      .describe("Search results with source classification"),
     totalResults: z.number().describe("Total number of results"),
     tokenEstimate: z.number().describe("Estimated tokens used"),
   }),
@@ -63,9 +132,19 @@ const searchStep = createStep({
         runtimeContext,
       });
 
+      // Classify each result by source type
+      const classifiedResults = searchResults.results.map((result: any) => ({
+        ...result,
+        sourceType: classifySourceType(
+          result.url,
+          result.title,
+          result.content
+        ),
+      }));
+
       return {
         answer: searchResults.answer,
-        results: searchResults.results,
+        results: classifiedResults,
         totalResults: searchResults.totalResults,
         tokenEstimate: searchResults.tokenEstimate,
       };
@@ -99,6 +178,13 @@ const synthesizeStep = createStep({
         url: z.string(),
         content: z.string(),
         score: z.number(),
+        sourceType: z.enum([
+          "court-case",
+          "academic",
+          "news",
+          "government",
+          "other",
+        ]),
       })
     ),
     totalResults: z.number(),
@@ -122,17 +208,149 @@ const synthesizeStep = createStep({
     const { query } = initData;
 
     try {
-      // Prepare synthesis prompt
-      const synthesisPrompt = `Synthesize these search results for Zimbabwe legal query: "${query}"
+      // Organize sources by type
+      const courtCases = results.filter(
+        (r: any) => r.sourceType === "court-case"
+      );
+      const academic = results.filter((r: any) => r.sourceType === "academic");
+      const government = results.filter(
+        (r: any) => r.sourceType === "government"
+      );
+      const news = results.filter((r: any) => r.sourceType === "news");
+      const other = results.filter((r: any) => r.sourceType === "other");
 
-Search Results:
+      // Build synthesis prompt with sources first, then rules
+      const synthesisPrompt = `You are synthesizing search results for Zimbabwe legal query: "${query}"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 AVAILABLE SOURCES (READ THESE FIRST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${
-  results.length > 0 ? JSON.stringify(results, null, 2) : "No results available"
+  courtCases.length > 0
+    ? `⚖️ COURT CASES (Primary Legal Authority):
+${courtCases
+  .map(
+    (r: any, i: number) =>
+      `
+CASE ${i + 1}: "${r.title}"
+URL: ${r.url}
+Content: ${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
 }
 
-AI Answer: ${answer || "No answer generated"}
+${
+  government.length > 0
+    ? `🏛️ GOVERNMENT SOURCES:
+${government
+  .map(
+    (r: any, i: number) =>
+      `
+GOV ${i + 1}: "${r.title}"
+URL: ${r.url}
+Content: ${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}
 
-Provide a clear, comprehensive answer with proper citations and Zimbabwe legal context.`;
+${
+  academic.length > 0
+    ? `📚 ACADEMIC SOURCES (Secondary):
+${academic
+  .map(
+    (r: any, i: number) =>
+      `
+STUDY ${i + 1}: "${r.title}"
+URL: ${r.url}
+Content: ${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}
+
+${
+  news.length > 0
+    ? `📰 NEWS SOURCES:
+${news
+  .map(
+    (r: any, i: number) =>
+      `
+NEWS ${i + 1}: "${r.title}"
+URL: ${r.url}
+Content: ${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}
+
+${
+  other.length > 0
+    ? `📄 OTHER SOURCES:
+${other
+  .map(
+    (r: any, i: number) =>
+      `
+SOURCE ${i + 1}: "${r.title}"
+URL: ${r.url}
+Content: ${r.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+  .join("\n")}
+`
+    : ""
+}
+
+${
+  answer
+    ? `INITIAL AI ANSWER (verify all facts):
+${answer}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+    : ""
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 CRITICAL GROUNDING RULES - READ BEFORE RESPONDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ MANDATORY:
+1. ONLY use information from sources above
+2. Cite every claim: [Source: URL]
+3. Use case names EXACTLY as written
+4. If case name not in sources, DO NOT mention it
+5. Academic sources are NOT court cases - label as "Study"
+6. Court cases have citations like "CCZ 11/23"
+7. NEVER fabricate URLs or case names
+
+❌ FORBIDDEN:
+- Adding information not in sources
+- Creating plausible case names
+- Inventing citations
+- Mixing studies with court cases
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 YOUR TASK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Answer: "${query}"
+
+STRUCTURE:
+1. **Summary** - Direct answer with citations
+2. **Key Points** - Bullet points with sources
+3. **Sources** - List all sources used
+
+REMEMBER: Accuracy > Comprehensiveness. If unsure, say so.`;
 
       // Generate synthesis with maxSteps=15
       // Note: Token limit is controlled by the agent's model configuration

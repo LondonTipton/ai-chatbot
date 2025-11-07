@@ -660,21 +660,38 @@ const documentStep = createStep({
 
       const synthesisPrompt = `Create a comprehensive legal research document for: "${query}"
 
-🎯 CRITICAL GROUNDING RULES:
-1. ONLY synthesize from the research content provided below
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 RESEARCH CONTENT TO SYNTHESIZE (READ THIS FIRST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${summarizedContent}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 CRITICAL GROUNDING RULES - READ BEFORE RESPONDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ MANDATORY REQUIREMENTS:
+1. ONLY synthesize from the research content above
 2. Do NOT add external knowledge or general legal information
 3. Label each major claim with its source section: [From: Initial Research] or [From: Enhanced Research] or [From: Deep Dive 1/2]
 4. Note any gaps or conflicting information clearly
 5. Use exact quotations when appropriate
 6. Include all relevant URLs and citations from the research
 7. If information is missing, explicitly state "This information was not found in the research"
+8. If a case name appears in research, use it EXACTLY as written
+9. If a case name does NOT appear in research, DO NOT mention it
+10. NEVER fabricate case names, citations, statute references, or URLs
 
-RESEARCH CONTENT TO SYNTHESIZE:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${summarizedContent}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ STRICTLY FORBIDDEN:
+- Adding information not in research content
+- Creating plausible-sounding case names
+- Inventing citation numbers or statute sections
+- Using general legal knowledge beyond research
+- Fabricating URLs or legal references
 
-SYNTHESIS TASK:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 SYNTHESIS TASK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Analyze the research content above thoroughly
 2. Create a logical document structure with clear sections
 3. Label each major finding with its research source (e.g., "[From: Initial Research]")

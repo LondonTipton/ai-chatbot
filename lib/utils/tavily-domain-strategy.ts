@@ -135,20 +135,19 @@ export function buildTavilyRequestBody(
     include_answer: true,
     include_raw_content: false,
     max_results: 7,
-    country: "ZW", // Boost Zimbabwe results
     topic: "general",
   };
 
   const requestBody: Record<string, unknown> = { ...baseBody };
 
   if (strategy === "strict") {
-    // Only Zimbabwe sources - use for highly specific queries requiring authoritative sources only
+    // Strict: ONLY Zimbabwe sources - use for highly specific queries requiring authoritative sources only
     requestBody.include_domains = getPriorityDomains(depth);
   } else if (strategy === "prioritized") {
-    // RECOMMENDED: Let Tavily rank globally, but exclude spam & mention priority domains
-    // Tavily will rank Zimbabwe domains higher but search everywhere for diversity
+    // Prioritized: Exclude spam but search globally
+    // Note: Removed include_domains to allow broader, more diverse search results
+    // This prevents over-filtering and allows Tavily to find the best matches globally
     requestBody.exclude_domains = getExcludeDomains();
-    requestBody.include_domains = getPriorityDomains(depth);
   } else {
     // Open: Just exclude spam, let Tavily find best matches globally
     // Use for comparative law or international context

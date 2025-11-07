@@ -131,15 +131,40 @@ const synthesizeStep = createStep({
     try {
       const synthesisPrompt = `Create comprehensive answer for Zimbabwe legal query: "${query}"
 
-Search Results (10 sources):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 SEARCH RESULTS (10 SOURCES - READ FIRST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${
   results.length > 0 ? JSON.stringify(results, null, 2) : "No results available"
 }
 
-AI Answer: ${answer || "No answer generated"}
+${
+  answer
+    ? `INITIAL AI ANSWER (verify facts):
+${answer}
 
-Provide detailed, comprehensive answer with proper citations and Zimbabwe legal context. 
-Synthesize information from all 10 sources to provide multiple perspectives.`;
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+    : ""
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 CRITICAL RULES - READ BEFORE RESPONDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ MANDATORY:
+1. ONLY use information from sources above
+2. Cite every claim: [Source: URL]
+3. Use case names EXACTLY as written
+4. If case name not in sources, DO NOT mention it
+5. NEVER fabricate case names, citations, or URLs
+
+❌ FORBIDDEN:
+- Adding information not in sources
+- Creating plausible case names
+- Inventing citations
+
+Provide detailed, comprehensive answer with proper citations. Synthesize from all 10 sources.`;
 
       const synthesized = await synthesizerAgent.generate(synthesisPrompt, {
         maxSteps: 1,

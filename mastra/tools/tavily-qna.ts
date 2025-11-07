@@ -61,17 +61,18 @@ export const tavilyQnaTool = createTool({
         include_answer: true,
         include_raw_content: false,
         max_results: 3,
-        country: "ZW",
       };
 
       // Apply domain strategy
       if (domainStrategy === "strict") {
+        // Strict: ONLY search priority domains
         requestBody.include_domains = getPriorityDomains("quick");
       } else if (domainStrategy === "prioritized") {
+        // Prioritized: Exclude spam but search globally
+        // Note: Removed include_domains to allow broader search while still excluding spam
         requestBody.exclude_domains = getExcludeDomains();
-        requestBody.include_domains = getPriorityDomains("quick");
       } else {
-        // open
+        // Open: Just exclude spam, let Tavily find best matches globally
         requestBody.exclude_domains = getExcludeDomains();
       }
 

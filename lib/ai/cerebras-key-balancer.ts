@@ -5,6 +5,7 @@
 
 import { createCerebras } from "@ai-sdk/cerebras";
 import { createLogger } from "@/lib/logger";
+import { isCerebrasRateLimitError } from "./cerebras-retry-handler";
 
 const logger = createLogger("ai/cerebras-key-balancer");
 
@@ -43,7 +44,6 @@ type KeyUsageStats = {
 
 class CerebrasKeyBalancer {
   private readonly keys: string[];
-  // biome-ignore lint/style/useConst: currentIndex is incremented during key rotation
   private currentIndex: number;
   private readonly keyStats: Map<string, KeyUsageStats>;
   private readonly providers: Map<string, ReturnType<typeof createCerebras>>;
@@ -328,6 +328,8 @@ export function getBalancedCerebrasProvider(): ReturnType<
 /**
  * Handle API errors and mark keys as failed for automatic rotation
  * Call this from error handlers to disable problematic keys
+ * 
+ * Now uses the standardized isCerebrasRateLimitError check
  */
 const RETRY_DELAY_REGEX = /retry in ([\d.]+)s/i;
 
@@ -342,61 +344,42 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
   const errorData = lastError?.data || error?.data;
   const errorCode = errorData?.code || "";
 
-  // Also check the error message directly for queue_exceeded
-  const fullErrorString = JSON.stringify(error);
-  const hasQueueError =
-    fullErrorString.includes("queue_exceeded") ||
-    fullErrorString.includes("high traffic");
+  // Use standardized rate limit check
+  const isRateLimitError = isCerebrasRateLimitError(error);
 
   logger.log(
-    `[Cerebras Balancer] 🔍 Analyzing error: Status ${statusCode}, Code: ${errorCode}, HasQueue: ${hasQueueError}`
+    `[Cerebras Balancer] 🔍 Analyzing error: Status ${statusCode}, Code: ${errorCode}, IsRateLimit: ${isRateLimitError}`
   );
-
-  // Check if it's a queue exceeded error (429 with queue_exceeded code)
-  const isQueueExceeded =
-    hasQueueError ||
-    (statusCode === 429 &&
-      (errorCode === "queue_exceeded" ||
-        errorMessage.includes("high traffic") ||
-        errorMessage.includes("queue")));
-
-  // Check if it's a quota/rate limit error
-  const isQuotaError =
-    statusCode === 429 ||
-    errorMessage.includes("quota") ||
-    errorMessage.includes("rate limit") ||
-    errorMessage.includes("RESOURCE_EXHAUSTED") ||
-    errorMessage.includes("too_many_requests");
 
   // Check if it's a server error (500)
   const isServerError =
     statusCode === 500 ||
-    errorMessage.includes("server error") ||
-    errorMessage.includes("500");
+    statusCode >= 500 ||
+    errorMessage.includes("server error");
 
-  if (isQueueExceeded || isQuotaError || isServerError) {
-    // For queue exceeded, use shorter cooldown since it's temporary traffic
-    // For quota errors, use longer cooldown
+  if (isRateLimitError || isServerError) {
+    // For rate limit errors, use shorter cooldown since it's temporary traffic
     // For server errors, use medium cooldown
     let retryDelay = 60; // default
-    // errorType intentionally removed (unused).
 
-    if (isQueueExceeded) {
-      retryDelay = 15; // Queue issues are usually temporary
+    if (isRateLimitError) {
+      retryDelay = 15; // Rate limit issues are usually temporary
       logger.log(
-        "[Cerebras Balancer] 🚦 Queue exceeded error detected - using 15s cooldown"
+        "[Cerebras Balancer] 🚦 Rate limit error detected - using 15s cooldown"
       );
     } else if (isServerError) {
       retryDelay = 30;
       logger.log(
         "[Cerebras Balancer] 🔧 Server error detected - using 30s cooldown"
       );
-    } else {
-      // Extract retry delay from error if available
-      const retryMatch = errorMessage.match(RETRY_DELAY_REGEX);
-      retryDelay = retryMatch ? Number.parseFloat(retryMatch[1]) : 60;
+    }
+
+    // Extract retry delay from error if available
+    const retryMatch = errorMessage.match(RETRY_DELAY_REGEX);
+    if (retryMatch) {
+      retryDelay = Number.parseFloat(retryMatch[1]);
       logger.log(
-        `[Cerebras Balancer] ⏱️  Rate limit detected - using ${retryDelay}s cooldown`
+        `[Cerebras Balancer] ⏱️  Using retry delay from error: ${retryDelay}s`
       );
     }
 
@@ -414,11 +397,7 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
       balancer.markKeyAsFailed(
         keyToMark,
         errorMessage ||
-          (isQueueExceeded
-            ? "Queue exceeded"
-            : isServerError
-              ? "Server error"
-              : "Quota exceeded"),
+          (isRateLimitError ? "Rate limit exceeded" : "Server error"),
         retryDelay
       );
     } else {
