@@ -17,15 +17,8 @@ export const Greeting = () => {
       const keyboardVisible = heightDiff > 150;
       setIsKeyboardVisible(keyboardVisible);
 
-      // Scroll greeting into view when keyboard appears
-      if (keyboardVisible && greetingRef.current) {
-        setTimeout(() => {
-          greetingRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 100);
-      }
+      // Don't scroll - let the transform handle positioning
+      // Scrolling was causing the header to move out of view
     };
 
     if (window.visualViewport) {
