@@ -15,9 +15,11 @@ type SuggestedActionsProps = {
 
 function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [hasEnoughSpace, setHasEnoughSpace] = useState(true);
 
   useEffect(() => {
     // Detect when keyboard appears on mobile by monitoring viewport height changes
+    // Also detect if viewport is too short to show both greeting and suggestions
     const handleResize = () => {
       // On mobile, if viewport height shrinks significantly, keyboard is likely visible
       const viewportHeight =
@@ -27,7 +29,14 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
 
       // If height difference is more than 150px, assume keyboard is visible
       setIsKeyboardVisible(heightDiff > 150);
+
+      // Check if viewport is tall enough to show both greeting and suggestions
+      // Need ~600px minimum: greeting (200px) + suggestions (250px) + input (150px)
+      setHasEnoughSpace(viewportHeight >= 600);
     };
+
+    // Run on mount
+    handleResize();
 
     // Use visualViewport API if available (better for mobile)
     if (window.visualViewport) {
@@ -57,15 +66,15 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
   return (
     <motion.div
       animate={{
-        opacity: isKeyboardVisible ? 0 : 1,
-        height: isKeyboardVisible ? 0 : "auto",
-        marginBottom: isKeyboardVisible ? 0 : undefined,
+        opacity: isKeyboardVisible || !hasEnoughSpace ? 0 : 1,
+        height: isKeyboardVisible || !hasEnoughSpace ? 0 : "auto",
+        marginBottom: isKeyboardVisible || !hasEnoughSpace ? 0 : undefined,
         overflow: "hidden",
       }}
       className="grid w-full gap-2 sm:grid-cols-2"
       data-testid="suggested-actions"
       initial={{ opacity: 1, height: "auto" }}
-      style={{ pointerEvents: isKeyboardVisible ? "none" : "auto" }}
+      style={{ pointerEvents: isKeyboardVisible || !hasEnoughSpace ? "none" : "auto" }}
       transition={{ duration: 0.25, ease: "easeOut" }}
     >
       {suggestedActions.map((suggestedAction, index) => (
