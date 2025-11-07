@@ -97,24 +97,18 @@ function PureMultimodalInput({
     let scrollTimeout: NodeJS.Timeout;
 
     const handleFocus = () => {
-      // Multiple scroll attempts to handle keyboard animation timing
       const scrollIntoView = () => {
         if (textareaRef.current) {
           textareaRef.current.scrollIntoView({
             behavior: "smooth",
-            block: "nearest",
+            block: "end",
             inline: "nearest",
           });
         }
       };
 
-      // Immediate scroll
-      scrollIntoView();
-
-      // Delayed scrolls to catch keyboard animation
-      scrollTimeout = setTimeout(scrollIntoView, 100);
-      setTimeout(scrollIntoView, 300);
-      setTimeout(scrollIntoView, 500);
+      // Single delayed scroll after keyboard appears
+      scrollTimeout = setTimeout(scrollIntoView, 300);
     };
 
     const handleBlur = () => {

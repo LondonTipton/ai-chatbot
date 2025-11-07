@@ -333,12 +333,13 @@ function PureArtifact({
                 />
 
                 <div
-                  className="mobile-input-container relative flex w-full flex-row items-end gap-2 px-4 pb-4 transition-all duration-300 ease-out"
+                  className="mobile-input-container relative flex w-full flex-row items-end gap-2 px-4 transition-all duration-300 ease-out"
                   style={{
-                    transform:
-                      keyboardHeight > 0
-                        ? `translateY(-${keyboardHeight}px)`
-                        : "translateY(0)",
+                    position: "fixed",
+                    bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "16px",
+                    left: 0,
+                    right: 0,
+                    paddingBottom: "16px",
                   }}
                 >
                   <MultimodalInput

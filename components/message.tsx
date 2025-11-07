@@ -71,15 +71,31 @@ const PurePreviewMessage = ({
       initial={{ opacity: 0 }}
     >
       <div
-        className={cn("flex w-full items-start gap-2 md:gap-3", {
-          "justify-end": message.role === "user" && mode !== "edit",
-          "justify-start": message.role === "assistant",
+        className={cn("flex w-full", {
+          "flex-row items-start gap-2 justify-end md:gap-3":
+            message.role === "user" && mode !== "edit",
+          "flex-col gap-2 md:flex-row md:items-start md:gap-3":
+            message.role === "assistant",
         })}
       >
         {message.role === "assistant" && (
-          <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
-            <SparklesIcon size={14} />
-          </div>
+          <>
+            {/* Mobile: Text only with pulse animation while streaming */}
+            <div className="px-2 md:hidden">
+              <span
+                className={cn(
+                  "text-sm font-semibold",
+                  isLoading && "animate-pulse"
+                )}
+              >
+                DeepCounsel
+              </span>
+            </div>
+            {/* Desktop: Icon only */}
+            <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
+              <SparklesIcon size={14} />
+            </div>
+          </>
         )}
 
         <div
@@ -146,7 +162,7 @@ const PurePreviewMessage = ({
                       className={cn("text-base", {
                         "w-fit break-words rounded-2xl px-3 py-2 text-right text-white":
                           message.role === "user",
-                        "bg-transparent px-0 py-0 text-left":
+                        "overflow-x-auto bg-transparent px-2 py-0 text-left md:px-0":
                           message.role === "assistant",
                       })}
                       data-testid="message-content"
@@ -419,13 +435,18 @@ export const ThinkingMessage = () => {
       data-testid="message-assistant-loading"
       initial={{ opacity: 0 }}
     >
-      <div className="flex items-start justify-start gap-3">
-        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
+      <div className="flex flex-col gap-2 px-2 md:flex-row md:items-start md:gap-3 md:px-0">
+        {/* Mobile: Text only */}
+        <div className="md:hidden">
+          <span className="text-sm font-semibold">DeepCounsel</span>
+        </div>
+        {/* Desktop: Icon only */}
+        <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
           <SparklesIcon size={14} />
         </div>
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="p-0 text-base text-muted-foreground">
+          <div className="text-base text-muted-foreground">
             <LoadingText>Thinking...</LoadingText>
           </div>
         </div>

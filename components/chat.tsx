@@ -354,12 +354,12 @@ export function Chat({
         />
 
         <div
-          className="mobile-input-container sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl flex-col gap-2 border-t-0 bg-background px-2 pb-3 transition-all duration-300 ease-out md:px-4 md:pb-4"
+          className="mobile-input-container z-1 mx-auto flex w-full max-w-4xl flex-col gap-2 border-t-0 bg-background px-2 pb-3 transition-all duration-300 ease-out md:px-4 md:pb-4"
           style={{
-            transform:
-              keyboardHeight > 0
-                ? `translateY(-${keyboardHeight}px)`
-                : "translateY(0)",
+            position: "fixed",
+            bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "0px",
+            left: 0,
+            right: 0,
           }}
         >
           {!isReadonly && (

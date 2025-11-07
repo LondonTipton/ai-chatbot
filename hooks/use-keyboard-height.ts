@@ -12,8 +12,8 @@ export function useKeyboardHeight() {
         const viewportHeight = window.visualViewport.height;
         const windowHeight = window.innerHeight;
         const height = Math.max(0, windowHeight - viewportHeight);
-
-        setKeyboardHeight(height);
+        // Add 16px buffer to keep input comfortably above keyboard
+        setKeyboardHeight(height > 0 ? height + 16 : 0);
       }
     };
 

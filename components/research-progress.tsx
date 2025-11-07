@@ -4,18 +4,18 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Brain, CheckCircle2, FileText, Loader2, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export interface ToolExecution {
+export type ToolExecution = {
   id: string;
   tool: string;
   status: "running" | "complete";
   message: string;
   startTime: number;
   endTime?: number;
-}
+};
 
-interface ResearchProgressProps {
+type ResearchProgressProps = {
   tools: ToolExecution[];
-}
+};
 
 const toolIcons: Record<string, any> = {
   tavilySearch: Search,
@@ -32,24 +32,33 @@ const toolMessages: Record<string, string> = {
 
 export function ResearchProgress({ tools }: ResearchProgressProps) {
   const [durations, setDurations] = useState<Record<string, number>>({});
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Prevent hydration mismatch by only rendering after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
       const newDurations: Record<string, number> = {};
-      tools.forEach((tool) => {
+      for (const tool of tools) {
         if (tool.status === "running") {
           newDurations[tool.id] = Date.now() - tool.startTime;
         } else if (tool.endTime) {
           newDurations[tool.id] = tool.endTime - tool.startTime;
         }
-      });
+      }
       setDurations(newDurations);
     }, 100);
 
     return () => clearInterval(interval);
   }, [tools]);
 
-  if (tools.length === 0) return null;
+  // Return null during SSR and initial render to prevent hydration mismatch
+  if (!isMounted || tools.length === 0) {
+    return null;
+  }
 
   const activeTools = tools.filter((t) => t.status === "running");
   const completedTools = tools.filter((t) => t.status === "complete");
