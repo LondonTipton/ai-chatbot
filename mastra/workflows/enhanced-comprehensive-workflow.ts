@@ -658,7 +658,6 @@ const finalSummarizationStep = createStep({
  * LEGACY Step 6: Document Synthesis (not used in new pipeline)
  * Replaced by: extract-entities → extract-claims → compose-document
  */
-// @ts-expect-error - Legacy step kept for reference
 const _legacyDocumentStep = createStep({
   id: "document",
   description: "Synthesize all research into comprehensive document",

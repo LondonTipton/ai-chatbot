@@ -51,11 +51,27 @@ const searchStep = createStep({
           content: z.string(),
           relevanceScore: z.number(),
           publishedDate: z.string(),
+          sourceType: z.enum([
+            "court-case",
+            "academic",
+            "news",
+            "government",
+            "other",
+          ]),
         })
       )
       .describe("Array of search results"),
     totalResults: z.number(),
     tokenEstimate: z.number(),
+    extractions: z.array(
+      z.object({
+        url: z.string(),
+        rawContent: z.string(),
+        tokenEstimate: z.number(),
+      })
+    ),
+    extractionTokens: z.number(),
+    skipped: z.boolean(),
   }),
   execute: async ({ inputData, runtimeContext }) => {
     const { query, jurisdiction } = inputData;
@@ -68,7 +84,6 @@ const searchStep = createStep({
           maxResults: 5,
           domainStrategy: "strict",
           researchDepth: "standard",
-          country: "ZW",
           jurisdiction,
           includeRawContent: true,
         },
@@ -77,9 +92,15 @@ const searchStep = createStep({
 
       return {
         answer: searchResults.answer,
-        results: searchResults.results,
+        results: searchResults.results.map((result: any) => ({
+          ...result,
+          sourceType: result.sourceType || "other",
+        })),
         totalResults: searchResults.totalResults,
         tokenEstimate: searchResults.tokenEstimate,
+        extractions: [],
+        extractionTokens: 0,
+        skipped: true,
       };
     } catch (error) {
       console.error("[Low-Advance Search Workflow] Search step error:", error);
@@ -89,6 +110,9 @@ const searchStep = createStep({
         results: [],
         totalResults: 0,
         tokenEstimate: 0,
+        extractions: [],
+        extractionTokens: 0,
+        skipped: true,
       };
     }
   },
@@ -98,7 +122,6 @@ const searchStep = createStep({
  * LEGACY Step 2: Synthesize (not used in new pipeline)
  * Replaced by: extract-entities → validate → extract-claims → compose
  */
-// @ts-expect-error - Legacy step kept for reference
 const _legacySynthesizeStep = createStep({
   id: "synthesize",
   description: "Synthesize search results into comprehensive answer",

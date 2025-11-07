@@ -32,16 +32,13 @@ import { synthesizerAgent } from "@/mastra/agents/synthesizer-agent";
  * Generic result type for search results
  */
 export const SearchResultSchema = z.object({
+  position: z.number(),
   title: z.string(),
   url: z.string(),
   content: z.string(),
-  score: z.number().optional(),
-  relevanceScore: z.number().optional(),
-  publishedDate: z.string().optional(),
-  position: z.number().optional(),
-  sourceType: z
-    .enum(["court-case", "academic", "news", "government", "other"])
-    .optional(),
+  relevanceScore: z.number(),
+  publishedDate: z.string(),
+  sourceType: z.enum(["court-case", "academic", "news", "government", "other"]),
 });
 
 export type SearchResult = z.infer<typeof SearchResultSchema>;
@@ -54,21 +51,37 @@ export function createEntityExtractionStep(stepId = "extract-entities") {
   return createStep({
     id: stepId,
     description: "Extract structured legal entities from search results",
-    inputSchema: z
-      .object({
-        results: z.array(SearchResultSchema),
-        answer: z.string().optional(),
-        tokenEstimate: z.number().optional(),
-      })
-      .passthrough(), // Allow additional fields
-    outputSchema: z
-      .object({
-        entities: ExtractedEntitiesSchema,
-        results: z.array(SearchResultSchema),
-        answer: z.string().optional(),
-        tokenEstimate: z.number().optional(),
-      })
-      .passthrough(),
+    inputSchema: z.object({
+      answer: z.string(),
+      results: z.array(SearchResultSchema),
+      totalResults: z.number(),
+      tokenEstimate: z.number(),
+      extractions: z.array(
+        z.object({
+          url: z.string(),
+          rawContent: z.string(),
+          tokenEstimate: z.number(),
+        })
+      ),
+      extractionTokens: z.number(),
+      skipped: z.boolean(),
+    }),
+    outputSchema: z.object({
+      entities: ExtractedEntitiesSchema,
+      answer: z.string(),
+      results: z.array(SearchResultSchema),
+      totalResults: z.number(),
+      tokenEstimate: z.number(),
+      extractions: z.array(
+        z.object({
+          url: z.string(),
+          rawContent: z.string(),
+          tokenEstimate: z.number(),
+        })
+      ),
+      extractionTokens: z.number(),
+      skipped: z.boolean(),
+    }),
     execute: async ({ inputData }) => {
       const { results, answer, tokenEstimate, ...rest } = inputData;
 
@@ -142,16 +155,38 @@ export function createEntityValidationStep(stepId = "validate-entities") {
   return createStep({
     id: stepId,
     description: "Validate extracted entities",
-    inputSchema: z
-      .object({
-        entities: ExtractedEntitiesSchema,
-      })
-      .passthrough(),
-    outputSchema: z
-      .object({
-        validatedEntities: ValidatedEntitiesSchema,
-      })
-      .passthrough(),
+    inputSchema: z.object({
+      entities: ExtractedEntitiesSchema,
+      answer: z.string(),
+      results: z.array(SearchResultSchema),
+      totalResults: z.number(),
+      tokenEstimate: z.number(),
+      extractions: z.array(
+        z.object({
+          url: z.string(),
+          rawContent: z.string(),
+          tokenEstimate: z.number(),
+        })
+      ),
+      extractionTokens: z.number(),
+      skipped: z.boolean(),
+    }),
+    outputSchema: z.object({
+      validatedEntities: ValidatedEntitiesSchema,
+      answer: z.string(),
+      results: z.array(SearchResultSchema),
+      totalResults: z.number(),
+      tokenEstimate: z.number(),
+      extractions: z.array(
+        z.object({
+          url: z.string(),
+          rawContent: z.string(),
+          tokenEstimate: z.number(),
+        })
+      ),
+      extractionTokens: z.number(),
+      skipped: z.boolean(),
+    }),
     execute: async ({ inputData }) => {
       const { entities, ...rest } = inputData;
 
@@ -205,17 +240,39 @@ export function createClaimExtractionStep(stepId = "extract-claims") {
   return createStep({
     id: stepId,
     description: "Extract factual claims with source attribution",
-    inputSchema: z
-      .object({
-        validatedEntities: ValidatedEntitiesSchema,
-      })
-      .passthrough(),
-    outputSchema: z
-      .object({
-        claims: ExtractedClaimsSchema,
-        validatedEntities: ValidatedEntitiesSchema,
-      })
-      .passthrough(),
+    inputSchema: z.object({
+      validatedEntities: ValidatedEntitiesSchema,
+      answer: z.string(),
+      results: z.array(SearchResultSchema),
+      totalResults: z.number(),
+      tokenEstimate: z.number(),
+      extractions: z.array(
+        z.object({
+          url: z.string(),
+          rawContent: z.string(),
+          tokenEstimate: z.number(),
+        })
+      ),
+      extractionTokens: z.number(),
+      skipped: z.boolean(),
+    }),
+    outputSchema: z.object({
+      claims: ExtractedClaimsSchema,
+      validatedEntities: ValidatedEntitiesSchema,
+      answer: z.string(),
+      results: z.array(SearchResultSchema),
+      totalResults: z.number(),
+      tokenEstimate: z.number(),
+      extractions: z.array(
+        z.object({
+          url: z.string(),
+          rawContent: z.string(),
+          tokenEstimate: z.number(),
+        })
+      ),
+      extractionTokens: z.number(),
+      skipped: z.boolean(),
+    }),
     execute: async ({ inputData, getInitData }) => {
       const { validatedEntities, ...rest } = inputData;
       const initData = getInitData();
@@ -277,13 +334,23 @@ export function createDocumentCompositionStep(stepId = "compose-document") {
   return createStep({
     id: stepId,
     description: "Compose final document from validated claims",
-    inputSchema: z
-      .object({
-        validatedEntities: ValidatedEntitiesSchema,
-        claims: ExtractedClaimsSchema,
-        tokenEstimate: z.number().optional(),
-      })
-      .passthrough(),
+    inputSchema: z.object({
+      validatedEntities: ValidatedEntitiesSchema,
+      claims: ExtractedClaimsSchema,
+      answer: z.string(),
+      results: z.array(SearchResultSchema),
+      totalResults: z.number(),
+      tokenEstimate: z.number(),
+      extractions: z.array(
+        z.object({
+          url: z.string(),
+          rawContent: z.string(),
+          tokenEstimate: z.number(),
+        })
+      ),
+      extractionTokens: z.number(),
+      skipped: z.boolean(),
+    }),
     outputSchema: z.object({
       response: z.string().describe("Synthesized comprehensive response"),
       sources: z

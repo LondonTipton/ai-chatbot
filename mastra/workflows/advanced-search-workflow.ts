@@ -341,7 +341,6 @@ const extractTopSourcesStep = createStep({
  * Replaced by: extract-entities → validate → extract-claims → compose
  * Token estimate: 1K-1.5K tokens
  */
-// @ts-expect-error - Legacy step kept for reference
 const _legacySynthesizeStep = createStep({
   id: "synthesize",
   description:

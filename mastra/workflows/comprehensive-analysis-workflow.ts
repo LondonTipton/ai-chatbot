@@ -376,7 +376,6 @@ const enhanceOrDeepDiveStep = createStep({
  * LEGACY Step 6: Document (not used in new pipeline)
  * Replaced by: extract-merge-entities → extract-claims → compose-document
  */
-// @ts-expect-error - Legacy step kept for reference
 const _legacyDocumentStep = createStep({
   id: "document",
   description: "Synthesize all research into comprehensive document",
