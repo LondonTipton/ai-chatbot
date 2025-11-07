@@ -120,6 +120,8 @@ export const register = async (
   formData: FormData
 ): Promise<RegisterActionState> => {
   try {
+    logger.log("[REGISTER] Starting registration process");
+
     const validatedData = authFormSchema.parse({
       email: formData.get("email"),
       password: formData.get("password"),
@@ -141,6 +143,8 @@ export const register = async (
       validatedData.password
     );
 
+    logger.log("[REGISTER] Appwrite account created:", appwriteUser.$id);
+
     // Store user in local database with Appwrite ID
     await createUserWithAppwriteId(validatedData.email, appwriteUser.$id);
 
@@ -150,11 +154,33 @@ export const register = async (
       validatedData.password
     );
 
+    logger.log("[REGISTER] Session created:", session.$id);
+
     // Set session cookie with the session secret (not the ID!)
     await setSessionCookie(session.$id, session.secret, session.userId);
 
+    // Send verification email
+    try {
+      const { createVerification } = await import("@/lib/appwrite/auth");
+      const verificationUrl = `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/verify`;
+
+      await createVerification(session.$id, verificationUrl);
+      logger.log("[REGISTER] Verification email sent successfully");
+    } catch (verificationError) {
+      // Log the error but don't fail registration
+      logger.error(
+        "[REGISTER] Failed to send verification email:",
+        verificationError
+      );
+      // User can still resend verification email later
+    }
+
     return { status: "success" };
   } catch (error) {
+    logger.error("[REGISTER] Registration error:", error);
+
     if (error instanceof z.ZodError) {
       return {
         status: "invalid_data",
@@ -210,11 +236,14 @@ export const resendVerification =
       const sessionId = await getSessionCookie();
 
       if (!sessionId) {
+        logger.error("[RESEND_VERIFICATION] No session cookie found");
         return {
           status: "failed",
           error: "No active session. Please log in again.",
         };
       }
+
+      logger.log("[RESEND_VERIFICATION] Session ID found:", sessionId);
 
       // Import the createVerification function
       const { createVerification } = await import("@/lib/appwrite/auth");
@@ -223,9 +252,15 @@ export const resendVerification =
       const verificationUrl = `${
         process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       }/verify`;
-      await createVerification(sessionId, verificationUrl);
 
-      logger.log("[RESEND_VERIFICATION] Verification email sent successfully");
+      logger.log("[RESEND_VERIFICATION] Verification URL:", verificationUrl);
+
+      const token = await createVerification(sessionId, verificationUrl);
+
+      logger.log(
+        "[RESEND_VERIFICATION] Verification email sent successfully, token:",
+        token.$id
+      );
 
       return { status: "success" };
     } catch (error) {
