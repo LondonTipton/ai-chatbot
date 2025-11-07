@@ -60,9 +60,16 @@ export function DocumentPreview({
   }, [artifact.documentId, setArtifact]);
 
   // Auto-open artifact when document is created (only once per document)
+  // Only auto-open during streaming (when being created), not when loading old chats
   useEffect(() => {
-    // Only auto-open if we haven't already opened this document
-    if (result?.id && hasAutoOpenedRef.current !== result.id) {
+    // Only auto-open if:
+    // 1. We haven't already opened this document
+    // 2. The artifact is currently streaming (being created)
+    if (
+      result?.id &&
+      hasAutoOpenedRef.current !== result.id &&
+      artifact.status === "streaming"
+    ) {
       hasAutoOpenedRef.current = result.id;
       const boundingBox = hitboxRef.current?.getBoundingClientRect();
 
@@ -82,7 +89,7 @@ export function DocumentPreview({
           : currentArtifact.boundingBox,
       }));
     }
-  }, [result, setArtifact]);
+  }, [result, artifact.status, setArtifact]);
 
   if (artifact.isVisible) {
     if (result) {
@@ -113,15 +120,15 @@ export function DocumentPreview({
   const document: Document | null = previewDocument
     ? previewDocument
     : artifact.status === "streaming"
-      ? {
-          title: artifact.title,
-          kind: artifact.kind,
-          content: artifact.content,
-          id: artifact.documentId,
-          createdAt: new Date(),
-          userId: "noop",
-        }
-      : null;
+    ? {
+        title: artifact.title,
+        kind: artifact.kind,
+        content: artifact.content,
+        id: artifact.documentId,
+        createdAt: new Date(),
+        userId: "noop",
+      }
+    : null;
 
   if (!document) {
     return <LoadingSkeleton artifactKind={artifact.kind} />;

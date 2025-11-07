@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { SparklesIcon } from "./icons";
 
 type ProcessingState =
   | "processing"
@@ -48,11 +47,10 @@ export const ProcessingMessage = () => {
       data-testid="message-assistant-processing"
       initial={{ opacity: 0 }}
     >
-      <div className="flex items-start justify-start gap-3">
-        {/* Mobile: Animated text - fades in/out while processing */}
+      <div className="flex flex-col gap-2">
         <motion.div
           animate={{ opacity: [0.5, 1, 0.5] }}
-          className="flex px-2 md:hidden"
+          className="flex px-2 md:px-0"
           transition={{
             duration: 2,
             repeat: Number.POSITIVE_INFINITY,
@@ -62,22 +60,8 @@ export const ProcessingMessage = () => {
           <span className="font-semibold text-sm">DeepCounsel</span>
         </motion.div>
 
-        {/* Desktop: Spinning icon */}
-        <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{
-              duration: 2,
-              repeat: Number.POSITIVE_INFINITY,
-              ease: "linear",
-            }}
-          >
-            <SparklesIcon size={14} />
-          </motion.div>
-        </div>
-
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="p-0 text-muted-foreground text-sm">
+          <div className="px-2 text-muted-foreground text-sm md:px-0">
             <LoadingText key={currentState}>
               {PROCESSING_MESSAGES[currentState]}
             </LoadingText>

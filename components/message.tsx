@@ -28,7 +28,6 @@ import {
   ToolInput,
   ToolOutput,
 } from "./elements/tool";
-import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
@@ -74,29 +73,22 @@ const PurePreviewMessage = ({
         className={cn("flex w-full", {
           "flex-row items-start justify-end gap-2 md:gap-3":
             message.role === "user" && mode !== "edit",
-          "flex-col gap-2 md:flex-row md:items-start md:gap-3":
+          "flex-col gap-2":
             message.role === "assistant",
         })}
       >
         {message.role === "assistant" && (
-          <>
-            {/* Mobile: Animated text - fades in/out while streaming */}
-            <motion.div
-              animate={{ opacity: isLoading ? [0.5, 1, 0.5] : 1 }}
-              className="flex px-2 md:hidden"
-              transition={{
-                duration: 2,
-                repeat: isLoading ? Number.POSITIVE_INFINITY : 0,
-                ease: "easeInOut",
-              }}
-            >
-              <span className="font-semibold text-sm">DeepCounsel</span>
-            </motion.div>
-            {/* Desktop: Icon only */}
-            <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
-              <SparklesIcon size={14} />
-            </div>
-          </>
+          <motion.div
+            animate={{ opacity: isLoading ? [0.5, 1, 0.5] : 1 }}
+            className="mb-2 flex px-2 md:px-0"
+            transition={{
+              duration: 2,
+              repeat: isLoading ? Number.POSITIVE_INFINITY : 0,
+              ease: "easeInOut",
+            }}
+          >
+            <span className="font-semibold text-sm">DeepCounsel</span>
+          </motion.div>
         )}
 
         <div
@@ -436,20 +428,21 @@ export const ThinkingMessage = () => {
       data-testid="message-assistant-loading"
       initial={{ opacity: 0 }}
     >
-      <div className="flex flex-col gap-2 px-2 md:flex-row md:items-start md:gap-3 md:px-0">
-        {/* Mobile: Text only with CSS fade animation */}
-        <div className="flex md:hidden">
-          <span className="animate-pulse font-semibold text-sm">
-            DeepCounsel
-          </span>
-        </div>
-        {/* Desktop: Icon only */}
-        <div className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border md:flex">
-          <SparklesIcon size={14} />
-        </div>
+      <div className="flex flex-col gap-2">
+        <motion.div
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          className="flex px-2 md:px-0"
+          transition={{
+            duration: 2,
+            repeat: Number.POSITIVE_INFINITY,
+            ease: "easeInOut",
+          }}
+        >
+          <span className="font-semibold text-sm">DeepCounsel</span>
+        </motion.div>
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="text-base text-muted-foreground">
+          <div className="px-2 text-base text-muted-foreground md:px-0">
             <LoadingText>Thinking...</LoadingText>
           </div>
         </div>

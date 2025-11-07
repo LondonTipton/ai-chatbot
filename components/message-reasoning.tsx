@@ -25,13 +25,15 @@ export function MessageReasoning({
   }, [isLoading]);
 
   return (
-    <Reasoning
-      data-testid="message-reasoning"
-      defaultOpen={hasBeenStreaming}
-      isStreaming={isLoading}
-    >
-      <ReasoningTrigger />
-      <ReasoningContent>{reasoning}</ReasoningContent>
-    </Reasoning>
+    <div className="px-2 md:px-0">
+      <Reasoning
+        data-testid="message-reasoning"
+        defaultOpen={hasBeenStreaming}
+        isStreaming={isLoading}
+      >
+        <ReasoningTrigger />
+        <ReasoningContent>{reasoning}</ReasoningContent>
+      </Reasoning>
+    </div>
   );
 }

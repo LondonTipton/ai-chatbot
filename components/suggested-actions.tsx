@@ -74,7 +74,9 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
       className="grid w-full gap-2 sm:grid-cols-2"
       data-testid="suggested-actions"
       initial={{ opacity: 1, height: "auto" }}
-      style={{ pointerEvents: isKeyboardVisible || !hasEnoughSpace ? "none" : "auto" }}
+      style={{
+        pointerEvents: isKeyboardVisible || !hasEnoughSpace ? "none" : "auto",
+      }}
       transition={{ duration: 0.25, ease: "easeOut" }}
     >
       {suggestedActions.map((suggestedAction, index) => (
