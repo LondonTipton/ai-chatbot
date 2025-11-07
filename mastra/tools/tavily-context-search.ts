@@ -105,8 +105,9 @@ export const tavilyContextSearchTool = createTool({
       );
     }
 
-    // Enhance query with jurisdiction if provided
-    const enhancedQuery = jurisdiction ? `${query} ${jurisdiction} law` : query;
+    // Use query directly - it's already enhanced by query-enhancer-agent
+    // which includes jurisdiction and relevant keywords
+    const enhancedQuery = query;
 
     // Retry logic configuration
     const MAX_RETRIES = 1;

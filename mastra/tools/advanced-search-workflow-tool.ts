@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { advancedSearchWorkflow } from "../workflows/advanced-search-workflow";
+import { advancedSearchWorkflowV2 } from "../workflows/advanced-search-workflow-v2";
 
 /**
  * Advanced Search Workflow Tool
@@ -34,6 +34,16 @@ export const advancedSearchWorkflowTool = createTool({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for context"),
   }),
 
   outputSchema: z.object({
@@ -50,15 +60,22 @@ export const advancedSearchWorkflowTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, jurisdiction = "Zimbabwe" } = context;
+    const {
+      query,
+      jurisdiction = "Zimbabwe",
+      conversationHistory = [],
+    } = context;
 
     console.log(
-      `[Advanced Search Workflow Tool] Starting workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
+      `[Advanced Search Workflow Tool] Starting V2 workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
+    );
+    console.log(
+      `[Advanced Search Workflow Tool] Conversation history: ${conversationHistory.length} messages`
     );
 
     try {
-      // Create and execute the workflow
-      const run = await advancedSearchWorkflow.createRunAsync();
+      // Create and execute the V2 workflow
+      const run = await advancedSearchWorkflowV2.createRunAsync();
       console.log(
         "[Advanced Search Workflow Tool] Workflow run created, starting execution..."
       );
@@ -67,6 +84,7 @@ export const advancedSearchWorkflowTool = createTool({
         inputData: {
           query,
           jurisdiction,
+          conversationHistory,
         },
       });
 
@@ -84,20 +102,21 @@ export const advancedSearchWorkflowTool = createTool({
         );
       }
 
-      // Extract output from the synthesize step (last step in workflow)
-      const synthesizeStep = result.steps.synthesize;
+      // Extract output from the search step (V2 workflow)
+      const searchStep = result.steps.search;
 
-      if (!synthesizeStep || synthesizeStep.status !== "success") {
+      if (!searchStep || searchStep.status !== "success") {
         console.error(
-          `[Advanced Search Workflow Tool] Synthesize step failed or not found. Step status: ${synthesizeStep?.status}`
+          `[Advanced Search Workflow Tool] Search step failed or not found. Step status: ${searchStep?.status}`
         );
-        throw new Error("Synthesize step failed or not found");
+        throw new Error("Search step failed or not found");
       }
 
-      const output = synthesizeStep.output as {
+      const output = searchStep.output as {
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;
+        rawResults?: any;
       };
 
       console.log(

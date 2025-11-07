@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { lowAdvanceSearchWorkflow } from "../workflows/low-advance-search-workflow";
+import { advancedSearchWorkflowV2 } from "../workflows/advanced-search-workflow-v2";
 
 /**
  * Standard Research Tool
@@ -28,10 +28,11 @@ import { lowAdvanceSearchWorkflow } from "../workflows/low-advance-search-workfl
 export const standardResearchTool = createTool({
   id: "standard-research",
   description:
-    "Performs balanced legal research with 2-3 sources and comprehensive synthesis. " +
-    "Use this for explanations, overviews, or comparisons that need more context than quick facts. " +
-    "Returns a well-rounded response with multiple source citations. " +
-    "Token budget: 2K-4K tokens. Best for queries requiring balanced speed and depth.",
+    "Balanced research for explanations and overviews with full source content. " +
+    "Use for: 'Explain...', 'Tell me about...', 'How does...', overview queries. " +
+    "Analyzes 10 search results WITH complete source text for comprehensive understanding. " +
+    "Speed: 3-5 seconds | Tokens: 3-5K | Best for: Balanced depth and speed with detailed sources. " +
+    "NOT for: Simple definitions (use quickFactSearch) or trend analysis (use comprehensiveResearch).",
 
   inputSchema: z.object({
     query: z
@@ -41,6 +42,16 @@ export const standardResearchTool = createTool({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for context"),
   }),
 
   outputSchema: z.object({
@@ -57,14 +68,21 @@ export const standardResearchTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, jurisdiction = "Zimbabwe" } = context;
+    const {
+      query,
+      jurisdiction = "Zimbabwe",
+      conversationHistory = [],
+    } = context;
 
     console.log(
       `[Standard Research Tool] Starting workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
     );
+    console.log(
+      `[Standard Research Tool] Conversation history: ${conversationHistory.length} messages`
+    );
 
     try {
-      const run = await lowAdvanceSearchWorkflow.createRunAsync();
+      const run = await advancedSearchWorkflowV2.createRunAsync();
       console.log(
         "[Standard Research Tool] Workflow run created, starting execution..."
       );
@@ -73,6 +91,7 @@ export const standardResearchTool = createTool({
         inputData: {
           query,
           jurisdiction,
+          conversationHistory,
         },
       });
 
@@ -89,16 +108,16 @@ export const standardResearchTool = createTool({
         );
       }
 
-      const synthesizeStep = result.steps.synthesize;
+      const searchStep = result.steps.search;
 
-      if (!synthesizeStep || synthesizeStep.status !== "success") {
+      if (!searchStep || searchStep.status !== "success") {
         console.error(
-          `[Standard Research Tool] Synthesize step failed or not found. Step status: ${synthesizeStep?.status}`
+          `[Standard Research Tool] Search step failed or not found. Step status: ${searchStep?.status}`
         );
-        throw new Error("Synthesize step failed or not found");
+        throw new Error("Search step failed or not found");
       }
 
-      const output = synthesizeStep.output as {
+      const output = searchStep.output as {
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;

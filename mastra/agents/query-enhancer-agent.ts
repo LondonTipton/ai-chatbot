@@ -69,22 +69,170 @@ CRITICAL:
 });
 
 /**
+ * Query enhancement cache for common patterns
+ * Key: query + context hash, Value: enhanced query
+ */
+const enhancementCache = new Map<
+  string,
+  { enhanced: string; timestamp: number }
+>();
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const MAX_CACHE_SIZE = 1000;
+
+/**
+ * Case indicators for query type detection (module-level for performance)
+ */
+const CASE_INDICATORS = [
+  /\sv\s/i, // "X v Y" pattern
+  /case/i,
+  /judgment/i,
+  /ruling/i,
+  /court/i,
+  /appellant/i,
+  /respondent/i,
+  /\[20\d{2}\]/i, // Citation like [2023]
+  /sc\s*\d+/i, // SC 43/15
+  /zwsc|zwhhc|zwcc/i, // Court codes
+];
+
+/**
+ * Statute indicators for query type detection (module-level for performance)
+ */
+const STATUTE_INDICATORS = [
+  /act/i,
+  /section/i,
+  /chapter/i,
+  /statute/i,
+  /legislation/i,
+  /law/i,
+  /provision/i,
+  /clause/i,
+];
+
+/**
+ * Detect query type for targeted enhancement
+ */
+function detectQueryType(query: string): "case" | "statute" | "general" {
+  const queryLower = query.toLowerCase();
+
+  // Check for case indicators
+  if (CASE_INDICATORS.some((pattern) => pattern.test(queryLower))) {
+    return "case";
+  }
+
+  // Check for statute indicators
+  if (STATUTE_INDICATORS.some((pattern) => pattern.test(queryLower))) {
+    return "statute";
+  }
+
+  return "general";
+}
+
+/**
+ * Create cache key from query and context
+ */
+function createCacheKey(query: string, context: string): string {
+  // Simple hash function for cache key
+  const str = `${query}|${context}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash &= hash; // Convert to 32-bit integer
+  }
+  return `${query.substring(0, 50)}_${hash}`;
+}
+
+/**
+ * Clean up expired cache entries
+ */
+function cleanCache() {
+  const now = Date.now();
+  for (const [key, value] of enhancementCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      enhancementCache.delete(key);
+    }
+  }
+
+  // If cache is still too large, remove oldest entries
+  if (enhancementCache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(enhancementCache.entries()).sort(
+      (a, b) => a[1].timestamp - b[1].timestamp
+    );
+
+    const toRemove = entries.slice(0, enhancementCache.size - MAX_CACHE_SIZE);
+    for (const [key] of toRemove) {
+      enhancementCache.delete(key);
+    }
+  }
+}
+
+/**
  * Enhance a search query using conversation context
+ *
+ * @param query - The user's search query
+ * @param conversationHistory - Recent conversation messages (uses last 5-7 messages)
+ * @param options - Optional configuration
+ * @returns Enhanced query string
  */
 export async function enhanceSearchQuery(
   query: string,
-  conversationHistory: Array<{ role: string; content: string }> = []
+  conversationHistory: Array<{ role: string; content: string }> = [],
+  options: {
+    maxContextMessages?: number;
+    useCache?: boolean;
+    queryType?: "case" | "statute" | "general" | "auto";
+  } = {}
 ): Promise<string> {
+  const {
+    maxContextMessages = 5, // Increased from 3 to 5 for better context
+    useCache = true,
+    queryType = "auto",
+  } = options;
+
   try {
-    // Build context from recent conversation (last 3 messages)
+    // Detect query type if auto
+    const detectedType =
+      queryType === "auto" ? detectQueryType(query) : queryType;
+
+    // Build context from recent conversation (last 5 messages by default)
     const recentContext = conversationHistory
-      .slice(-3)
+      .slice(-maxContextMessages)
       .map((msg) => `${msg.role}: ${msg.content.substring(0, 200)}`) // Limit content length
       .join("\n");
 
+    // Check cache if enabled
+    if (useCache) {
+      const cacheKey = createCacheKey(query, recentContext);
+      const cached = enhancementCache.get(cacheKey);
+
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        console.log(`[Query Enhancer] Cache hit for: "${query}"`);
+        console.log(`[Query Enhancer] Cached enhanced: "${cached.enhanced}"`);
+        return cached.enhanced;
+      }
+    }
+
+    // Build type-specific enhancement instructions
+    let typeInstructions = "";
+    switch (detectedType) {
+      case "case":
+        typeInstructions =
+          "\nQUERY TYPE: Legal case - Prioritize: case name, court, citation, judgment, ruling";
+        break;
+      case "statute":
+        typeInstructions =
+          "\nQUERY TYPE: Statute/legislation - Prioritize: act name, section, chapter, provision";
+        break;
+      default:
+        typeInstructions =
+          "\nQUERY TYPE: General legal query - Prioritize: legal domain, Zimbabwe context";
+        break;
+    }
+
     const prompt = `${
       recentContext ? `CONVERSATION CONTEXT:\n${recentContext}\n\n` : ""
-    }USER QUERY: ${query}
+    }USER QUERY: ${query}${typeInstructions}
 
 ENHANCED QUERY:`;
 
@@ -103,7 +251,26 @@ ENHANCED QUERY:`;
     }
 
     console.log(`[Query Enhancer] Original: "${query}"`);
+    console.log(`[Query Enhancer] Type: ${detectedType}`);
     console.log(`[Query Enhancer] Enhanced: "${enhanced}"`);
+
+    // Cache the result if enabled
+    if (useCache) {
+      const cacheKey = createCacheKey(query, recentContext);
+      enhancementCache.set(cacheKey, {
+        enhanced,
+        timestamp: Date.now(),
+      });
+
+      // Clean cache periodically
+      if (enhancementCache.size > MAX_CACHE_SIZE * 0.9) {
+        cleanCache();
+      }
+
+      console.log(
+        `[Query Enhancer] Cached result (cache size: ${enhancementCache.size})`
+      );
+    }
 
     return enhanced;
   } catch (error) {
@@ -111,4 +278,23 @@ ENHANCED QUERY:`;
     // Fallback: just add Zimbabwe
     return `${query} Zimbabwe`;
   }
+}
+
+/**
+ * Get cache statistics for monitoring
+ */
+export function getEnhancementCacheStats() {
+  return {
+    size: enhancementCache.size,
+    maxSize: MAX_CACHE_SIZE,
+    ttl: CACHE_TTL,
+  };
+}
+
+/**
+ * Clear the enhancement cache (useful for testing or manual cleanup)
+ */
+export function clearEnhancementCache() {
+  enhancementCache.clear();
+  console.log("[Query Enhancer] Cache cleared");
 }

@@ -156,14 +156,11 @@ const searchStep = createStep({
         conversationHistory || []
       );
 
-      // Execute search with enhanced query
+      // Execute search with enhanced query (already includes jurisdiction)
       const searchResults = await tavilySearchTool.execute({
         context: {
-          query: `${enhancedQuery} ${jurisdiction} law`,
+          query: enhancedQuery,
           maxResults: 20,
-          domainStrategy:
-            jurisdiction.toLowerCase() === "zimbabwe" ? "prioritized" : "open",
-          researchDepth: "standard",
         },
         runtimeContext,
       });

@@ -163,15 +163,13 @@ const advancedSearchStep = createStep({
         conversationHistory || []
       );
 
-      // Execute advanced search with enhanced query and Zimbabwe-specific configuration
+      // Execute advanced search with enhanced query (already includes jurisdiction)
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
-          query: `${enhancedQuery} ${jurisdiction}`,
-          maxResults: 20, // Maximum results for comprehensive coverage
+          query: enhancedQuery,
+          maxResults: 20,
           jurisdiction,
-          includeRawContent: true, // Required for content extraction
-          domainStrategy: "prioritized", // Automatically uses Zimbabwe domain prioritization
-          researchDepth: "deep",
+          includeRawContent: true,
         },
         runtimeContext,
       });

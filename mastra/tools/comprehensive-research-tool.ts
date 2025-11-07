@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { highAdvanceSearchWorkflow } from "../workflows/high-advance-search-workflow";
+import { comprehensiveAnalysisWorkflowV2 } from "../workflows/comprehensive-analysis-workflow-v2";
 
 /**
  * Comprehensive Research Tool (High Advance Search Workflow)
@@ -38,12 +38,11 @@ import { highAdvanceSearchWorkflow } from "../workflows/high-advance-search-work
 export const comprehensiveResearchTool = createTool({
   id: "comprehensive-research",
   description:
-    "Performs BROAD ANALYSIS across 6+ DIVERSE SOURCES to identify TRENDS and PATTERNS. " +
-    "Excels at COMPARING information across sources and SYNTHESIZING multiple perspectives. " +
-    "Use for: identifying trends, comparing perspectives, pattern recognition, broad surveys. " +
-    "Best when you need to understand how DIFFERENT SOURCES view a topic or find COMMON THEMES. " +
-    "Returns comprehensive synthesis with trend analysis and extensive source citations. " +
-    "Token budget: 5K-10K tokens. NOT for dense content extraction (use deepResearch for that).",
+    "Broad analysis across MANY SOURCES (10-20 results) to identify TRENDS and PATTERNS. " +
+    "Use for: 'What are trends...', 'Compare perspectives...', 'Survey...', pattern recognition across sources. " +
+    "Performs multiple searches with gap analysis to ensure comprehensive coverage. " +
+    "Speed: 8-15 seconds | Tokens: 5-10K | Best for: Understanding how different sources view a topic and identifying common themes. " +
+    "NOT for: Simple questions (use quickFactSearch), explanations (use standardResearch), or dense content extraction (use deepResearch).",
 
   inputSchema: z.object({
     query: z
@@ -55,6 +54,16 @@ export const comprehensiveResearchTool = createTool({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for context"),
   }),
 
   outputSchema: z.object({
@@ -73,14 +82,21 @@ export const comprehensiveResearchTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, jurisdiction = "Zimbabwe" } = context;
+    const {
+      query,
+      jurisdiction = "Zimbabwe",
+      conversationHistory = [],
+    } = context;
 
     console.log(
       `[Comprehensive Research Tool] Starting workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
     );
+    console.log(
+      `[Comprehensive Research Tool] Conversation history: ${conversationHistory.length} messages`
+    );
 
     try {
-      const run = await highAdvanceSearchWorkflow.createRunAsync();
+      const run = await comprehensiveAnalysisWorkflowV2.createRunAsync();
       console.log(
         "[Comprehensive Research Tool] Workflow run created, starting execution..."
       );
@@ -89,6 +105,7 @@ export const comprehensiveResearchTool = createTool({
         inputData: {
           query,
           jurisdiction,
+          conversationHistory,
         },
       });
 
@@ -105,16 +122,16 @@ export const comprehensiveResearchTool = createTool({
         );
       }
 
-      const synthesizeStep = result.steps.synthesize;
+      const finalStep = result.steps["follow-up-searches"];
 
-      if (!synthesizeStep || synthesizeStep.status !== "success") {
+      if (!finalStep || finalStep.status !== "success") {
         console.error(
-          `[Comprehensive Research Tool] Synthesize step failed or not found. Step status: ${synthesizeStep?.status}`
+          `[Comprehensive Research Tool] Follow-up searches step failed or not found. Step status: ${finalStep?.status}`
         );
-        throw new Error("Synthesize step failed or not found");
+        throw new Error("Follow-up searches step failed or not found");
       }
 
-      const output = synthesizeStep.output as {
+      const output = finalStep.output as {
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;

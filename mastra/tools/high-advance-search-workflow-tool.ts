@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { highAdvanceSearchWorkflow } from "../workflows/high-advance-search-workflow";
+import { highAdvanceSearchWorkflowV2 } from "../workflows/high-advance-search-workflow-v2";
 
 /**
  * High-Advance Search Workflow Tool
@@ -31,6 +31,16 @@ export const highAdvanceSearchWorkflowTool = createTool({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for context"),
   }),
 
   outputSchema: z.object({
@@ -47,18 +57,26 @@ export const highAdvanceSearchWorkflowTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, jurisdiction = "Zimbabwe" } = context;
+    const {
+      query,
+      jurisdiction = "Zimbabwe",
+      conversationHistory = [],
+    } = context;
 
     console.log(
       `[High-Advance Search Workflow Tool] Starting workflow for query: "${query}"`
     );
+    console.log(
+      `[High-Advance Search Workflow Tool] Conversation history: ${conversationHistory.length} messages`
+    );
 
     try {
-      const run = await highAdvanceSearchWorkflow.createRunAsync();
+      const run = await highAdvanceSearchWorkflowV2.createRunAsync();
       const result = await run.start({
         inputData: {
           query,
           jurisdiction,
+          conversationHistory,
         },
       });
 
@@ -68,13 +86,13 @@ export const highAdvanceSearchWorkflowTool = createTool({
         );
       }
 
-      const synthesizeStep = result.steps.synthesize;
+      const searchStep = result.steps.search;
 
-      if (!synthesizeStep || synthesizeStep.status !== "success") {
-        throw new Error("Synthesize step failed or not found");
+      if (!searchStep || searchStep.status !== "success") {
+        throw new Error("Search step failed or not found");
       }
 
-      const output = synthesizeStep.output as {
+      const output = searchStep.output as {
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;

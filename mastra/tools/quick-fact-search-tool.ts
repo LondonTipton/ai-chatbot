@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { basicSearchWorkflow } from "../workflows/basic-search-workflow";
+import { basicSearchWorkflowV2 } from "../workflows/basic-search-workflow-v2";
 
 /**
  * Quick Fact Search Tool
@@ -9,8 +9,8 @@ import { basicSearchWorkflow } from "../workflows/basic-search-workflow";
  * Executes: 1 search → quick synthesis
  *
  * Search Depth: 1 search result
- * Token Budget: 1K-2.5K tokens
- * Latency: 3-5 seconds
+ * Token Budget: 500-1500 tokens
+ * Latency: 2-4 seconds
  *
  * Use cases:
  * - "What is..." queries (definitions, concepts)
@@ -27,10 +27,11 @@ import { basicSearchWorkflow } from "../workflows/basic-search-workflow";
 export const quickFactSearchTool = createTool({
   id: "quick-fact-search",
   description:
-    "Performs quick factual lookup with 1 search result and rapid synthesis. " +
-    "Use this for simple factual questions, definitions, or current facts that need fast answers. " +
-    "Returns a concise response with source citation. " +
-    "Token budget: 1K-2.5K tokens. Best for straightforward queries requiring speed over depth.",
+    "Fast factual lookup for simple questions and definitions. " +
+    "Use for: 'What is...', 'Define...', 'When was...', single-fact queries. " +
+    "Analyzes 10 search results and returns concise answer with source citations. " +
+    "Speed: 2-3 seconds | Tokens: 1-2K | Best for: Quick answers requiring speed over depth. " +
+    "NOT for: Detailed analysis or trend identification (use standardResearch or deepResearch instead).",
 
   inputSchema: z.object({
     query: z
@@ -40,6 +41,16 @@ export const quickFactSearchTool = createTool({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for context"),
   }),
 
   outputSchema: z.object({
@@ -56,15 +67,22 @@ export const quickFactSearchTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, jurisdiction = "Zimbabwe" } = context;
+    const {
+      query,
+      jurisdiction = "Zimbabwe",
+      conversationHistory = [],
+    } = context;
 
     console.log(
       `[Quick Fact Search Tool] Starting workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
     );
+    console.log(
+      `[Quick Fact Search Tool] Conversation history: ${conversationHistory.length} messages`
+    );
 
     try {
-      // Create and execute the workflow
-      const run = await basicSearchWorkflow.createRunAsync();
+      // Create and execute the V2 workflow
+      const run = await basicSearchWorkflowV2.createRunAsync();
       console.log(
         "[Quick Fact Search Tool] Workflow run created, starting execution..."
       );
@@ -73,6 +91,7 @@ export const quickFactSearchTool = createTool({
         inputData: {
           query,
           jurisdiction,
+          conversationHistory,
         },
       });
 
@@ -90,20 +109,21 @@ export const quickFactSearchTool = createTool({
         );
       }
 
-      // Extract output from the synthesize step (last step in workflow)
-      const synthesizeStep = result.steps.synthesize;
+      // Extract output from the search step (V2 workflow)
+      const searchStep = result.steps.search;
 
-      if (!synthesizeStep || synthesizeStep.status !== "success") {
+      if (!searchStep || searchStep.status !== "success") {
         console.error(
-          `[Quick Fact Search Tool] Synthesize step failed or not found. Step status: ${synthesizeStep?.status}`
+          `[Quick Fact Search Tool] Search step failed or not found. Step status: ${searchStep?.status}`
         );
-        throw new Error("Synthesize step failed or not found");
+        throw new Error("Search step failed or not found");
       }
 
-      const output = synthesizeStep.output as {
+      const output = searchStep.output as {
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;
+        rawResults?: any;
       };
 
       console.log(

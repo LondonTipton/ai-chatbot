@@ -1,6 +1,6 @@
 /**
  * Cerebras API Retry Handler
- * 
+ *
  * Implements exponential backoff retry logic specifically for Cerebras API rate limit errors.
  * Handles 429 errors, queue_exceeded, and too_many_requests_error gracefully.
  */
@@ -25,7 +25,7 @@ export type CerebrasError = Error & {
   };
 };
 
-const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'onRetry'>> = {
+const DEFAULT_OPTIONS: Required<Omit<RetryOptions, "onRetry">> = {
   maxRetries: 3,
   initialDelay: 2000, // 2 seconds
   maxDelay: 15_000, // 15 seconds
@@ -38,10 +38,10 @@ const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'onRetry'>> = {
 export function isCerebrasRateLimitError(error: any): boolean {
   return (
     error.statusCode === 429 ||
-    error.code === 'queue_exceeded' ||
-    error.type === 'too_many_requests_error' ||
-    error.data?.code === 'queue_exceeded' ||
-    error.data?.type === 'too_many_requests_error'
+    error.code === "queue_exceeded" ||
+    error.type === "too_many_requests_error" ||
+    error.data?.code === "queue_exceeded" ||
+    error.data?.type === "too_many_requests_error"
   );
 }
 
@@ -58,7 +58,7 @@ export function isCerebrasRetryableError(error: any): boolean {
 
 /**
  * Execute a function with exponential backoff retry logic for Cerebras API errors
- * 
+ *
  * @example
  * ```typescript
  * const result = await withCerebrasRetry(
@@ -86,7 +86,9 @@ export async function withCerebrasRetry<T>(
 
       // Log the error
       console.error(
-        `[Cerebras Retry] Attempt ${attempt + 1}/${config.maxRetries + 1} failed:`,
+        `[Cerebras Retry] Attempt ${attempt + 1}/${
+          config.maxRetries + 1
+        } failed:`,
         {
           statusCode: error.statusCode,
           code: error.code || error.data?.code,
@@ -100,7 +102,7 @@ export async function withCerebrasRetry<T>(
       if (!isRetryable || isLastAttempt) {
         console.error(
           `[Cerebras Retry] ${
-            isLastAttempt ? 'Max retries reached' : 'Error not retryable'
+            isLastAttempt ? "Max retries reached" : "Error not retryable"
           }, giving up`
         );
         throw error;
@@ -115,8 +117,8 @@ export async function withCerebrasRetry<T>(
       console.log(
         `[Cerebras Retry] ${
           isCerebrasRateLimitError(error)
-            ? '⏳ Rate limit hit'
-            : '🔄 Retryable error'
+            ? "⏳ Rate limit hit"
+            : "🔄 Retryable error"
         }, waiting ${Math.round(delay)}ms before retry (attempt ${
           attempt + 1
         }/${config.maxRetries})`
@@ -136,21 +138,21 @@ export async function withCerebrasRetry<T>(
   if (lastError) {
     throw lastError;
   }
-  
+
   // This should never happen, but TypeScript needs it
   throw new Error("Retry failed with no error captured");
 }
 
 /**
  * Create a retry-wrapped version of an async function
- * 
+ *
  * @example
  * ```typescript
  * const retryableStream = createRetryableFunction(
  *   (input) => agent.stream(input, options),
  *   { maxRetries: 3 }
  * );
- * 
+ *
  * const stream = await retryableStream(input);
  * ```
  */

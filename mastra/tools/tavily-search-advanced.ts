@@ -1,55 +1,30 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import {
-  analyzeSourceDistribution,
-  type DomainStrategy,
-  getExcludeDomains,
-  getPriorityDomains,
-  type ResearchDepth,
-} from "@/lib/utils/tavily-domain-strategy";
-import {
-  estimateSearchResultTokens,
-  estimateTokens,
-} from "@/lib/utils/token-estimation";
-import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 
 /**
- * Tavily Advanced Search Tool for Mastra
- * Deep search with comprehensive results and AI-generated answer
- * Optimized for token efficiency with intelligent Zimbabwe legal domain prioritization
+ * Tavily Advanced Search Tool - SIMPLIFIED to match MCP
+ * Advanced web search using Tavily API with minimal configuration
  */
 export const tavilySearchAdvancedTool = createTool({
   id: "tavily-search-advanced",
   description:
-    "Advanced search for legal information with comprehensive results and AI-generated answer. Use for queries needing detailed information with domain prioritization. Optimized for token efficiency with default 20 results.",
+    "Advanced search for detailed information with comprehensive results.",
 
   inputSchema: z.object({
-    query: z
-      .string()
-      .describe("The search query for detailed legal information"),
+    query: z.string().describe("The search query for detailed information"),
     maxResults: z
       .number()
       .optional()
-      .default(20)
-      .describe("Maximum number of results (1-20, default: 20)"),
-    domainStrategy: z
-      .enum(["strict", "prioritized", "open"])
-      .optional()
-      .default("prioritized")
-      .describe(
-        "Domain strategy: 'strict' (ZW only), 'prioritized' (ZW + global), 'open' (exclude spam only)"
-      ),
-    researchDepth: z
-      .enum(["quick", "standard", "deep", "comprehensive"])
-      .optional()
-      .default("deep")
-      .describe("Research depth for domain prioritization"),
+      .default(10)
+      .describe("Maximum number of results (1-20, default: 10)"),
     jurisdiction: z
       .string()
+      .optional()
       .default("Zimbabwe")
-      .describe("Legal jurisdiction for context"),
+      .describe("Legal jurisdiction for context (not used in search)"),
     includeRawContent: z
       .boolean()
+      .optional()
       .default(false)
       .describe("Whether to include raw content in search results"),
   }),
@@ -66,36 +41,24 @@ export const tavilySearchAdvancedTool = createTool({
           content: z.string(),
           relevanceScore: z.number(),
           publishedDate: z.string(),
-          tier: z.enum(["tier1", "tier2", "tier3", "tier4", "external"]),
         })
       )
-      .describe("Array of detailed search results with authority tier"),
+      .describe("Array of detailed search results"),
     totalResults: z.number(),
     searchDepth: z.string(),
     tokenEstimate: z
       .number()
       .describe("Estimated token count for the search results"),
-    sourceDistribution: z.object({
-      zimbabweAuthority: z.number(),
-      zimbabweOther: z.number(),
-      regional: z.number(),
-      global: z.number(),
-    }),
   }),
 
   execute: async ({ context }) => {
     const {
       query,
-      maxResults = 20,
-      domainStrategy = "prioritized",
-      researchDepth = "deep",
+      maxResults = 10,
       includeRawContent = false,
     } = context as {
       query: string;
       maxResults?: number;
-      domainStrategy?: DomainStrategy;
-      researchDepth?: ResearchDepth;
-      jurisdiction?: string;
       includeRawContent?: boolean;
     };
 
@@ -107,28 +70,18 @@ export const tavilySearchAdvancedTool = createTool({
       // Validate maxResults
       const validMaxResults = Math.min(Math.max(maxResults, 1), 20);
 
-      // Build request body
-      const requestBody: Record<string, unknown> = {
+      // MINIMAL CONFIGURATION - Exactly like MCP but with advanced depth
+      const requestBody = {
         api_key: process.env.TAVILY_API_KEY,
         query,
         search_depth: "advanced",
-        include_answer: true,
-        include_raw_content: includeRawContent,
         max_results: validMaxResults,
+        include_raw_content: includeRawContent,
       };
 
-      // Apply domain strategy
-      if (domainStrategy === "strict") {
-        // Strict: ONLY search priority domains
-        requestBody.include_domains = getPriorityDomains(researchDepth);
-      } else if (domainStrategy === "prioritized") {
-        // Prioritized: Exclude spam but search globally
-        // Note: Removed include_domains to allow broader search while still excluding spam
-        requestBody.exclude_domains = getExcludeDomains();
-      } else {
-        // Open: Just exclude spam, let Tavily find best matches globally
-        requestBody.exclude_domains = getExcludeDomains();
-      }
+      console.log("[Tavily Advanced] Query:", query);
+      console.log("[Tavily Advanced] Max results:", validMaxResults);
+      console.log("[Tavily Advanced] Include raw content:", includeRawContent);
 
       const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
@@ -139,6 +92,12 @@ export const tavilySearchAdvancedTool = createTool({
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(
+          "[Tavily Advanced] API error:",
+          response.status,
+          errorText
+        );
         throw new Error(`Tavily API error: ${response.statusText}`);
       }
 
@@ -152,27 +111,32 @@ export const tavilySearchAdvancedTool = createTool({
           content: result.content || "",
           relevanceScore: result.score || 0,
           publishedDate: result.published_date || "Not available",
-          tier: getDomainTier(result.url),
         })) || [];
 
-      // Calculate token estimate for results
-      const answerTokens = estimateTokens(data.answer || "");
-      const resultsTokens = estimateSearchResultTokens(formattedResults);
-      const tokenEstimate = answerTokens + resultsTokens;
+      console.log("[Tavily Advanced] Results found:", formattedResults.length);
+      if (formattedResults.length > 0) {
+        console.log(
+          "[Tavily Advanced] First result:",
+          formattedResults[0].title
+        );
+      }
 
-      const sourceDistribution = analyzeSourceDistribution(formattedResults);
+      // Simple token estimate
+      const tokenEstimate = Math.ceil(
+        (JSON.stringify(formattedResults).length + (data.answer?.length || 0)) /
+          4
+      );
 
       return {
-        query: data.query,
-        answer: data.answer || "No comprehensive answer available",
+        query: data.query || query,
+        answer: data.answer || "",
         results: formattedResults,
         totalResults: formattedResults.length,
         searchDepth: "advanced",
         tokenEstimate,
-        sourceDistribution,
       };
     } catch (error) {
-      console.error("Tavily advanced search error:", error);
+      console.error("[Tavily Advanced] Error:", error);
       throw error;
     }
   },

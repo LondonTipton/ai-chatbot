@@ -237,37 +237,35 @@ export async function POST(request: Request) {
       }
 
       try {
-        // Import and execute enhanced comprehensive workflow with better token handling
-        const { enhancedComprehensiveWorkflow } = await import(
-          "@/mastra/workflows/enhanced-comprehensive-workflow"
+        // Import and execute enhanced comprehensive workflow V2 (simplified Tavily integration)
+        const { enhancedComprehensiveWorkflowV2 } = await import(
+          "@/mastra/workflows/enhanced-comprehensive-workflow-v2"
         );
 
         logger.log(
-          "[Routing] 🚀 Starting enhanced comprehensive analysis workflow"
+          "[Routing] 🚀 Starting enhanced comprehensive analysis workflow V2"
+        );
+        logger.log(
+          "[Routing] 📊 Using simplified Tavily integration (raw results to Chat Agent)"
         );
 
-        // Extract recent conversation history (last 5 messages for context)
+        // Get conversation history for context
         const conversationHistory = uiMessages
-          .slice(-6, -1) // Get last 5 messages before current one
-          .map((msg) => ({
-            role: msg.role,
-            content:
-              typeof msg.parts[0] === "object" && "text" in msg.parts[0]
-                ? msg.parts[0].text
-                : "",
-          }))
-          .filter((msg) => msg.content.length > 0);
+          .slice(0, -1) // Exclude current message
+          .map((msg) => {
+            const textPart = msg.parts.find((p: any) => p.type === "text");
+            return {
+              role: msg.role,
+              content: textPart ? (textPart as any).text : "",
+            };
+          })
+          .filter((msg) => msg.content); // Remove empty messages
 
-        logger.log(
-          `[Routing] 📜 Conversation history: ${conversationHistory.length} messages`
-        );
-
-        const run = await enhancedComprehensiveWorkflow.createRunAsync();
+        const run = await enhancedComprehensiveWorkflowV2.createRunAsync();
         const result = await run.start({
           inputData: {
             query: userMessageText,
             jurisdiction: "Zimbabwe",
-            tokenBudget: 20_000,
             conversationHistory,
           },
         });
@@ -278,25 +276,23 @@ export async function POST(request: Request) {
 
         if (result.status !== "success") {
           throw new Error(
-            `Comprehensive workflow failed with status: ${result.status}`
+            `Comprehensive workflow V2 failed with status: ${result.status}`
           );
         }
 
-        // Extract output from document step
-        const documentStep = result.steps.document;
+        // Extract output from chatAgent step
+        const chatAgentStep = result.steps.chatAgent;
 
-        if (!documentStep || documentStep.status !== "success") {
-          throw new Error("Document step failed or not found");
+        if (!chatAgentStep || chatAgentStep.status !== "success") {
+          throw new Error("Chat Agent step failed or not found");
         }
 
-        const output = documentStep.output as {
+        const output = chatAgentStep.output as {
           response: string;
-          totalTokens: number;
-          path: "enhance" | "deep-dive";
         };
 
         logger.log(
-          `[Routing] ✅ Comprehensive workflow completed. Path: ${output.path}, Tokens: ${output.totalTokens}`
+          "[Routing] ✅ Comprehensive workflow V2 completed successfully"
         );
 
         // Save assistant message
@@ -323,8 +319,6 @@ export async function POST(request: Request) {
           id: assistantMessageId,
           role: "assistant",
           content: output.response,
-          totalTokens: output.totalTokens,
-          path: output.path,
         });
       } catch (error) {
         logger.error("[Routing] ❌ Comprehensive workflow error:", error);

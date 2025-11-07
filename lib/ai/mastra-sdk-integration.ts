@@ -7,9 +7,9 @@
 
 import { createLogger } from "@/lib/logger";
 import { mastra } from "@/mastra";
-import type { QueryComplexity } from "./complexity-detector";
-import { withCerebrasRetry } from "./cerebras-retry-handler";
 import { handleCerebrasError } from "./cerebras-key-balancer";
+import { withCerebrasRetry } from "./cerebras-retry-handler";
+import type { QueryComplexity } from "./complexity-detector";
 
 const logger = createLogger("ai/mastra-sdk-integration");
 
@@ -173,7 +173,9 @@ Remember: You provide legal information, not legal advice. Always recommend cons
         maxDelay: 15_000,
         onRetry: (attempt, delay, error) => {
           logger.warn(
-            `[Mastra SDK] Retry attempt ${attempt} after ${Math.round(delay)}ms due to:`,
+            `[Mastra SDK] Retry attempt ${attempt} after ${Math.round(
+              delay
+            )}ms due to:`,
             error.message
           );
           // Mark the key as failed for rotation
@@ -186,7 +188,10 @@ Remember: You provide legal information, not legal advice. Always recommend cons
     return stream;
   } catch (error) {
     // Final error after all retries
-    logger.error("[Mastra SDK] ❌ Failed to create stream after retries:", error);
+    logger.error(
+      "[Mastra SDK] ❌ Failed to create stream after retries:",
+      error
+    );
     handleCerebrasError(error);
     throw error;
   }
@@ -408,7 +413,9 @@ Remember: You provide legal information, not legal advice. Always recommend cons
         maxDelay: 15_000,
         onRetry: (attempt, delay, error) => {
           logger.warn(
-            `[Mastra SDK] Retry attempt ${attempt} after ${Math.round(delay)}ms due to:`,
+            `[Mastra SDK] Retry attempt ${attempt} after ${Math.round(
+              delay
+            )}ms due to:`,
             error.message
           );
           // Mark the key as failed for rotation
@@ -421,7 +428,10 @@ Remember: You provide legal information, not legal advice. Always recommend cons
     return stream;
   } catch (error) {
     // Final error after all retries
-    logger.error("[Mastra SDK] ❌ Failed to create stream after retries:", error);
+    logger.error(
+      "[Mastra SDK] ❌ Failed to create stream after retries:",
+      error
+    );
     handleCerebrasError(error);
     throw error;
   }

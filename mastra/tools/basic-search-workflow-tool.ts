@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { basicSearchWorkflow } from "../workflows/basic-search-workflow";
+import { basicSearchWorkflowV2 } from "../workflows/basic-search-workflow-v2";
 
 /**
  * Basic Search Workflow Tool
@@ -31,6 +31,16 @@ export const basicSearchWorkflowTool = createTool({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for context"),
   }),
 
   outputSchema: z.object({
@@ -47,15 +57,22 @@ export const basicSearchWorkflowTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, jurisdiction = "Zimbabwe" } = context;
+    const {
+      query,
+      jurisdiction = "Zimbabwe",
+      conversationHistory = [],
+    } = context;
 
     console.log(
       `[Basic Search Workflow Tool] Starting workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
     );
+    console.log(
+      `[Basic Search Workflow Tool] Conversation history: ${conversationHistory.length} messages`
+    );
 
     try {
-      // Create and execute the workflow
-      const run = await basicSearchWorkflow.createRunAsync();
+      // Create and execute the V2 workflow
+      const run = await basicSearchWorkflowV2.createRunAsync();
       console.log(
         "[Basic Search Workflow Tool] Workflow run created, starting execution..."
       );
@@ -64,6 +81,7 @@ export const basicSearchWorkflowTool = createTool({
         inputData: {
           query,
           jurisdiction,
+          conversationHistory,
         },
       });
 
@@ -81,17 +99,17 @@ export const basicSearchWorkflowTool = createTool({
         );
       }
 
-      // Extract output from the synthesize step (last step in workflow)
-      const synthesizeStep = result.steps.synthesize;
+      // Extract output from the search step (V2 workflow)
+      const searchStep = result.steps.search;
 
-      if (!synthesizeStep || synthesizeStep.status !== "success") {
+      if (!searchStep || searchStep.status !== "success") {
         console.error(
-          `[Basic Search Workflow Tool] Synthesize step failed or not found. Step status: ${synthesizeStep?.status}`
+          `[Basic Search Workflow Tool] Search step failed or not found. Step status: ${searchStep?.status}`
         );
-        throw new Error("Synthesize step failed or not found");
+        throw new Error("Search step failed or not found");
       }
 
-      const output = synthesizeStep.output as {
+      const output = searchStep.output as {
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;

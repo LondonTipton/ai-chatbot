@@ -328,7 +328,7 @@ export function getBalancedCerebrasProvider(): ReturnType<
 /**
  * Handle API errors and mark keys as failed for automatic rotation
  * Call this from error handlers to disable problematic keys
- * 
+ *
  * Now uses the standardized isCerebrasRateLimitError check
  */
 const RETRY_DELAY_REGEX = /retry in ([\d.]+)s/i;
@@ -401,7 +401,9 @@ export function handleCerebrasError(error: any, apiKey?: string): void {
         retryDelay
       );
     } else {
-      logger.warn("[Cerebras Balancer] ⚠️  Could not identify which key failed");
+      logger.warn(
+        "[Cerebras Balancer] ⚠️  Could not identify which key failed"
+      );
     }
   } else {
     logger.log(

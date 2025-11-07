@@ -96,13 +96,11 @@ const searchStep = createStep({
         conversationHistory || []
       );
 
-      // Execute advanced search with enhanced query
+      // Execute advanced search with enhanced query (already includes jurisdiction)
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
-          query: `${enhancedQuery} ${jurisdiction}`,
+          query: enhancedQuery,
           maxResults: 20,
-          domainStrategy: "prioritized",
-          researchDepth: "comprehensive",
           jurisdiction,
           includeRawContent: false,
         },

@@ -198,24 +198,24 @@ export function Chat({
         (error as any).error === "rate_limit_exceeded"
       ) {
         const retryAfter = (error as any).retryAfter || 15;
-        
-        // Show user-friendly toast (using success type for info message)
+
+        // Show user-friendly toast
         toast({
-          type: "success",
+          type: "info",
           description: `High traffic detected. Retrying in ${retryAfter} seconds...`,
         });
 
         // Automatically retry after the specified delay
         setTimeout(() => {
           logger.log(`[Client] Auto-retrying after ${retryAfter}s rate limit`);
-          
+
           // Re-submit the last message
           const lastUserMessage = messages.at(-1);
           if (lastUserMessage) {
             sendMessage(lastUserMessage);
           }
         }, retryAfter * 1000);
-        
+
         stop();
         return;
       }

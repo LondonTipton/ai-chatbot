@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { advancedSearchWorkflow } from "../workflows/advanced-search-workflow";
+import { advancedSearchWorkflowV2 } from "../workflows/advanced-search-workflow-v2";
 
 /**
  * Deep Research Tool (Advanced Search Workflow)
@@ -38,12 +38,11 @@ import { advancedSearchWorkflow } from "../workflows/advanced-search-workflow";
 export const deepResearchTool = createTool({
   id: "deep-research",
   description:
-    "Performs DEEP ANALYSIS of FACTUAL, CONTENT-DENSE legal information with 4-5 sources. " +
-    "Excels at EXTRACTING specific facts, provisions, and requirements from detailed sources. " +
-    "Use for: analyzing dense statutes, extracting case law details, breaking down technical requirements. " +
-    "Best when you need to PICK APART content and extract precise information. " +
-    "Returns detailed analysis with extracted content and authoritative citations. " +
-    "Token budget: 4K-8K tokens. NOT for trend analysis (use comprehensiveResearch for trends).",
+    "Deep analysis of dense legal content and specific provisions with FULL SOURCE TEXT. " +
+    "Use for: 'Analyze...', 'Extract...', 'Break down...', detailed case law, specific statutory provisions. " +
+    "Analyzes 10 search results WITH complete source text for precise extraction and detailed analysis. " +
+    "Speed: 3-5 seconds | Tokens: 3-5K | Best for: Extracting precise information from dense legal sources. " +
+    "NOT for: Simple questions (use quickFactSearch), overviews (use standardResearch), or trend analysis (use comprehensiveResearch).",
 
   inputSchema: z.object({
     query: z
@@ -55,6 +54,16 @@ export const deepResearchTool = createTool({
       .string()
       .default("Zimbabwe")
       .describe("Legal jurisdiction for the query"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .optional()
+      .default([])
+      .describe("Recent conversation history for context"),
   }),
 
   outputSchema: z.object({
@@ -73,15 +82,22 @@ export const deepResearchTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const { query, jurisdiction = "Zimbabwe" } = context;
+    const {
+      query,
+      jurisdiction = "Zimbabwe",
+      conversationHistory = [],
+    } = context;
 
     console.log(
       `[Deep Research Tool] Starting workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
     );
+    console.log(
+      `[Deep Research Tool] Conversation history: ${conversationHistory.length} messages`
+    );
 
     try {
-      // Create and execute the workflow
-      const run = await advancedSearchWorkflow.createRunAsync();
+      // Create and execute the V2 workflow
+      const run = await advancedSearchWorkflowV2.createRunAsync();
       console.log(
         "[Deep Research Tool] Workflow run created, starting execution..."
       );
@@ -90,6 +106,7 @@ export const deepResearchTool = createTool({
         inputData: {
           query,
           jurisdiction,
+          conversationHistory,
         },
       });
 
@@ -107,17 +124,17 @@ export const deepResearchTool = createTool({
         );
       }
 
-      // Extract output from the synthesize step (last step in workflow)
-      const synthesizeStep = result.steps.synthesize;
+      // Extract output from the search step (V2 workflow)
+      const searchStep = result.steps.search;
 
-      if (!synthesizeStep || synthesizeStep.status !== "success") {
+      if (!searchStep || searchStep.status !== "success") {
         console.error(
-          `[Deep Research Tool] Synthesize step failed or not found. Step status: ${synthesizeStep?.status}`
+          `[Deep Research Tool] Search step failed or not found. Step status: ${searchStep?.status}`
         );
-        throw new Error("Synthesize step failed or not found");
+        throw new Error("Search step failed or not found");
       }
 
-      const output = synthesizeStep.output as {
+      const output = searchStep.output as {
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;

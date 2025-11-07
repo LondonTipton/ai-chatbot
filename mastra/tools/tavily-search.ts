@@ -1,47 +1,22 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import {
-  analyzeSourceDistribution,
-  type DomainStrategy,
-  getExcludeDomains,
-  getPriorityDomains,
-  type ResearchDepth,
-} from "@/lib/utils/tavily-domain-strategy";
-import {
-  estimateSearchResultTokens,
-  estimateTokens,
-} from "@/lib/utils/token-estimation";
-import { getDomainTier } from "@/lib/utils/zimbabwe-domains";
 
 /**
- * Tavily Search Tool for Mastra
- * Performs web searches using the Tavily API
- * Optimized for token efficiency with intelligent Zimbabwe legal domain prioritization
+ * Tavily Search Tool - SIMPLIFIED to match MCP
+ * Basic web search using Tavily API with minimal configuration
  */
 export const tavilySearchTool = createTool({
   id: "tavily-search",
   description:
-    "Search the web for current information. Returns relevant search results with intelligent Zimbabwe domain prioritization. Optimized for token efficiency with default 20 results.",
+    "Search the web for current information. Returns relevant search results.",
 
   inputSchema: z.object({
     query: z.string().describe("The search query"),
     maxResults: z
       .number()
       .optional()
-      .default(20)
-      .describe("Maximum number of results to return (default: 20)"),
-    domainStrategy: z
-      .enum(["strict", "prioritized", "open"])
-      .optional()
-      .default("prioritized")
-      .describe(
-        "Domain strategy: 'strict' (ZW only), 'prioritized' (ZW + global), 'open' (exclude spam only)"
-      ),
-    researchDepth: z
-      .enum(["quick", "standard", "deep", "comprehensive"])
-      .optional()
-      .default("standard")
-      .describe("Research depth for domain prioritization"),
+      .default(10)
+      .describe("Maximum number of results to return (default: 10)"),
   }),
 
   outputSchema: z.object({
@@ -53,33 +28,19 @@ export const tavilySearchTool = createTool({
           url: z.string(),
           content: z.string(),
           score: z.number(),
-          tier: z.enum(["tier1", "tier2", "tier3", "tier4", "external"]),
         })
       )
-      .describe("Array of search results with authority tier"),
+      .describe("Array of search results"),
     totalResults: z.number().describe("Total number of results found"),
     tokenEstimate: z
       .number()
       .describe("Estimated token count for the search results"),
-    sourceDistribution: z.object({
-      zimbabweAuthority: z.number(),
-      zimbabweOther: z.number(),
-      regional: z.number(),
-      global: z.number(),
-    }),
   }),
 
   execute: async ({ context }) => {
-    const {
-      query,
-      maxResults = 20,
-      domainStrategy = "prioritized",
-      researchDepth = "standard",
-    } = context as {
+    const { query, maxResults = 10 } = context as {
       query: string;
       maxResults?: number;
-      domainStrategy?: DomainStrategy;
-      researchDepth?: ResearchDepth;
     };
 
     if (!process.env.TAVILY_API_KEY) {
@@ -87,28 +48,20 @@ export const tavilySearchTool = createTool({
     }
 
     try {
-      // Build request body with intelligent domain prioritization
-      const requestBody: Record<string, unknown> = {
+      // MINIMAL CONFIGURATION - Exactly like MCP
+      const requestBody = {
         api_key: process.env.TAVILY_API_KEY,
         query,
         max_results: maxResults,
-        include_answer: true,
-        include_raw_content: false,
-        search_depth: "basic",
       };
 
-      // Apply domain strategy
-      if (domainStrategy === "strict") {
-        // Strict: ONLY search priority domains
-        requestBody.include_domains = getPriorityDomains(researchDepth);
-      } else if (domainStrategy === "prioritized") {
-        // Prioritized: Exclude spam but search globally
-        // Note: Removed include_domains to allow broader search while still excluding spam
-        requestBody.exclude_domains = getExcludeDomains();
-      } else {
-        // Open: Just exclude spam, let Tavily find best matches globally
-        requestBody.exclude_domains = getExcludeDomains();
-      }
+      console.log("[Tavily Search] ==========================================");
+      console.log("[Tavily Search] Query:", query);
+      console.log("[Tavily Search] Max results:", maxResults);
+      console.log(
+        "[Tavily Search] Request body:",
+        JSON.stringify(requestBody, null, 2)
+      );
 
       const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
@@ -119,6 +72,8 @@ export const tavilySearchTool = createTool({
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Tavily Search] API error:", response.status, errorText);
         throw new Error(`Tavily API error: ${response.statusText}`);
       }
 
@@ -130,25 +85,40 @@ export const tavilySearchTool = createTool({
           url: result.url || "",
           content: result.content || "",
           score: result.score || 0,
-          tier: getDomainTier(result.url),
         })) || [];
 
-      // Calculate token estimate for results
-      const answerTokens = estimateTokens(data.answer || "");
-      const resultsTokens = estimateSearchResultTokens(results);
-      const tokenEstimate = answerTokens + resultsTokens;
+      console.log("[Tavily Search] Results found:", results.length);
+      console.log(
+        "[Tavily Search] Answer:",
+        data.answer?.substring(0, 200) || "No answer"
+      );
 
-      const sourceDistribution = analyzeSourceDistribution(results);
+      if (results.length > 0) {
+        console.log("[Tavily Search] Top 3 results:");
+        results.slice(0, 3).forEach((r: any, i: number) => {
+          console.log(`  ${i + 1}. ${r.title}`);
+          console.log(`     URL: ${r.url}`);
+          console.log(`     Score: ${r.score}`);
+          console.log(`     Content: ${r.content.substring(0, 150)}...`);
+        });
+      } else {
+        console.log("[Tavily Search] ❌ NO RESULTS FOUND FOR QUERY:", query);
+      }
+      console.log("[Tavily Search] ==========================================");
+
+      // Simple token estimate
+      const tokenEstimate = Math.ceil(
+        (JSON.stringify(results).length + (data.answer?.length || 0)) / 4
+      );
 
       return {
-        answer: data.answer || "No answer generated",
+        answer: data.answer || "",
         results,
         totalResults: results.length,
         tokenEstimate,
-        sourceDistribution,
       };
     } catch (error) {
-      console.error("Tavily search error:", error);
+      console.error("[Tavily Search] Error:", error);
       throw error;
     }
   },

@@ -144,8 +144,8 @@ export const tavilyNewsSearchTool = createTool({
       );
     }
 
-    // Enhance query with jurisdiction if provided
-    const enhancedQuery = jurisdiction ? `${query} ${jurisdiction}` : query;
+    // Use query directly - it's already enhanced by query-enhancer-agent
+    const enhancedQuery = query;
 
     // Calculate date range
     const toDate = new Date();
