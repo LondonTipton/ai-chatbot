@@ -128,8 +128,10 @@ Please search for information to answer this query. Use the tavilySearch tool an
 
     if (result.toolCalls && result.toolCalls.length > 0) {
       for (const toolCall of result.toolCalls) {
-        if (toolCall.toolName === "tavilySearch" && toolCall.result) {
-          const searchResult = toolCall.result as any;
+        // Type assertion to access toolName property
+        const call = toolCall as any;
+        if (call.toolName === "tavilySearch" && call.result) {
+          const searchResult = call.result as any;
           rawResults = searchResult;
 
           if (searchResult.results && Array.isArray(searchResult.results)) {

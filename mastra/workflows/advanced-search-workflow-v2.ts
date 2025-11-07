@@ -56,7 +56,7 @@ const searchStep = createStep({
     rawResults: z.any().optional().describe("Raw Tavily results for debugging"),
   }),
   execute: async ({ inputData, runtimeContext }) => {
-    const { query, conversationHistory } = inputData;
+    const { query, jurisdiction, conversationHistory } = inputData;
 
     console.log("[Advanced Search V2] Starting search");
     console.log("[Advanced Search V2] Query:", query);
@@ -85,6 +85,7 @@ const searchStep = createStep({
         context: {
           query: enhancedQuery,
           maxResults: 10, // Advanced search: 10 results with full content
+          jurisdiction: jurisdiction || "Zimbabwe",
           includeRawContent: true, // Full source text for deep analysis
         },
         runtimeContext,

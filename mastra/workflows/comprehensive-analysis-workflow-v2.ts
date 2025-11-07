@@ -90,6 +90,7 @@ const initialSearchStep = createStep({
         context: {
           query: enhancedQuery,
           maxResults: 10,
+          jurisdiction: jurisdiction || "Zimbabwe",
           includeRawContent: true, // Full content for initial analysis
         },
         runtimeContext,
@@ -325,6 +326,7 @@ const followUpSearchesStep = createStep({
   execute: async ({ inputData, runtimeContext }) => {
     const {
       query,
+      jurisdiction,
       initialResults,
       initialSources,
       hasGaps,
@@ -356,6 +358,7 @@ const followUpSearchesStep = createStep({
             context: {
               query: gapQuery,
               maxResults: 5, // Smaller follow-up searches
+              jurisdiction: jurisdiction || "Zimbabwe",
               includeRawContent: false,
             },
             runtimeContext,
