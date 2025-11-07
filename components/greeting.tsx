@@ -54,7 +54,7 @@ export const Greeting = () => {
       key="overview"
       ref={greetingRef}
       style={{ scrollMarginTop: "1rem" }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
     >
       <motion.div
         animate={{ opacity: 1, y: 0 }}

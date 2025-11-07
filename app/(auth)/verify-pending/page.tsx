@@ -110,7 +110,7 @@ function VerifyPendingContent() {
 
   return (
     <div
-      className={`relative flex h-dvh w-screen flex-col items-center bg-background transition-all duration-300 ${
+      className={`relative flex h-dvh w-screen flex-col items-center bg-background transition-all duration-200 ease-out ${
         isKeyboardVisible ? "justify-start pt-4" : "justify-center"
       } md:justify-start md:pt-16`}
     >
@@ -121,7 +121,7 @@ function VerifyPendingContent() {
 
       {/* Large Logo at Top */}
       <Link
-        className={`transition-all duration-300 hover:opacity-80 ${
+        className={`transition-all duration-200 ease-out hover:opacity-80 ${
           isKeyboardVisible ? "mb-4" : "mb-12 md:mb-16"
         }`}
         href="https://deep-counsel.org"

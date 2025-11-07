@@ -21,6 +21,7 @@ import { UpgradeModal } from "@/components/upgrade-modal";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import { useUsage } from "@/hooks/use-usage";
 import type { Vote } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
@@ -63,6 +64,7 @@ export function Chat({
   const { mutate } = useSWRConfig();
   const { mutate: mutateUsage } = useUsage();
   const { setDataStream } = useDataStream();
+  const keyboardHeight = useKeyboardHeight();
 
   const [input, setInput] = useState<string>("");
   const [usage, setUsage] = useState<AppUsage | undefined>(initialLastContext);
@@ -309,7 +311,12 @@ export function Chat({
           votes={votes}
         />
 
-        <div className="mobile-input-container sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+        <div
+          className="mobile-input-container sticky z-1 mx-auto flex w-full max-w-4xl flex-col gap-2 border-t-0 bg-background px-2 pb-3 transition-all duration-200 ease-out md:px-4 md:pb-4"
+          style={{
+            bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "0px",
+          }}
+        >
           {!isReadonly && (
             <MultimodalInput
               attachments={attachments}

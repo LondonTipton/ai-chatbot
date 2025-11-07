@@ -17,6 +17,7 @@ import { imageArtifact } from "@/artifacts/image/client";
 import { sheetArtifact } from "@/artifacts/sheet/client";
 import { textArtifact } from "@/artifacts/text/client";
 import { useArtifact } from "@/hooks/use-artifact";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import type { Document, Vote } from "@/lib/db/schema";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { fetcher } from "@/lib/utils";
@@ -86,6 +87,7 @@ function PureArtifact({
   selectedModelId: string;
 }) {
   const { artifact, setArtifact, metadata, setMetadata } = useArtifact();
+  const keyboardHeight = useKeyboardHeight();
 
   const {
     data: documents,
@@ -330,7 +332,13 @@ function PureArtifact({
                   votes={votes}
                 />
 
-                <div className="mobile-input-container relative flex w-full flex-row items-end gap-2 px-4 pb-4">
+                <div
+                  className="mobile-input-container relative flex w-full flex-row items-end gap-2 px-4 pb-4 transition-all duration-200 ease-out"
+                  style={{
+                    paddingBottom:
+                      keyboardHeight > 0 ? `${keyboardHeight + 16}px` : "16px",
+                  }}
+                >
                   <MultimodalInput
                     attachments={attachments}
                     chatId={chatId}

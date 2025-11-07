@@ -220,3 +220,79 @@ Test login/register pages on mobile:
 - Multiple scroll attempts (immediate, 100ms, 300ms, 500ms) to catch keyboard animation
 - Changed to `block: "nearest"` for more natural scrolling
 - Cleans up timeouts on blur to prevent memory leaks
+
+## V3 Improvements (Keyboard Height Detection)
+
+### Issue Fixed:
+
+Textarea was being hidden behind the keyboard instead of staying above it.
+
+### Solution:
+
+Created a custom hook `useKeyboardHeight` that uses the Visual Viewport API to calculate the exact keyboard height in real-time.
+
+**New Hook** (`hooks/use-keyboard-height.ts`):
+
+```typescript
+export function useKeyboardHeight() {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.visualViewport) {
+        const viewportHeight = window.visualViewport.height;
+        const windowHeight = window.innerHeight;
+        const height = Math.max(0, windowHeight - viewportHeight);
+        setKeyboardHeight(height);
+      }
+    };
+    // ...
+  }, []);
+
+  return keyboardHeight;
+}
+```
+
+**Chat Component** (`components/chat.tsx`):
+
+- Uses `keyboardHeight` hook
+- Dynamically sets `bottom` style based on keyboard height
+- Smooth transition with `duration-200 ease-out`
+
+```tsx
+<div
+  style={{
+    bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "0px",
+  }}
+>
+```
+
+**Artifact Component** (`components/artifact.tsx`):
+
+- Uses `keyboardHeight` hook
+- Adjusts `paddingBottom` to push content above keyboard
+- Adds base padding (16px) plus keyboard height
+
+```tsx
+<div
+  style={{
+    paddingBottom: keyboardHeight > 0 ? `${keyboardHeight + 16}px` : "16px",
+  }}
+>
+```
+
+### Benefits:
+
+1. **Precise positioning**: Uses actual keyboard height, not estimates
+2. **Always visible**: Input stays above keyboard on all devices
+3. **Smooth transitions**: 200ms ease-out animation
+4. **Hero text preserved**: Greeting stays visible while input moves up
+5. **Works everywhere**: Both main chat and artifact chat interfaces
+
+### How It Works:
+
+1. Visual Viewport API detects when keyboard appears
+2. Calculates keyboard height: `windowHeight - viewportHeight`
+3. Applies height as inline style to input container
+4. Container smoothly transitions to new position
+5. Input is always visible above keyboard

@@ -66,7 +66,7 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
       data-testid="suggested-actions"
       initial={{ opacity: 1, height: "auto" }}
       style={{ pointerEvents: isKeyboardVisible ? "none" : "auto" }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
     >
       {suggestedActions.map((suggestedAction, index) => (
         <motion.div
