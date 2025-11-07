@@ -30,28 +30,37 @@ const SESSION_REFRESH_THRESHOLD = 60 * 60 * 24; // 1 day in seconds
 
 /**
  * Set session cookie
- * Sets both our custom session cookie and the Appwrite session cookie
+ * Sets both our custom session cookie (with session SECRET for API calls)
+ * and the Appwrite session cookie
+ *
+ * @param sessionSecret - The session secret (JWT token) for making API calls
+ * @param sessionId - Optional session ID for tracking
+ * @param userId - Optional user ID for fallback validation
  */
 export async function setSessionCookie(
-  sessionId: string,
-  sessionSecret?: string,
+  sessionSecret: string,
+  sessionId?: string,
   userId?: string
 ): Promise<void> {
   const cookieStore = await cookies();
 
   logger.log("[session] setSessionCookie called with:", {
-    sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : "null",
     hasSecret: !!sessionSecret,
     secretLength: sessionSecret?.length || 0,
+    sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : "null",
     userId: userId ? `${userId.substring(0, 8)}...` : "null",
   });
 
   const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
   logger.log("[session] Project ID:", projectId);
 
-  // Set our custom session cookie for tracking
-  cookieStore.set(SESSION_COOKIE_NAME, sessionId, SESSION_COOKIE_OPTIONS);
-  logger.log("[session] Custom session cookie set:", SESSION_COOKIE_NAME);
+  // Set our custom session cookie with the SECRET (not ID!)
+  // This is what we'll use to make API calls to Appwrite
+  cookieStore.set(SESSION_COOKIE_NAME, sessionSecret, SESSION_COOKIE_OPTIONS);
+  logger.log(
+    "[session] Custom session cookie set with secret:",
+    SESSION_COOKIE_NAME
+  );
 
   // Persist user id for admin validation fallback in middleware
   if (userId) {
@@ -62,18 +71,14 @@ export async function setSessionCookie(
     logger.log("[session] User ID cookie set");
   }
 
-  // Set the Appwrite session cookie if we have the secret
-  // This is CRITICAL for verification emails to work
+  // Also set the Appwrite session cookie with the secret
+  // This is for compatibility with Appwrite SDKs
   if (sessionSecret && projectId) {
     const appwriteSessionCookieName = `a_session_${projectId}`;
 
     logger.log(
       "[session] Setting Appwrite session cookie:",
       appwriteSessionCookieName
-    );
-    logger.log(
-      "[session] Session secret (first 10 chars):",
-      sessionSecret.substring(0, 10)
     );
 
     // Set the cookie with the session secret (the actual JWT token)

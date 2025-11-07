@@ -4,9 +4,8 @@ import { z } from "zod";
 import {
   createAccount,
   createEmailSession,
-  deleteSession,
-  getSession,
   createVerification,
+  deleteSession,
 } from "@/lib/appwrite/auth";
 import { type AuthError, AuthErrorCode } from "@/lib/appwrite/errors";
 import {
@@ -69,7 +68,7 @@ export const login = async (
 
     // Set session cookie with the session secret (not the ID!)
     // The secret is the actual session token that Appwrite uses for authentication
-    await setSessionCookie(session.$id, session.secret, session.userId);
+    await setSessionCookie(session.secret, session.$id, session.userId);
 
     logger.log("[LOGIN] Session cookie set, login successful");
 
@@ -166,7 +165,7 @@ export const register = async (
     });
 
     // Set session cookie with the session secret (not the ID!)
-    await setSessionCookie(session.$id, session.secret, session.userId);
+    await setSessionCookie(session.secret, session.$id, session.userId);
     logger.log("[REGISTER] Session cookie set");
 
     // Send verification email
@@ -258,10 +257,11 @@ export const resendVerification =
     try {
       logger.log("[RESEND_VERIFICATION] Starting resend verification process");
 
-      // Use the same approach as login - get session from our custom cookie
-      const sessionId = await getSessionCookie();
+      // Get the session secret from our custom cookie
+      // This is the JWT token needed to make Appwrite API calls
+      const sessionSecret = await getSessionCookie();
 
-      if (!sessionId) {
+      if (!sessionSecret) {
         logger.error("[RESEND_VERIFICATION] No session cookie found");
         return {
           status: "failed",
@@ -270,34 +270,18 @@ export const resendVerification =
       }
 
       logger.log(
-        "[RESEND_VERIFICATION] Session ID found:",
-        `${sessionId.substring(0, 8)}...`
+        "[RESEND_VERIFICATION] Session secret found:",
+        `${sessionSecret.substring(0, 10)}...`
       );
 
-      // Get the session details from Appwrite using the session ID
-      const session = await getSession(sessionId);
-
-      if (!session) {
-        logger.error("[RESEND_VERIFICATION] Invalid session");
-        return {
-          status: "failed",
-          error: "Invalid session. Please log in again.",
-        };
-      }
-
-      logger.log(
-        "[RESEND_VERIFICATION] Session validated, has secret:",
-        !!session.secret
-      );
-
-      // Create verification email using the session secret
+      // Create verification email using the session secret directly
       const verificationUrl = `${
         process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       }/verify`;
 
       logger.log("[RESEND_VERIFICATION] Verification URL:", verificationUrl);
 
-      const token = await createVerification(session.secret, verificationUrl);
+      const token = await createVerification(sessionSecret, verificationUrl);
 
       logger.log(
         "[RESEND_VERIFICATION] Verification email sent successfully, token:",
