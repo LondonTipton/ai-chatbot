@@ -7,135 +7,115 @@ import { AuthErrorCode, handleAppwriteError } from "./errors";
 const logger = createLogger("appwrite/session");
 
 /**
- * Session cookie configuration
- */
-export const SESSION_COOKIE_NAME = "appwrite-session";
-
-/**
- * Session cookie options
- */
-export const SESSION_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const, // Changed from "strict" to "lax" for cross-domain Appwrite setup
-  maxAge: 60 * 60 * 24 * 30, // 30 days
-  path: "/",
-} as const;
-
-/**
  * Session refresh threshold (refresh when less than this time remains)
  * Set to 1 day before expiration
  */
 const SESSION_REFRESH_THRESHOLD = 60 * 60 * 24; // 1 day in seconds
 
 /**
- * Set session cookie
- * Sets both our custom session cookie (with session SECRET for API calls)
- * and the Appwrite session cookie
+ * Get the Appwrite session cookie name
+ * Following Appwrite SSR standard: a_session_<PROJECT_ID>
+ */
+function getSessionCookieName(): string | null {
+  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+  if (!projectId) {
+    logger.error("[session] Missing NEXT_PUBLIC_APPWRITE_PROJECT_ID");
+    return null;
+  }
+  return `a_session_${projectId}`;
+}
+
+/**
+ * Get the session ID cookie name (for management operations)
+ */
+function getSessionIdCookieName(): string {
+  return "appwrite_session_id";
+}
+
+/**
+ * Set session cookie following Appwrite SSR standard
+ * Stores session secret in a_session_<PROJECT_ID> for authentication
+ * Stores session ID separately for refresh/management operations
  *
- * @param sessionSecret - The session secret (JWT token) for making API calls
- * @param sessionId - Optional session ID for tracking
- * @param userId - Optional user ID for fallback validation
+ * @param sessionSecret - The session secret (JWT token) from session.secret
+ * @param sessionId - The session ID from session.$id (for refresh operations)
  */
 export async function setSessionCookie(
   sessionSecret: string,
-  sessionId?: string,
-  userId?: string
+  sessionId: string
 ): Promise<void> {
   const cookieStore = await cookies();
+  const sessionCookieName = getSessionCookieName();
 
-  logger.log("[session] setSessionCookie called with:", {
-    hasSecret: !!sessionSecret,
-    secretLength: sessionSecret?.length || 0,
-    sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : "null",
-    userId: userId ? `${userId.substring(0, 8)}...` : "null",
+  if (!sessionCookieName) {
+    logger.error("[session] Cannot set cookie - missing project ID");
+    return;
+  }
+
+  logger.log("[session] Setting session cookies:", {
+    sessionIdLength: sessionId.length,
+    secretLength: sessionSecret.length,
   });
 
-  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
-  logger.log("[session] Project ID:", projectId);
+  // Set the Appwrite session cookie with the secret (JWT token)
+  // This is used by Appwrite SDKs for authentication
+  cookieStore.set(sessionCookieName, sessionSecret, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    path: "/",
+  });
 
-  // Set our custom session cookie with the SECRET (not ID!)
-  // This is what we'll use to make API calls to Appwrite
-  cookieStore.set(SESSION_COOKIE_NAME, sessionSecret, SESSION_COOKIE_OPTIONS);
-  logger.log(
-    "[session] Custom session cookie set with secret:",
-    SESSION_COOKIE_NAME
-  );
+  // Store session ID for management operations (refresh, delete)
+  cookieStore.set(getSessionIdCookieName(), sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    path: "/",
+  });
 
-  // Persist user id for admin validation fallback in middleware
-  if (userId) {
-    cookieStore.set("appwrite_user_id", userId, {
-      ...SESSION_COOKIE_OPTIONS,
-      httpOnly: true,
-    });
-    logger.log("[session] User ID cookie set");
-  }
-
-  // Also set the Appwrite session cookie with the secret
-  // This is for compatibility with Appwrite SDKs
-  if (sessionSecret && projectId) {
-    const appwriteSessionCookieName = `a_session_${projectId}`;
-
-    logger.log(
-      "[session] Setting Appwrite session cookie:",
-      appwriteSessionCookieName
-    );
-
-    // Set the cookie with the session secret (the actual JWT token)
-    cookieStore.set(appwriteSessionCookieName, sessionSecret, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: "/",
-    });
-
-    logger.log("[session] ✓ Appwrite session cookie SET");
-
-    // Verify it was set
-    const verifySet = cookieStore.get(appwriteSessionCookieName);
-    logger.log("[session] Verification - cookie exists:", !!verifySet);
-    logger.log(
-      "[session] Verification - cookie value length:",
-      verifySet?.value.length || 0
-    );
-  } else {
-    if (!sessionSecret) {
-      logger.error(
-        "[session] ❌ No session secret provided - Appwrite cookie NOT set"
-      );
-    }
-    if (!projectId) {
-      logger.error("[session] ❌ No project ID - Appwrite cookie NOT set");
-    }
-  }
+  logger.log("[session] ✓ Session cookies set successfully");
 }
 
 /**
- * Get session cookie value
+ * Get session secret (JWT token) for authentication
+ * Returns the value from a_session_<PROJECT_ID> cookie
  */
 export async function getSessionCookie(): Promise<string | null> {
   const cookieStore = await cookies();
-  return cookieStore.get(SESSION_COOKIE_NAME)?.value || null;
+  const sessionCookieName = getSessionCookieName();
+
+  if (!sessionCookieName) {
+    return null;
+  }
+
+  return cookieStore.get(sessionCookieName)?.value || null;
 }
 
 /**
- * Clear session cookie
+ * Get session ID for management operations
+ */
+export async function getSessionId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(getSessionIdCookieName())?.value || null;
+}
+
+/**
+ * Clear all session cookies
  */
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE_NAME);
-  cookieStore.delete("appwrite_user_id");
+  const sessionCookieName = getSessionCookieName();
 
-  // Also clear the Appwrite session cookie
-  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
-  if (projectId) {
-    const appwriteSessionCookieName = `a_session_${projectId}`;
-    cookieStore.delete(appwriteSessionCookieName);
-    logger.log(
-      "[session] Cleared all session cookies including Appwrite cookie"
-    );
+  if (sessionCookieName) {
+    cookieStore.delete(sessionCookieName);
   }
+
+  cookieStore.delete(getSessionIdCookieName());
+
+  logger.log("[session] ✓ All session cookies cleared");
 }
 
 /**
@@ -157,13 +137,19 @@ export function shouldRefreshSession(session: Models.Session): boolean {
 
 /**
  * Refresh session if needed and update cookie
+ * Uses session ID (not secret) for refresh operations
  * Returns the refreshed session or null if refresh failed
  */
-export async function refreshSessionIfNeeded(
-  sessionId: string
-): Promise<Models.Session | null> {
+export async function refreshSessionIfNeeded(): Promise<Models.Session | null> {
   try {
-    // Get current session
+    const sessionId = await getSessionId();
+
+    if (!sessionId) {
+      logger.error("[session] No session ID found for refresh");
+      return null;
+    }
+
+    // Get current session using session ID
     const session = await getSession(sessionId);
 
     if (!session) {
@@ -178,13 +164,15 @@ export async function refreshSessionIfNeeded(
         `[session] Refreshing session ${sessionId} (expires: ${session.expire})`
       );
 
-      // Refresh the session
+      // Refresh the session using session ID
       const refreshedSession = await refreshSession(sessionId);
 
-      // Update cookie with new session ID if it changed
-      if (refreshedSession.$id !== sessionId) {
-        await setSessionCookie(refreshedSession.$id);
-      }
+      // Update cookies with refreshed session data
+      await setSessionCookie(refreshedSession.secret, refreshedSession.$id);
+
+      logger.log(
+        `[session] Session refreshed. New expiration: ${refreshedSession.expire}`
+      );
 
       return refreshedSession;
     }
@@ -211,11 +199,11 @@ export async function refreshSessionIfNeeded(
  * Returns the session if valid, null otherwise
  */
 export async function validateAndRefreshSession(): Promise<Models.Session | null> {
-  const sessionId = await getSessionCookie();
+  const sessionSecret = await getSessionCookie();
 
-  if (!sessionId) {
+  if (!sessionSecret) {
     return null;
   }
 
-  return refreshSessionIfNeeded(sessionId);
+  return refreshSessionIfNeeded();
 }

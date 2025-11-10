@@ -11,6 +11,7 @@ import { type AuthError, AuthErrorCode } from "@/lib/appwrite/errors";
 import {
   clearSessionCookie,
   getSessionCookie,
+  getSessionId,
   setSessionCookie,
 } from "@/lib/appwrite/session";
 import { createUserWithAppwriteId, getUser } from "@/lib/db/queries";
@@ -66,9 +67,9 @@ export const login = async (
       await createUserWithAppwriteId(validatedData.email, session.userId);
     }
 
-    // Set session cookie with the session secret (not the ID!)
-    // The secret is the actual session token that Appwrite uses for authentication
-    await setSessionCookie(session.secret, session.$id, session.userId);
+    // Set session cookie following Appwrite SSR standard
+    // Store session secret (JWT token) for auth and session ID for management
+    await setSessionCookie(session.secret, session.$id);
 
     logger.log("[LOGIN] Session cookie set, login successful");
 
@@ -164,8 +165,9 @@ export const register = async (
       provider: session.provider,
     });
 
-    // Set session cookie with the session secret (not the ID!)
-    await setSessionCookie(session.secret, session.$id, session.userId);
+    // Set session cookie following Appwrite SSR standard
+    // Store session secret (JWT token) for auth and session ID for management
+    await setSessionCookie(session.secret, session.$id);
     logger.log("[REGISTER] Session cookie set");
 
     // Send verification email
@@ -231,18 +233,18 @@ export const register = async (
 
 export const logout = async (): Promise<void> => {
   try {
-    const sessionId = await getSessionCookie();
+    const sessionId = await getSessionId();
 
     if (sessionId) {
-      // Delete session from Appwrite
+      // Delete session from Appwrite using session ID
       await deleteSession(sessionId);
     }
 
-    // Clear session cookie
+    // Clear all session cookies
     await clearSessionCookie();
   } catch (error) {
     logger.error("[logout] Error during logout:", error);
-    // Always clear the cookie even if Appwrite deletion fails
+    // Always clear the cookies even if Appwrite deletion fails
     await clearSessionCookie();
   }
 };

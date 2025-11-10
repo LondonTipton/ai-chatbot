@@ -20,9 +20,9 @@ const SESSION_REFRESH_THRESHOLD = 24 * 60 * 60 * 1000;
 
 /**
  * Extract session cookie from request
+ * Following Appwrite SSR standard: a_session_<PROJECT_ID>
  */
 function getSessionCookie(request: NextRequest): string | null {
-  // Appwrite stores session in a cookie named like: a_session_{projectId}
   const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
   if (!projectId) {
     return null;
@@ -30,24 +30,6 @@ function getSessionCookie(request: NextRequest): string | null {
 
   const sessionCookieName = `a_session_${projectId}`;
   return request.cookies.get(sessionCookieName)?.value || null;
-}
-
-function getFallbackCookies(request: NextRequest): {
-  sessionId: string | null;
-  userId: string | null;
-} {
-  // Check multiple cookie sources
-  const sessionId =
-    request.cookies.get("appwrite-session")?.value ||
-    request.cookies.get("appwrite-session-backup")?.value ||
-    request.cookies.get("appwrite-session-js")?.value ||
-    null;
-  const userId =
-    request.cookies.get("appwrite_user_id")?.value ||
-    request.cookies.get("appwrite_user_id_backup")?.value ||
-    request.cookies.get("appwrite_user_id_js")?.value ||
-    null;
-  return { sessionId, userId };
 }
 
 /**
@@ -184,34 +166,14 @@ export async function middleware(request: NextRequest) {
   // verify-pending is semi-protected - requires a session but not verification
   const isVerifyPending = pathname === "/verify-pending";
 
-  // Extract session cookie (primary: Appwrite cookie; fallback: our cookie)
+  // Extract session cookie (Appwrite standard: a_session_<PROJECT_ID>)
   const sessionToken = getSessionCookie(request);
-  const fallback = getFallbackCookies(request);
 
-  // Debug: Log cookie presence
+  // Log session status
   if (sessionToken) {
     logger.log(`[middleware] Found session cookie for ${pathname}`);
   } else {
     logger.log(`[middleware] No session cookie found for ${pathname}`);
-  }
-
-  // Debug: Log all cookies and fallback cookies
-  const allCookies = request.cookies.toString();
-  logger.log(
-    `[middleware] All cookies: ${allCookies.substring(0, 200)}${
-      allCookies.length > 200 ? "..." : ""
-    }`
-  );
-
-  if (fallback.sessionId || fallback.userId) {
-    logger.log(
-      `[middleware] Fallback cookies: sessionId=${fallback.sessionId?.substring(
-        0,
-        8
-      )}..., userId=${fallback.userId?.substring(0, 8)}...`
-    );
-  } else {
-    logger.log("[middleware] No fallback cookies found");
   }
 
   // Validate session if token exists
@@ -230,163 +192,6 @@ export async function middleware(request: NextRequest) {
     } else {
       logger.log(`[middleware] Session validation failed for ${pathname}`);
     }
-  } else if (fallback.sessionId && fallback.userId) {
-    logger.log(
-      `[middleware] Using fallback cookies for ${pathname}: sessionId present=${!!fallback.sessionId}, userId present=${!!fallback.userId}`
-    );
-    // Fallback: validate using server API with sessionId and userId stored in our cookies
-    try {
-      const res = await fetch(new URL("/api/auth/validate", request.url), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sessionId: fallback.sessionId,
-          userId: fallback.userId,
-        }),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as any;
-        if (data?.valid && data?.user && data?.session) {
-          validationResult = { user: data.user, session: data.session };
-          logger.log(
-            `[middleware] Fallback validation succeeded for user: ${data.user?.$id}`
-          );
-        } else {
-          logger.log("[middleware] Fallback validation returned invalid");
-        }
-      }
-    } catch (e) {
-      logger.log("[middleware] Fallback validation failed:", e);
-    }
-  } else {
-    // Last resort: check if there's temporary session data in the request
-    // This handles cases where cookies haven't synced yet but we have session data
-    const tempSessionHeader = request.headers.get("x-temp-session");
-    if (tempSessionHeader) {
-      try {
-        const tempSession = JSON.parse(tempSessionHeader);
-        if (tempSession.sessionId && tempSession.userId) {
-          logger.log(`[middleware] Using temp session data for ${pathname}`);
-
-          // Quick validate using the temp session data
-          const res = await fetch(
-            new URL(
-              `/api/auth/quick-validate?sessionId=${tempSession.sessionId}&userId=${tempSession.userId}`,
-              request.url
-            )
-          );
-          if (res.ok) {
-            const data = (await res.json()) as any;
-            if (data?.valid && data?.user && data?.session) {
-              validationResult = { user: data.user, session: data.session };
-              logger.log(
-                `[middleware] Temp session validation succeeded for user: ${data.user?.$id}`
-              );
-            }
-          }
-        }
-      } catch (e) {
-        logger.log("[middleware] Temp session validation failed:", e);
-      }
-    }
-  }
-
-  // Development bypass: check for temp auth header when no cookies are available
-  if (!validationResult && process.env.NODE_ENV === "development") {
-    const tempAuthHeader = request.headers.get("x-temp-auth");
-
-    if (tempAuthHeader) {
-      try {
-        const payload = JSON.parse(
-          Buffer.from(tempAuthHeader, "base64").toString()
-        );
-
-        // Check if token is recent (less than 1 hour old)
-        const now = Date.now();
-        const tokenAge = now - payload.timestamp;
-
-        if (tokenAge < 60 * 60 * 1000 && payload.userId && payload.sessionId) {
-          logger.log(
-            `[middleware] Using development auth bypass for ${pathname}`
-          );
-
-          // Create a mock validation result for development
-          validationResult = {
-            user: {
-              $id: payload.userId,
-              $createdAt: new Date().toISOString(),
-              $updatedAt: new Date().toISOString(),
-              name: "Dev User",
-              registration: new Date().toISOString(),
-              status: true,
-              labels: [],
-              passwordUpdate: new Date().toISOString(),
-              email: "dev@localhost.dev",
-              phone: "",
-              emailVerification: true,
-              phoneVerification: false,
-              mfa: false,
-              prefs: {},
-              targets: [],
-              accessedAt: new Date().toISOString(),
-            } as any,
-            session: {
-              $id: payload.sessionId,
-              $createdAt: new Date().toISOString(),
-              $updatedAt: new Date().toISOString(),
-              userId: payload.userId,
-              expire: new Date(Date.now() + 86_400_000).toISOString(), // 24 hours from now
-              provider: "email",
-              providerUid: payload.userId,
-              providerAccessToken: "",
-              providerAccessTokenExpiry: "",
-              providerRefreshToken: "",
-              ip: "127.0.0.1",
-              osCode: "WIN",
-              osName: "Windows",
-              osVersion: "",
-              clientType: "browser",
-              clientCode: "CH",
-              clientName: "Chrome",
-              clientVersion: "",
-              clientEngine: "",
-              clientEngineVersion: "",
-              deviceName: "localhost",
-              deviceBrand: "",
-              deviceModel: "",
-              countryCode: "US",
-              countryName: "United States",
-              current: true,
-              factors: [],
-              secret: "",
-              mfaUpdatedAt: "",
-            } as any,
-          };
-        }
-      } catch (e) {
-        logger.log("[middleware] Failed to parse temp auth header:", e);
-      }
-    }
-  }
-
-  // Development bypass: if we consistently have no cookies at all, let requests through
-  // This allows client-side auth to work when server-side cookies are not functioning
-  if (
-    !validationResult &&
-    !isPublicRoute &&
-    !isWellKnown &&
-    process.env.NODE_ENV === "development"
-  ) {
-    // Check if we have absolutely no cookies - this indicates a cookie system problem
-    const hasCookies = request.cookies.toString().length > 0;
-
-    if (!hasCookies) {
-      logger.log(
-        `[middleware] DEVELOPMENT: No cookies detected, bypassing auth for ${pathname} - client-side auth will handle`
-      );
-      // Let the request through - client-side auth will handle authentication
-      return NextResponse.next();
-    }
   }
 
   // If no valid session and trying to access protected route, redirect to login
@@ -401,26 +206,16 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set("returnUrl", pathname);
     }
 
-    // Only clear cookies if a session token was present but failed validation
-    // Don't clear cookies if no token was found - they might be fallback cookies that need time to sync
+    // Clear invalid session cookies
     const response = NextResponse.redirect(loginUrl);
     if (sessionToken) {
       const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
       if (projectId) {
-        // Clear Appwrite session cookie
         const sessionCookieName = `a_session_${projectId}`;
         response.cookies.delete(sessionCookieName);
-
-        // Also clear our custom session cookie
-        response.cookies.delete("appwrite-session");
-        response.cookies.delete("appwrite_user_id");
-
+        response.cookies.delete("appwrite_session_id");
         logger.log("[middleware] Cleared invalid session cookies");
       }
-    } else {
-      logger.log(
-        "[middleware] No cookies cleared - no session token was present"
-      );
     }
 
     return response;
