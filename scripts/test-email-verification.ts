@@ -5,6 +5,7 @@
  */
 
 import { Account, Client, ID } from "node-appwrite";
+import { getAppUrl } from "../lib/utils/url";
 
 const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
 const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
@@ -72,9 +73,7 @@ async function testEmailVerification() {
 
     // Step 3: Try to send verification email
     console.log("\n📝 Step 3: Sending verification email...");
-    const verificationUrl = `${
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    }/verify`;
+    const verificationUrl = `${getAppUrl()}/verify`;
     console.log("  Verification URL:", verificationUrl);
 
     // Create a new client with the session

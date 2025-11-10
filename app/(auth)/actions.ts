@@ -16,6 +16,7 @@ import {
 } from "@/lib/appwrite/session";
 import { createUserWithAppwriteId, getUser } from "@/lib/db/queries";
 import { createLogger } from "@/lib/logger";
+import { getAppUrl } from "@/lib/utils/url";
 
 const logger = createLogger("(auth)/actions");
 
@@ -179,10 +180,8 @@ export const register = async (
         session.secret?.length || 0
       );
 
-      // Use NEXT_PUBLIC_APP_URL for dynamic URL construction
-      const verificationUrl = `${
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-      }/verify`;
+      // Use dynamic URL construction that works in all environments
+      const verificationUrl = `${getAppUrl()}/verify`;
 
       logger.log("[REGISTER] Verification URL:", verificationUrl);
 
@@ -278,9 +277,7 @@ export const resendVerification =
       );
 
       // Create verification email using the session secret directly
-      const verificationUrl = `${
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-      }/verify`;
+      const verificationUrl = `${getAppUrl()}/verify`;
 
       logger.log("[RESEND_VERIFICATION] Verification URL:", verificationUrl);
 
