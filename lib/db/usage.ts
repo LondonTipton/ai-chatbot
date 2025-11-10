@@ -187,7 +187,7 @@ export async function updateUserPlan(
   try {
     // Set daily limits based on plan
     const limits: Record<string, number> = {
-      Free: 35,
+      Free: 5,
       Basic: 50,
       Pro: 200,
       "Pro+": 600,

@@ -27,7 +27,7 @@ export const user = pgTable("User", {
     .default("0"),
   dailyRequestLimit: varchar("dailyRequestLimit", { length: 10 })
     .notNull()
-    .default("100"),
+    .default("5"),
   lastRequestReset: timestamp("lastRequestReset").notNull().defaultNow(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
