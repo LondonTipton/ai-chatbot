@@ -179,6 +179,7 @@ export const register = async (
         session.secret?.length || 0
       );
 
+      // Use NEXT_PUBLIC_APP_URL for dynamic URL construction
       const verificationUrl = `${
         process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       }/verify`;
