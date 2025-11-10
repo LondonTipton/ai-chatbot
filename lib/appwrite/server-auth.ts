@@ -1,78 +1,61 @@
-import { cookies } from "next/headers";
 import { createLogger } from "@/lib/logger";
 import type { Session } from "@/lib/types";
-import { createAdminClient } from "./config";
+import { getSessionCookie } from "./session";
 
 const logger = createLogger("appwrite/server-auth");
 
 /**
  * Get the current authenticated user session on the server
  * This replaces the NextAuth auth() function
- * Uses the same logic as middleware for consistency
+ * Uses the same Appwrite standard cookie logic as middleware
  */
 export async function auth(): Promise<Session | null> {
   try {
-    const cookieStore = await cookies();
-    const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+    // Use the same Appwrite standard cookie as middleware and session.ts
+    const sessionSecret = await getSessionCookie();
 
-    if (!projectId) {
-      logger.error("[server-auth] Missing NEXT_PUBLIC_APPWRITE_PROJECT_ID");
+    if (!sessionSecret) {
+      logger.log("[server-auth] No session cookie found");
       return null;
     }
 
-    // Use same cookie checking logic as middleware
-    const sessionCookieName = `a_session_${projectId}`;
-    const sessionToken = cookieStore.get(sessionCookieName)?.value;
-    const fallbackSession =
-      cookieStore.get("appwrite-session")?.value ||
-      cookieStore.get("appwrite-session-backup")?.value ||
-      cookieStore.get("appwrite-session-js")?.value ||
-      null;
-    const userIdCookie =
-      cookieStore.get("appwrite_user_id")?.value ||
-      cookieStore.get("appwrite_user_id_backup")?.value ||
-      cookieStore.get("appwrite_user_id_js")?.value ||
-      null;
+    logger.log("[server-auth] Found session cookie, validating...");
 
-    logger.log(
-      `[server-auth] Checking cookies - appwrite session: ${!!sessionToken}, fallback session: ${!!fallbackSession}, userId: ${!!userIdCookie}`
-    );
+    // Validate session using Appwrite client SDK with the session secret
+    try {
+      // Create a client session to get user info
+      const { Account, Client } = await import("node-appwrite");
+      const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
+      const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
 
-    // Primary method: Use userId cookie if available
-    if (userIdCookie) {
-      try {
-        const { users } = createAdminClient();
-        const user = await users.get(userIdCookie);
-
-        logger.log(
-          `[server-auth] Successfully validated user via userId: ${user.email}`
-        );
-        return {
-          user: {
-            id: user.$id,
-            email: user.email || undefined,
-            name: user.name || undefined,
-          },
-        };
-      } catch (userError) {
-        logger.error(
-          "[server-auth] Error validating user with userId cookie:",
-          userError
-        );
+      if (!endpoint || !projectId) {
+        logger.error("[server-auth] Missing Appwrite configuration");
+        return null;
       }
-    }
 
-    // Fallback method: if we have a fallback session but no userId, we can't validate session without secret.
-    // Prefer returning null to trigger client-side fetch/bridge to upgrade cookies.
-    if (sessionToken || fallbackSession) {
+      const client = new Client()
+        .setEndpoint(endpoint)
+        .setProject(projectId)
+        .setSession(sessionSecret);
+
+      const account = new Account(client);
+      const user = await account.get();
+
       logger.log(
-        "[server-auth] Session tokens present but no userId cookie; returning null to let client bridge upgrade cookies"
+        `[server-auth] Successfully validated user: ${user.email} (verified: ${user.emailVerification})`
       );
+
+      return {
+        user: {
+          id: user.$id,
+          email: user.email || undefined,
+          name: user.name || undefined,
+        },
+      };
+    } catch (validationError) {
+      logger.error("[server-auth] Session validation failed:", validationError);
       return null;
     }
-
-    logger.log("[server-auth] No authentication cookies found");
-    return null;
   } catch (error) {
     logger.error("[server-auth] Unexpected error getting session:", error);
     return null;

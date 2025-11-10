@@ -1,25 +1,31 @@
 # Session and Cookie Management Refactor
 
 ## Overview
+
 Refactored session and cookie management to comply with Appwrite's SSR (Server-Side Rendering) authentication standards. This eliminates complexity and aligns with official Appwrite documentation patterns.
 
 ## Changes Made
 
 ### 1. **Simplified Cookie System** ✅
+
 **Before**: Maintained dual cookie system with custom `appwrite-session` cookie + Appwrite's `a_session_<PROJECT_ID>` cookie
 
 **After**: Single cookie system following Appwrite SSR standard:
+
 - Primary: `a_session_<PROJECT_ID>` - stores session secret (JWT token) for authentication
 - Secondary: `appwrite_session_id` - stores session ID for management operations (refresh, delete)
 
 **Benefit**: Cleaner, standard-compliant, less confusing
 
 ### 2. **Fixed Session Secret vs Session ID Confusion** ✅
+
 **Before**: Mixed usage of session secret and session ID
+
 - Stored `session.secret` but tried to use it as session ID
 - Called refresh operations with session secret instead of ID
 
 **After**: Clear separation:
+
 - **Session Secret** (`session.secret`): JWT token stored in `a_session_<PROJECT_ID>`, used for authentication
 - **Session ID** (`session.$id`): Identifier stored in `appwrite_session_id`, used for management (refresh, delete)
 
@@ -28,6 +34,7 @@ Refactored session and cookie management to comply with Appwrite's SSR (Server-S
 ### 3. **Updated Session Cookie Functions** ✅
 
 #### `setSessionCookie(sessionSecret, sessionId)`
+
 ```typescript
 // Before: Complex with 3 parameters, set multiple cookies
 await setSessionCookie(session.secret, session.$id, session.userId);
@@ -37,6 +44,7 @@ await setSessionCookie(session.secret, session.$id);
 ```
 
 #### `getSessionCookie()`
+
 ```typescript
 // Before: Returned custom cookie value
 return cookieStore.get("appwrite-session")?.value || null;
@@ -46,6 +54,7 @@ return cookieStore.get(`a_session_${projectId}`)?.value || null;
 ```
 
 #### New: `getSessionId()`
+
 ```typescript
 // Get session ID for management operations
 const sessionId = await getSessionId();
@@ -53,18 +62,22 @@ await deleteSession(sessionId);
 ```
 
 ### 4. **Simplified Middleware** ✅
-**Before**: 
+
+**Before**:
+
 - Complex fallback cookie detection
 - Multiple cookie sources (`appwrite-session`, `appwrite-session-backup`, etc.)
 - Temporary session headers
 - Development bypasses
 
 **After**:
+
 - Single source: `a_session_<PROJECT_ID>` cookie
 - Standard Appwrite session validation
 - Clean error handling
 
 **Removed**:
+
 - `getFallbackCookies()` function
 - Fallback validation logic
 - Temporary session header checks
@@ -73,18 +86,21 @@ await deleteSession(sessionId);
 ### 5. **Updated Auth Actions** ✅
 
 #### Registration
+
 ```typescript
 // Set session cookies after registration
 await setSessionCookie(session.secret, session.$id);
 ```
 
 #### Login
+
 ```typescript
 // Set session cookies after login
 await setSessionCookie(session.secret, session.$id);
 ```
 
 #### Logout
+
 ```typescript
 // Use session ID (not secret) to delete session
 const sessionId = await getSessionId();
@@ -92,6 +108,7 @@ await deleteSession(sessionId);
 ```
 
 #### Resend Verification
+
 ```typescript
 // Use session secret for authentication
 const sessionSecret = await getSessionCookie();
@@ -101,6 +118,7 @@ await createVerification(sessionSecret, verificationUrl);
 ## Files Modified
 
 1. **`lib/appwrite/session.ts`**
+
    - Removed: `SESSION_COOKIE_NAME`, `SESSION_COOKIE_OPTIONS` constants
    - Removed: `appwrite-session`, `appwrite_user_id` cookies
    - Added: `getSessionCookieName()`, `getSessionIdCookieName()`, `getSessionId()`
@@ -108,6 +126,7 @@ await createVerification(sessionSecret, verificationUrl);
    - Fixed: `refreshSessionIfNeeded()` to use session ID
 
 2. **`middleware.ts`**
+
    - Removed: `getFallbackCookies()` function
    - Removed: Fallback validation logic
    - Removed: Temporary session header logic
@@ -124,18 +143,21 @@ await createVerification(sessionSecret, verificationUrl);
 ## Appwrite SSR Standards Compliance
 
 ### ✅ Cookie Naming
+
 ```typescript
 // Appwrite Standard
 const sessionCookieName = `a_session_${projectId}`;
 ```
 
 ### ✅ Cookie Value
+
 ```typescript
 // Store session secret (JWT token) as cookie value
 res.cookie(sessionCookieName, session.secret, options);
 ```
 
 ### ✅ Cookie Options
+
 ```typescript
 {
   httpOnly: true,
@@ -147,6 +169,7 @@ res.cookie(sessionCookieName, session.secret, options);
 ```
 
 ### ✅ Client Initialization
+
 ```typescript
 // Middleware validation
 const sessionClient = new Client()
@@ -159,6 +182,7 @@ const user = await account.get();
 ```
 
 ### ✅ Session Management
+
 ```typescript
 // Use session ID for management operations
 const session = await account.createEmailPasswordSession(email, password);
@@ -167,7 +191,7 @@ const session = await account.createEmailPasswordSession(email, password);
 res.cookie(`a_session_${projectId}`, session.secret, options);
 
 // Store ID for management
-res.cookie('appwrite_session_id', session.$id, options);
+res.cookie("appwrite_session_id", session.$id, options);
 ```
 
 ## Benefits of Refactor
@@ -182,6 +206,7 @@ res.cookie('appwrite_session_id', session.$id, options);
 ## Testing Checklist
 
 - [ ] **Registration Flow**
+
   - Register new user
   - Verify `a_session_<PROJECT_ID>` cookie is set
   - Verify `appwrite_session_id` cookie is set
@@ -189,29 +214,34 @@ res.cookie('appwrite_session_id', session.$id, options);
   - User redirected to `/verify-pending`
 
 - [ ] **Login Flow**
+
   - Login with existing user
   - Verify session cookies are set correctly
   - Verify redirect to home (if verified) or `/verify-pending` (if unverified)
   - Check session persists across page refreshes
 
 - [ ] **Email Verification**
+
   - Click verification link in email
   - Verify email is verified successfully
   - Redirect to home page
   - Can access protected routes
 
 - [ ] **Resend Verification**
+
   - Click "Resend Verification Email" on `/verify-pending`
   - New email received
   - New link works, old link invalid
 
 - [ ] **Logout**
+
   - Click logout
   - Session deleted from Appwrite
   - All cookies cleared
   - Redirected to login
 
 - [ ] **Session Persistence**
+
   - Login and close browser
   - Reopen browser
   - Session should persist (30 days)
@@ -225,12 +255,14 @@ res.cookie('appwrite_session_id', session.$id, options);
 ## Migration Notes
 
 ### Breaking Changes
+
 - Custom `appwrite-session` cookie is no longer used
 - `setSessionCookie()` now requires 2 parameters instead of 3
 - `getSessionCookie()` returns session secret, not session ID
 - New function `getSessionId()` for management operations
 
 ### Backward Compatibility
+
 - Old cookies will be automatically cleared on next login
 - Existing sessions will remain valid until expiration
 - Users may need to log in again after deployment (recommended)
@@ -270,6 +302,7 @@ NEXT_PUBLIC_APP_URL=https://yourdomain.com
 ## Support
 
 For issues:
+
 1. Check browser DevTools → Application → Cookies for `a_session_<PROJECT_ID>`
 2. Check server logs for session cookie operations
 3. Verify environment variables are set correctly
