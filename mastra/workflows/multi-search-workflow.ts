@@ -25,6 +25,7 @@ const decomposeStep = createStep({
   description: "Decompose broad query into focused sub-queries",
   inputSchema: z.object({
     query: z.string().describe("The user's search query"),
+    jurisdiction: z.string().default("Zimbabwe").describe("Legal jurisdiction"),
     conversationHistory: z
       .array(
         z.object({
@@ -41,9 +42,10 @@ const decomposeStep = createStep({
       .array(z.string())
       .describe("Array of focused sub-queries (1-3)"),
     isBroad: z.boolean().describe("Whether query was broad and decomposed"),
+    jurisdiction: z.string().describe("Legal jurisdiction to pass through"),
   }),
   execute: async ({ inputData }) => {
-    const { query, conversationHistory } = inputData;
+    const { query, jurisdiction, conversationHistory } = inputData;
 
     console.log("[Multi-Search] Decomposing query:", query);
 
@@ -59,6 +61,7 @@ const decomposeStep = createStep({
         return {
           subQueries: [query],
           isBroad: false,
+          jurisdiction,
         };
       }
 
@@ -71,12 +74,14 @@ const decomposeStep = createStep({
       return {
         subQueries,
         isBroad: true,
+        jurisdiction,
       };
     } catch (error) {
       console.error("[Multi-Search] Decomposition error:", error);
       return {
         subQueries: [query],
         isBroad: false,
+        jurisdiction,
       };
     }
   },
@@ -195,7 +200,7 @@ const synthesizeStep = createStep({
   id: "synthesize",
   description: "Synthesize results from multiple searches",
   inputSchema: z.object({
-    query: z.string().describe("Original user query"),
+    subQueries: z.array(z.string()).describe("Sub-queries that were searched"),
     allResults: z
       .array(
         z.object({
@@ -225,15 +230,19 @@ const synthesizeStep = createStep({
       )
       .describe("All unique sources cited"),
     totalTokens: z.number().describe("Estimated tokens used"),
+    searchCount: z.number().describe("Number of searches performed"),
   }),
   execute: async ({ inputData }) => {
-    const { query, allResults, isBroad } = inputData;
+    const { subQueries, allResults, isBroad } = inputData;
 
     console.log("[Multi-Search] Synthesizing results");
 
     try {
+      // Use first sub-query as the main query for display
+      const mainQuery = subQueries[0] || "your query";
+
       // Format results for Chat Agent
-      let response = `MULTI-SEARCH RESULTS FOR: "${query}"\n\n`;
+      let response = `MULTI-SEARCH RESULTS FOR: "${mainQuery}"\n\n`;
 
       if (isBroad) {
         response += `This query was decomposed into ${allResults.length} focused searches:\n\n`;
@@ -284,6 +293,7 @@ const synthesizeStep = createStep({
         response,
         sources,
         totalTokens,
+        searchCount: allResults.length,
       };
     } catch (error) {
       console.error("[Multi-Search] Synthesis error:", error);
@@ -293,6 +303,7 @@ const synthesizeStep = createStep({
           "I encountered an error while synthesizing the search results. Please try rephrasing your query.",
         sources: [],
         totalTokens: 0,
+        searchCount: 0,
       };
     }
   },
