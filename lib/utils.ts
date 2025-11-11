@@ -112,8 +112,13 @@ export function getTrailingMessageId({
   return trailingMessage.id;
 }
 
+import { sanitizeMarkdownOutput } from "./input-sanitizer";
+
 export function sanitizeText(text: string) {
-  return text.replace("<has_function_call>", "");
+  // Remove function call markers
+  const cleaned = text.replace("<has_function_call>", "");
+  // Apply markdown sanitization to prevent XSS
+  return sanitizeMarkdownOutput(cleaned);
 }
 
 export function convertToUIMessages(messages: DBMessage[]): ChatMessage[] {

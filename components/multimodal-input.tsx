@@ -22,6 +22,7 @@ import { saveChatModelAsCookie } from "@/app/(chat)/actions";
 import { SelectItem } from "@/components/ui/select";
 import { useUsage } from "@/hooks/use-usage";
 import { chatModels } from "@/lib/ai/models";
+import { sanitizeUserInput } from "@/lib/input-sanitizer";
 import { createLogger } from "@/lib/logger";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
@@ -178,6 +179,26 @@ function PureMultimodalInput({
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
 
   const submitForm = useCallback(() => {
+    // Sanitize user input before sending
+    const { sanitized, isValid, errors, truncated } = sanitizeUserInput(input);
+
+    console.log("[multimodal-input] Sanitization result:", {
+      originalLength: input.length,
+      sanitizedLength: sanitized.length,
+      isValid,
+      errors,
+      truncated,
+      firstChars: sanitized.substring(0, 100),
+    });
+
+    if (!isValid) {
+      // Show error toast for invalid input
+      for (const error of errors) {
+        toast.error(error);
+      }
+      return;
+    }
+
     window.history.replaceState({}, "", `/chat/${chatId}`);
 
     sendMessage({
@@ -191,7 +212,7 @@ function PureMultimodalInput({
         })),
         {
           type: "text",
-          text: input,
+          text: sanitized, // Use sanitized input
         },
       ],
     });
@@ -375,6 +396,7 @@ function PureMultimodalInput({
               placeholder="Send a message..."
               ref={textareaRef}
               rows={1}
+              showCharacterCount={true}
               value={input}
             />{" "}
             <Context {...contextProps} />

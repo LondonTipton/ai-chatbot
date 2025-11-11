@@ -68,12 +68,48 @@ export function detectQueryComplexity(message: string): ComplexityAnalysis {
   ];
 
   const caseLawIndicators = [
+    // Explicit case law requests
+    "case law",
+    "cases about",
+    "cases on",
+    "find cases",
+    "cite cases",
+    "precedent",
+    "precedents",
+    "judicial decisions",
+    "court decisions",
+
+    // Additional/supporting case law (CRITICAL - catches hallucination trigger)
+    "additional case law",
+    "additional cases",
+    "more cases",
+    "other cases",
+    "supporting case law",
+    "supporting cases",
+    "what cases",
+    "which cases",
+    "any cases",
+    "relevant cases",
+
+    // Case comparison and analysis
     "compare cases",
     "compare precedent",
     "analyze precedent",
     "case law comparison",
     "compare holdings",
     "precedent analysis",
+
+    // Citation requests
+    "cite authorities",
+    "cite sources",
+    "provide citations",
+    "legal authorities",
+    "authorities supporting",
+
+    // Verification requests
+    "verify case law",
+    "verified cases",
+    "check case law",
   ];
 
   const reviewIndicators = [

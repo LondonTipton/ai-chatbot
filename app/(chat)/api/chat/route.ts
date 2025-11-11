@@ -8,6 +8,7 @@ import { isCerebrasRateLimitError } from "@/lib/ai/cerebras-retry-handler";
 import { detectQueryComplexity } from "@/lib/ai/complexity-detector";
 import type { ChatModel } from "@/lib/ai/models";
 import { auth } from "@/lib/appwrite/server-auth";
+import { validateCitations } from "@/lib/citation-validator";
 import {
   createStreamId,
   createUserWithAppwriteId,
@@ -26,6 +27,7 @@ import {
   rollbackTransaction,
 } from "@/lib/db/usage-transaction";
 import { ChatSDKError } from "@/lib/errors";
+import { sanitizeUserInput } from "@/lib/input-sanitizer";
 import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -87,11 +89,41 @@ export async function POST(request: Request) {
       comprehensiveWorkflowEnabled?: boolean;
     } = requestBody;
 
-    // Extract user message text for complexity detection
+    // Extract user message text for sanitization and complexity detection
     const userMessageText =
       typeof message.parts[0] === "object" && "text" in message.parts[0]
         ? message.parts[0].text
         : "";
+
+    // Sanitize user input on the backend as well (defense in depth)
+    const sanitizationResult = sanitizeUserInput(userMessageText);
+
+    logger.log("[chat/route] Sanitization result:", {
+      originalLength: userMessageText.length,
+      sanitizedLength: sanitizationResult.sanitized.length,
+      isValid: sanitizationResult.isValid,
+      errors: sanitizationResult.errors,
+      truncated: sanitizationResult.truncated,
+    });
+
+    if (!sanitizationResult.isValid) {
+      logger.error("Invalid input detected:", sanitizationResult.errors);
+      return new Response(
+        JSON.stringify({
+          error: "invalid_input",
+          message: sanitizationResult.errors[0] || "Invalid input",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Use sanitized input for processing
+    if (typeof message.parts[0] === "object" && "text" in message.parts[0]) {
+      message.parts[0].text = sanitizationResult.sanitized;
+    }
 
     // Check if using simple chat model (no research)
     const useSimpleChat = selectedChatModel === "chat-model";
@@ -106,7 +138,7 @@ export async function POST(request: Request) {
           requiresMultiStep: false,
           estimatedSteps: 1,
         }
-      : detectQueryComplexity(userMessageText);
+      : detectQueryComplexity(sanitizationResult.sanitized);
 
     logger.log(`[Routing] 💬 Chat ID: ${id}`);
     logger.log(`[Routing] 🤖 Selected Model: ${selectedChatModel}`);
@@ -486,17 +518,85 @@ export async function POST(request: Request) {
               }
 
               // Log all tool calls for analysis
+              // NOTE: Mastra workflows use part.type = "tool-{toolName}" instead of "tool-call"
               const allToolCalls = assistantMessages.flatMap(
                 (msg: any) =>
                   msg.parts
-                    ?.filter((part: any) => part.type === "tool-call")
-                    .map((part: any) => part.toolName) || []
+                    ?.filter(
+                      (part: any) =>
+                        part.type === "tool-call" ||
+                        part.type?.startsWith("tool-")
+                    )
+                    .map((part: any) => {
+                      // Extract tool name from part.toolName or part.type
+                      if (part.toolName) {
+                        return part.toolName;
+                      }
+                      if (part.type?.startsWith("tool-")) {
+                        return part.type.substring(5); // Remove "tool-" prefix
+                      }
+                      return "unknown-tool";
+                    }) || []
               );
+
               if (allToolCalls.length > 0) {
                 logger.log(
                   `[Mastra] 🔨 Tools invoked in this interaction: ${allToolCalls.join(
                     ", "
                   )}`
+                );
+              }
+
+              // 🚨 CITATION VALIDATION: Check for hallucinations before saving
+              const hasToolUsage = allToolCalls.some(
+                (toolName: string) =>
+                  [
+                    "quickFactSearch",
+                    "standardResearch",
+                    "deepResearch",
+                    "tavilySearchAdvancedTool",
+                    "advancedSearchWorkflowTool",
+                  ].includes(toolName) ||
+                  toolName?.toLowerCase().includes("search") ||
+                  toolName?.toLowerCase().includes("research") ||
+                  toolName?.toLowerCase().includes("workflow")
+              );
+
+              // Debug logging for tool detection
+              if (allToolCalls.length > 0) {
+                logger.log(
+                  `[Validator] 🔍 Tool detection: ${allToolCalls.length} tools called, hasToolUsage=${hasToolUsage}`
+                );
+                logger.log(
+                  `[Validator] 🔍 Tool names: ${allToolCalls.join(", ")}`
+                );
+              }
+
+              const responseText =
+                assistantMessages[0]?.content ||
+                assistantMessages[0]?.parts
+                  ?.filter((p: any) => p.type === "text")
+                  .map((p: any) => p.text)
+                  .join(" ") ||
+                "";
+
+              // Validate citations
+              const validation = validateCitations(responseText, hasToolUsage);
+
+              if (!validation.isValid) {
+                logger.error(
+                  "[Validator] ❌ Invalid citations detected:",
+                  validation.violations
+                );
+                logger.error(
+                  `[Validator] Citation count: ${validation.citationCount}, Tool used: ${hasToolUsage}`
+                );
+              }
+
+              if (validation.suspiciousPatterns.length > 0) {
+                logger.warn(
+                  "[Validator] ⚠️ Suspicious patterns detected:",
+                  validation.suspiciousPatterns
                 );
               }
 
