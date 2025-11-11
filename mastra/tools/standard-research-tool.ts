@@ -61,9 +61,30 @@ export const standardResearchTool = createTool({
         z.object({
           title: z.string(),
           url: z.string(),
+          content: z
+            .string()
+            .optional()
+            .describe("Content excerpt from source"),
+          score: z.number().optional().describe("Relevance score"),
         })
       )
-      .describe("Source citations (typically 2-3 sources)"),
+      .describe("Source citations with excerpts"),
+    rawResults: z
+      .array(
+        z.object({
+          title: z.string(),
+          url: z.string(),
+          content: z.string(),
+          score: z.number().optional(),
+          publishedDate: z.string().optional(),
+        })
+      )
+      .optional()
+      .describe("Original Tavily results for grounding and verification"),
+    enhancedQuery: z
+      .string()
+      .optional()
+      .describe("Enhanced query used for search"),
     totalTokens: z.number().describe("Total tokens used"),
   }),
 
@@ -133,15 +154,43 @@ export const standardResearchTool = createTool({
         response: string;
         sources: Array<{ title: string; url: string }>;
         totalTokens: number;
+        rawResults?: any;
       };
 
+      // Extract raw Tavily results for grounding
+      const rawTavilyResults = output.rawResults?.results || [];
+
+      // Enhance sources with content excerpts and scores
+      const enhancedSources = output.sources.map((source) => {
+        const rawResult = rawTavilyResults.find(
+          (r: any) => r.url === source.url
+        );
+        return {
+          title: source.title,
+          url: source.url,
+          content: rawResult?.content?.substring(0, 500) || "", // First 500 chars
+          score: rawResult?.score,
+        };
+      });
+
+      // Prepare raw results for Chat Agent (limit to top 5 for token efficiency)
+      const topRawResults = rawTavilyResults.slice(0, 5).map((r: any) => ({
+        title: r.title,
+        url: r.url,
+        content: r.content || "",
+        score: r.score,
+        publishedDate: r.published_date,
+      }));
+
       console.log(
-        `[Standard Research Tool] Successfully completed. Response length: ${output.response.length} chars, Sources: ${output.sources.length}, Tokens: ${output.totalTokens}`
+        `[Standard Research Tool] Successfully completed. Response length: ${output.response.length} chars, Sources: ${output.sources.length}, Raw results: ${topRawResults.length}, Tokens: ${output.totalTokens}`
       );
 
       return {
         response: output.response,
-        sources: output.sources,
+        sources: enhancedSources,
+        rawResults: topRawResults,
+        enhancedQuery: query, // Pass through for context
         totalTokens: output.totalTokens,
       };
     } catch (error) {
@@ -154,6 +203,7 @@ export const standardResearchTool = createTool({
         response:
           "I encountered an error while researching your question. Please try rephrasing your query or try again later.",
         sources: [],
+        rawResults: [],
         totalTokens: 0,
       };
     }
