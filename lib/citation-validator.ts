@@ -3,6 +3,7 @@
  *
  * Validates case law citations before displaying to users
  * Blocks responses with hallucinated or invalid citations
+ * Enhanced to verify citations against raw tool results
  */
 
 export type CitationValidationResult = {
@@ -10,6 +11,9 @@ export type CitationValidationResult = {
   violations: string[];
   citationCount: number;
   suspiciousPatterns: string[];
+  verifiedCitations?: string[];
+  unverifiedCitations?: string[];
+  sourceGroundingRate?: number;
 };
 
 // Pre-compiled regex patterns for performance
@@ -34,31 +38,112 @@ const STATUTORY_MISATTRIBUTIONS = [
 ];
 
 /**
- * Validate case law citations in agent response
- * Returns validation result with specific violations
+ * Extract case citations from text
  */
-export function validateCitations(
-  response: string,
-  toolWasUsed: boolean
-): CitationValidationResult {
-  const violations: string[] = [];
-  const suspiciousPatterns: string[] = [];
-
-  // Pattern 1: Detect case citations (e.g., [2015] ZWHHC 164, SC 13/18, etc.)
+function extractCitations(text: string): string[] {
   const casePatterns = [
     /\[\d{4}\]\s*ZW[A-Z]{2,4}\s*\d+/g, // [2015] ZWHHC 164
     /\b[A-Z]{2,4}\s*\d+\/\d{2,4}\b/g, // SC 13/18, HH 45/15
     /\bHC\s*\d+\s*of\s*\d{4}\b/gi, // HC 4885 of 2014
+    /\b[A-Z][a-z]+\s+v\s+[A-Z][a-z]+(?:\s+\[\d{4}\])?/g, // Case names like "Nyamande v Zuva [2018]"
   ];
 
-  let citationCount = 0;
   const citations: string[] = [];
-
   for (const pattern of casePatterns) {
-    const matches = response.match(pattern);
+    const matches = text.match(pattern);
     if (matches) {
-      citationCount += matches.length;
       citations.push(...matches);
+    }
+  }
+
+  return [...new Set(citations)]; // Remove duplicates
+}
+
+/**
+ * Verify if a citation appears in tool results
+ */
+function verifyCitationInResults(
+  citation: string,
+  toolResults: any[]
+): boolean {
+  if (!toolResults || toolResults.length === 0) {
+    return false;
+  }
+
+  const citationLower = citation.toLowerCase();
+
+  for (const result of toolResults) {
+    // Check in title
+    if (result.title?.toLowerCase().includes(citationLower)) {
+      return true;
+    }
+
+    // Check in content
+    if (result.content?.toLowerCase().includes(citationLower)) {
+      return true;
+    }
+
+    // Check in URL
+    if (result.url?.toLowerCase().includes(citationLower)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Validate case law citations in agent response
+ * Returns validation result with specific violations
+ * Enhanced to verify against raw tool results
+ */
+export function validateCitations(
+  response: string,
+  toolWasUsed: boolean,
+  rawToolResults?: any[]
+): CitationValidationResult {
+  const violations: string[] = [];
+  const suspiciousPatterns: string[] = [];
+
+  // Extract all citations from response
+  const citations = extractCitations(response);
+  const citationCount = citations.length;
+
+  // NEW: Verify citations against raw tool results
+  const verifiedCitations: string[] = [];
+  const unverifiedCitations: string[] = [];
+
+  if (rawToolResults && rawToolResults.length > 0 && citationCount > 0) {
+    for (const citation of citations) {
+      if (verifyCitationInResults(citation, rawToolResults)) {
+        verifiedCitations.push(citation);
+      } else {
+        unverifiedCitations.push(citation);
+      }
+    }
+
+    // Calculate source grounding rate
+    const sourceGroundingRate =
+      citationCount > 0 ? verifiedCitations.length / citationCount : 1;
+
+    // RULE 0: Citations must be grounded in tool results
+    if (unverifiedCitations.length > 0) {
+      violations.push(
+        `CRITICAL: ${
+          unverifiedCitations.length
+        } citations not found in search results. Likely hallucinated: ${unverifiedCitations
+          .slice(0, 3)
+          .join(", ")}${unverifiedCitations.length > 3 ? "..." : ""}`
+      );
+    }
+
+    // Log grounding rate for monitoring
+    if (sourceGroundingRate < 1.0) {
+      suspiciousPatterns.push(
+        `Source grounding rate: ${(sourceGroundingRate * 100).toFixed(1)}% (${
+          verifiedCitations.length
+        }/${citationCount} citations verified)`
+      );
     }
   }
 
@@ -190,11 +275,22 @@ export function validateCitations(
 
   const isValid = violations.length === 0;
 
+  // Calculate source grounding rate
+  const sourceGroundingRate =
+    citationCount > 0 && verifiedCitations.length > 0
+      ? verifiedCitations.length / citationCount
+      : citationCount === 0
+      ? 1.0
+      : 0.0;
+
   return {
     isValid,
     violations,
     citationCount,
     suspiciousPatterns,
+    verifiedCitations,
+    unverifiedCitations,
+    sourceGroundingRate,
   };
 }
 

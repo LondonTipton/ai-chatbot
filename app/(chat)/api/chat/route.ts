@@ -554,6 +554,8 @@ export async function POST(request: Request) {
                     "quickFactSearch",
                     "standardResearch",
                     "deepResearch",
+                    "comprehensiveResearch",
+                    "multiSearch",
                     "tavilySearchAdvancedTool",
                     "advancedSearchWorkflowTool",
                   ].includes(toolName) ||
@@ -580,8 +582,46 @@ export async function POST(request: Request) {
                   .join(" ") ||
                 "";
 
-              // Validate citations
-              const validation = validateCitations(responseText, hasToolUsage);
+              // Extract raw tool results for citation verification
+              const rawToolResults: any[] = [];
+
+              for (const msg of assistantMessages) {
+                for (const part of msg.parts || []) {
+                  // Check for tool results with rawResults field
+                  if (part.type === "tool-result") {
+                    try {
+                      const result =
+                        typeof part.content === "string"
+                          ? JSON.parse(part.content)
+                          : part.content;
+
+                      // Extract rawResults if available
+                      if (
+                        result?.rawResults &&
+                        Array.isArray(result.rawResults)
+                      ) {
+                        rawToolResults.push(...result.rawResults);
+                        logger.log(
+                          `[Validator] 📊 Extracted ${result.rawResults.length} raw results from ${part.toolName}`
+                        );
+                      }
+                    } catch {
+                      // Ignore parse errors
+                    }
+                  }
+                }
+              }
+
+              logger.log(
+                `[Validator] 📊 Total raw results for verification: ${rawToolResults.length}`
+              );
+
+              // Validate citations with raw tool results
+              const validation = validateCitations(
+                responseText,
+                hasToolUsage,
+                rawToolResults.length > 0 ? rawToolResults : undefined
+              );
 
               if (!validation.isValid) {
                 logger.error(
@@ -591,12 +631,39 @@ export async function POST(request: Request) {
                 logger.error(
                   `[Validator] Citation count: ${validation.citationCount}, Tool used: ${hasToolUsage}`
                 );
+
+                if (
+                  validation.unverifiedCitations &&
+                  validation.unverifiedCitations.length > 0
+                ) {
+                  logger.error(
+                    `[Validator] 🚨 Unverified citations: ${validation.unverifiedCitations.join(
+                      ", "
+                    )}`
+                  );
+                }
               }
 
               if (validation.suspiciousPatterns.length > 0) {
                 logger.warn(
                   "[Validator] ⚠️ Suspicious patterns detected:",
                   validation.suspiciousPatterns
+                );
+              }
+
+              // Log verification metrics
+              if (validation.sourceGroundingRate !== undefined) {
+                logger.log(
+                  `[Validator] 📈 Source grounding rate: ${(
+                    validation.sourceGroundingRate * 100
+                  ).toFixed(1)}%`
+                );
+                logger.log(
+                  `[Validator] ✅ Verified: ${
+                    validation.verifiedCitations?.length || 0
+                  }, ❌ Unverified: ${
+                    validation.unverifiedCitations?.length || 0
+                  }`
                 );
               }
 
