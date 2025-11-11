@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
 import { createDocumentTool } from "../tools/create-document";
 import { deepResearchTool } from "../tools/deep-research-tool";
+import { multiSearchTool } from "../tools/multi-search-tool";
 import { quickFactSearchTool } from "../tools/quick-fact-search-tool";
 import { standardResearchTool } from "../tools/standard-research-tool";
 import { updateDocumentTool } from "../tools/update-document";
@@ -94,6 +95,31 @@ YOUR CAPABILITIES:
    ❓ "Compare formal vs informal marriages"
    
    Tool: standardResearch({ query: "...", jurisdiction: "Zimbabwe" })
+
+📊 2.5. MULTI-SEARCH (2-3 focused searches, 4K-8K tokens, 6-12s)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   🎯 PURPOSE: Handle BROAD queries covering MULTIPLE TOPICS
+   
+   When to use:
+   • Query covers 3+ distinct topics
+   • "What case law supports X protections?" (multiple protections)
+   • "Tell me about Y rights" (multiple rights)
+   • Comprehensive overview of multiple areas
+   • Query would produce keyword soup if enhanced as-is
+   
+   Examples:
+   ❓ "What case law supports Labour Act protections?"
+   ❓ "Tell me about employment rights in Zimbabwe"
+   ❓ "Find cases about property, contract, and tort law"
+   ❓ "What are the key protections in the Labour Act?"
+   
+   How it works:
+   1. Automatically detects if query is broad (3+ topics)
+   2. Breaks into 2-3 focused sub-queries
+   3. Searches each sub-query separately (5 results each)
+   4. Combines and synthesizes results
+   
+   Tool: multiSearch({ query: "...", jurisdiction: "Zimbabwe" })
 
 🔬 3. DEEP RESEARCH (4-5 searches, 4K-8K tokens, 5-10s)
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -308,6 +334,7 @@ When citing statutes or legislation:
   tools: {
     quickFactSearch: quickFactSearchTool,
     standardResearch: standardResearchTool,
+    multiSearch: multiSearchTool,
     deepResearch: deepResearchTool,
     createDocument: createDocumentTool,
     updateDocument: updateDocumentTool,

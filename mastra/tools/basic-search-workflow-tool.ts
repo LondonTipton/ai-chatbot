@@ -56,18 +56,30 @@ export const basicSearchWorkflowTool = createTool({
     totalTokens: z.number().describe("Total tokens used"),
   }),
 
-  execute: async ({ context }) => {
+  execute: async (executionContext: any) => {
+    const { context } = executionContext;
     const {
       query,
       jurisdiction = "Zimbabwe",
-      conversationHistory = [],
+      conversationHistory: providedHistory = [],
     } = context;
+
+    // Extract conversation history from agentContext if not provided in context
+    // Priority: context.conversationHistory > agentContext.conversationHistory > empty array
+    const conversationHistory =
+      providedHistory.length > 0
+        ? providedHistory
+        : executionContext?.agentContext?.conversationHistory || [];
 
     console.log(
       `[Basic Search Workflow Tool] Starting workflow for query: "${query}", jurisdiction: "${jurisdiction}"`
     );
     console.log(
-      `[Basic Search Workflow Tool] Conversation history: ${conversationHistory.length} messages`
+      `[Basic Search Workflow Tool] Conversation history: ${
+        conversationHistory.length
+      } messages (source: ${
+        providedHistory.length > 0 ? "context" : "agentContext"
+      })`
     );
 
     try {

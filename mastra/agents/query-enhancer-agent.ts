@@ -168,6 +168,57 @@ function cleanCache() {
 }
 
 /**
+ * Create smart fallback enhancement when LLM fails
+ */
+function createSmartFallback(query: string): string {
+  console.log("[Query Enhancer] Creating smart fallback");
+
+  // If query is already long, focus it
+  const words = query.split(/\s+/);
+  if (words.length > 15) {
+    const keyTerms: string[] = [];
+
+    // Keep statute references
+    if (query.match(/labour act|act|section \d+/i)) {
+      keyTerms.push("Labour Act");
+    }
+
+    // Keep case law indicators
+    if (query.match(/case law|cases|precedent/i)) {
+      keyTerms.push("case law");
+    }
+
+    // Keep court references
+    if (query.match(/supreme court|high court/i)) {
+      keyTerms.push("Supreme Court");
+    } else {
+      keyTerms.push("court");
+    }
+
+    // Add Zimbabwe if not present
+    if (!query.toLowerCase().includes("zimbabwe")) {
+      keyTerms.push("Zimbabwe");
+    }
+
+    // Add judgment for legal queries
+    keyTerms.push("judgment");
+
+    const focused = keyTerms.join(" ");
+    console.log(
+      `[Query Enhancer] Focused from ${words.length} words to: ${focused}`
+    );
+    return focused;
+  }
+
+  // For shorter queries, just add Zimbabwe if missing
+  if (!query.toLowerCase().includes("zimbabwe")) {
+    return `${query} Zimbabwe`;
+  }
+
+  return query;
+}
+
+/**
  * Enhance a search query using conversation context
  *
  * @param query - The user's search query
@@ -185,7 +236,7 @@ export async function enhanceSearchQuery(
   } = {}
 ): Promise<string> {
   const {
-    maxContextMessages = 5, // Increased from 3 to 5 for better context
+    maxContextMessages = 5,
     useCache = true,
     queryType = "auto",
   } = options;
@@ -198,7 +249,7 @@ export async function enhanceSearchQuery(
     // Build context from recent conversation (last 5 messages by default)
     const recentContext = conversationHistory
       .slice(-maxContextMessages)
-      .map((msg) => `${msg.role}: ${msg.content.substring(0, 200)}`) // Limit content length
+      .map((msg) => `${msg.role}: ${msg.content.substring(0, 200)}`)
       .join("\n");
 
     // Check cache if enabled
@@ -240,14 +291,40 @@ ENHANCED QUERY:`;
       maxSteps: 1,
     });
 
-    const enhanced = result.text.trim();
+    let enhanced = result.text.trim();
+
+    // Clean up common explanation patterns
+    enhanced = enhanced
+      .replace(/^(here'?s?|the enhanced query is:?|enhanced:)/i, "")
+      .replace(/^["']|["']$/g, "") // Remove quotes
+      .trim();
 
     // Validation: ensure output is reasonable
-    if (enhanced.length > 200 || enhanced.length < query.length) {
+    if (enhanced.length > 250) {
+      console.warn("[Query Enhancer] Output too long, using smart fallback");
+      return createSmartFallback(query);
+    }
+
+    // Check for explanation patterns (multiple sentences)
+    if (enhanced.includes("\n") || enhanced.match(/\.\s+[A-Z]/)) {
       console.warn(
-        "[Query Enhancer] Invalid output, using fallback enhancement"
+        "[Query Enhancer] Output contains explanation, extracting query"
       );
-      return `${query} Zimbabwe`;
+      const lines = enhanced.split("\n");
+      const queryLine = lines.find(
+        (line) => !line.match(/^(here|the|this|enhanced)/i) && line.length > 10
+      );
+      if (queryLine) {
+        enhanced = queryLine.trim();
+      } else {
+        return createSmartFallback(query);
+      }
+    }
+
+    // If enhanced is too short or empty, use fallback
+    if (enhanced.length < 5) {
+      console.warn("[Query Enhancer] Output too short, using smart fallback");
+      return createSmartFallback(query);
     }
 
     console.log(`[Query Enhancer] Original: "${query}"`);
@@ -275,8 +352,7 @@ ENHANCED QUERY:`;
     return enhanced;
   } catch (error) {
     console.error("[Query Enhancer] Error:", error);
-    // Fallback: just add Zimbabwe
-    return `${query} Zimbabwe`;
+    return createSmartFallback(query);
   }
 }
 

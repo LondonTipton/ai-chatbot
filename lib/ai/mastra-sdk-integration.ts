@@ -70,54 +70,40 @@ export async function streamMastraAgent(
         const { getBalancedCerebrasProvider } = await import(
           "@/lib/ai/cerebras-key-balancer"
         );
-        const { advancedSearchWorkflowTool } = await import(
-          "@/mastra/tools/advanced-search-workflow-tool"
+
+        // Import ALL research tools (matching main chat agent)
+        const { quickFactSearchTool } = await import(
+          "@/mastra/tools/quick-fact-search-tool"
+        );
+        const { standardResearchTool } = await import(
+          "@/mastra/tools/standard-research-tool"
+        );
+        const { multiSearchTool } = await import(
+          "@/mastra/tools/multi-search-tool"
+        );
+        const { deepResearchTool } = await import(
+          "@/mastra/tools/deep-research-tool"
         );
 
         const cerebrasProvider = getBalancedCerebrasProvider();
         const contextTools = createToolsWithContext(options.userId);
 
+        // Import main chat agent to get its instructions
+        const { chatAgent: mainChatAgent } = await import(
+          "@/mastra/agents/chat-agent"
+        );
+
         agent = new Agent({
           name: "chat-agent",
-          instructions: `You are DeepCounsel, a helpful legal AI assistant for Zimbabwe.
-
-**CRITICAL: When user asks to "create a document" or "draft a document", you MUST call the createDocument tool. Do NOT write document content in your response.**
-
-Your capabilities:
-- Answer legal questions about Zimbabwe law
-- Use the advancedSearchWorkflow tool for complex research queries requiring multiple sources
-- Create documents using the createDocument tool
-- Update existing documents using the updateDocument tool
-- Provide legal information and guidance
-
-When to use advancedSearchWorkflow:
-- User asks for comprehensive research on a topic
-- Query requires multiple perspectives or sources
-- Question involves case law, precedents, or detailed legal analysis
-- User explicitly requests "research" or "find cases about"
-
-When NOT to use advancedSearchWorkflow:
-- Simple definitions or explanations
-- Direct questions with straightforward answers
-- General legal guidance
-
-When responding:
-1. Be clear, concise, and professional
-2. Provide accurate legal information about Zimbabwe
-3. **Use advancedSearchWorkflow tool for research-intensive queries**
-4. **ALWAYS use createDocument tool when asked to create/draft documents**
-5. Use updateDocument tool when asked to modify documents
-6. Cite relevant Zimbabwe laws and statutes when applicable
-
-DOCUMENT CREATION RULE:
-- User says: "Create a document about X"
-- You MUST: Call createDocument({ title: "X", kind: "text" })
-- You MUST NOT: Write the document content in your response
-
-Remember: You provide legal information, not legal advice. Always recommend consulting qualified legal professionals for specific legal matters.`,
+          instructions: mainChatAgent.instructions, // Use same instructions as main agent
           model: () => cerebrasProvider("gpt-oss-120b"),
           tools: {
-            advancedSearchWorkflow: advancedSearchWorkflowTool,
+            // All 4 research tools (matching main chat agent)
+            quickFactSearch: quickFactSearchTool,
+            standardResearch: standardResearchTool,
+            multiSearch: multiSearchTool,
+            deepResearch: deepResearchTool,
+            // Document tools with user context
             createDocument: contextTools.createDocument,
             updateDocument: contextTools.updateDocument,
           },
@@ -305,54 +291,40 @@ export async function streamMastraAgentWithHistory(
         const { getBalancedCerebrasProvider } = await import(
           "@/lib/ai/cerebras-key-balancer"
         );
-        const { advancedSearchWorkflowTool } = await import(
-          "@/mastra/tools/advanced-search-workflow-tool"
+
+        // Import ALL research tools (matching main chat agent)
+        const { quickFactSearchTool } = await import(
+          "@/mastra/tools/quick-fact-search-tool"
+        );
+        const { standardResearchTool } = await import(
+          "@/mastra/tools/standard-research-tool"
+        );
+        const { multiSearchTool } = await import(
+          "@/mastra/tools/multi-search-tool"
+        );
+        const { deepResearchTool } = await import(
+          "@/mastra/tools/deep-research-tool"
         );
 
         const cerebrasProvider = getBalancedCerebrasProvider();
         const contextTools = createToolsWithContext(options.userId);
 
+        // Import main chat agent to get its instructions
+        const { chatAgent: mainChatAgent } = await import(
+          "@/mastra/agents/chat-agent"
+        );
+
         agent = new Agent({
           name: "chat-agent",
-          instructions: `You are DeepCounsel, a helpful legal AI assistant for Zimbabwe.
-
-**CRITICAL: When user asks to "create a document" or "draft a document", you MUST call the createDocument tool. Do NOT write document content in your response.**
-
-Your capabilities:
-- Answer legal questions about Zimbabwe law
-- Use the advancedSearchWorkflow tool for complex research queries requiring multiple sources
-- Create documents using the createDocument tool
-- Update existing documents using the updateDocument tool
-- Provide legal information and guidance
-
-When to use advancedSearchWorkflow:
-- User asks for comprehensive research on a topic
-- Query requires multiple perspectives or sources
-- Question involves case law, precedents, or detailed legal analysis
-- User explicitly requests "research" or "find cases about"
-
-When NOT to use advancedSearchWorkflow:
-- Simple definitions or explanations
-- Direct questions with straightforward answers
-- General legal guidance
-
-When responding:
-1. Be clear, concise, and professional
-2. Provide accurate legal information about Zimbabwe
-3. **Use advancedSearchWorkflow tool for research-intensive queries**
-4. **ALWAYS use createDocument tool when asked to create/draft documents**
-5. Use updateDocument tool when asked to modify documents
-6. Cite relevant Zimbabwe laws and statutes when applicable
-
-DOCUMENT CREATION RULE:
-- User says: "Create a document about X"
-- You MUST: Call createDocument({ title: "X", kind: "text" })
-- You MUST NOT: Write the document content in your response
-
-Remember: You provide legal information, not legal advice. Always recommend consulting qualified legal professionals for specific legal matters.`,
+          instructions: mainChatAgent.instructions, // Use same instructions as main agent
           model: () => cerebrasProvider("gpt-oss-120b"),
           tools: {
-            advancedSearchWorkflow: advancedSearchWorkflowTool,
+            // All 4 research tools (matching main chat agent)
+            quickFactSearch: quickFactSearchTool,
+            standardResearch: standardResearchTool,
+            multiSearch: multiSearchTool,
+            deepResearch: deepResearchTool,
+            // Document tools with user context
             createDocument: contextTools.createDocument,
             updateDocument: contextTools.updateDocument,
           },
@@ -396,8 +368,18 @@ Remember: You provide legal information, not legal advice. Always recommend cons
 
   logger.log("[Mastra SDK] Message count:", mastraMessages.length);
 
+  // Prepare conversation history for tools (exclude current message)
+  const conversationHistory = mastraMessages.slice(0, -1).map((msg) => ({
+    role: msg.role,
+    content: msg.content,
+  }));
+
+  logger.log(
+    `[Mastra SDK] Prepared conversation history for tools: ${conversationHistory.length} messages`
+  );
+
   // Stream with AI SDK v5 format
-  // Don't pass memory config or context - just the messages
+  // Pass conversation history through agentContext so tools can access it
   // Wrap in retry handler for rate limit protection
   try {
     const stream = await withCerebrasRetry(
@@ -405,6 +387,13 @@ Remember: You provide legal information, not legal advice. Always recommend cons
         return await agent.stream(mastraMessages, {
           format: "aisdk", // AI SDK v5 format
           maxSteps: 15, // Allow multiple tool calls
+          // Pass conversation history through agentContext
+          agentContext: {
+            conversationHistory,
+            userId: options?.userId,
+            chatId: options?.chatId,
+            sessionId: options?.sessionId,
+          },
         } as any);
       },
       {
