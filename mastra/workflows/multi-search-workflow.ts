@@ -43,6 +43,14 @@ const decomposeStep = createStep({
       .describe("Array of focused sub-queries (1-3)"),
     isBroad: z.boolean().describe("Whether query was broad and decomposed"),
     jurisdiction: z.string().describe("Legal jurisdiction to pass through"),
+    conversationHistory: z
+      .array(
+        z.object({
+          role: z.string(),
+          content: z.string(),
+        })
+      )
+      .describe("Conversation history to pass through"),
   }),
   execute: async ({ inputData }) => {
     const { query, jurisdiction, conversationHistory } = inputData;
@@ -62,6 +70,7 @@ const decomposeStep = createStep({
           subQueries: [query],
           isBroad: false,
           jurisdiction,
+          conversationHistory: conversationHistory || [],
         };
       }
 
@@ -75,6 +84,7 @@ const decomposeStep = createStep({
         subQueries,
         isBroad: true,
         jurisdiction,
+        conversationHistory: conversationHistory || [],
       };
     } catch (error) {
       console.error("[Multi-Search] Decomposition error:", error);
@@ -82,6 +92,7 @@ const decomposeStep = createStep({
         subQueries: [query],
         isBroad: false,
         jurisdiction,
+        conversationHistory: conversationHistory || [],
       };
     }
   },
@@ -92,7 +103,8 @@ const multiSearchStep = createStep({
   description: "Execute multiple focused searches",
   inputSchema: z.object({
     subQueries: z.array(z.string()).describe("Array of sub-queries to search"),
-    jurisdiction: z.string().default("Zimbabwe").describe("Legal jurisdiction"),
+    isBroad: z.boolean().describe("Whether query was decomposed"),
+    jurisdiction: z.string().describe("Legal jurisdiction"),
     conversationHistory: z
       .array(
         z.object({
@@ -100,10 +112,10 @@ const multiSearchStep = createStep({
           content: z.string(),
         })
       )
-      .optional()
-      .default([]),
+      .describe("Conversation history for context"),
   }),
   outputSchema: z.object({
+    subQueries: z.array(z.string()).describe("Sub-queries that were searched"),
     allResults: z
       .array(
         z.object({
@@ -121,9 +133,11 @@ const multiSearchStep = createStep({
       )
       .describe("Results from all sub-queries"),
     totalResults: z.number().describe("Total number of results found"),
+    isBroad: z.boolean().describe("Whether query was decomposed"),
   }),
   execute: async ({ inputData, runtimeContext }) => {
-    const { subQueries, jurisdiction, conversationHistory } = inputData;
+    const { subQueries, isBroad, jurisdiction, conversationHistory } =
+      inputData;
 
     console.log(`[Multi-Search] Executing ${subQueries.length} searches`);
 
@@ -183,14 +197,18 @@ const multiSearchStep = createStep({
       );
 
       return {
+        subQueries,
         allResults,
         totalResults,
+        isBroad,
       };
     } catch (error) {
       console.error("[Multi-Search] Search error:", error);
       return {
+        subQueries,
         allResults: [],
         totalResults: 0,
+        isBroad,
       };
     }
   },
@@ -217,6 +235,7 @@ const synthesizeStep = createStep({
         })
       )
       .describe("Results from all sub-queries"),
+    totalResults: z.number().describe("Total number of results found"),
     isBroad: z.boolean().describe("Whether query was decomposed"),
   }),
   outputSchema: z.object({
