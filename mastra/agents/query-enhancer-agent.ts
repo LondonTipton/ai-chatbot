@@ -27,6 +27,7 @@ RULES:
 5. Use conversation context to understand what user is really asking
 6. If user mentions a case name, preserve it exactly
 7. Always include "Zimbabwe" unless already present
+8. For case law queries, zimlii.org will be automatically added as a site filter
 
 EXAMPLES:
 
@@ -325,6 +326,14 @@ ENHANCED QUERY:`;
     if (enhanced.length < 5) {
       console.warn("[Query Enhancer] Output too short, using smart fallback");
       return createSmartFallback(query);
+    }
+
+    // Add zimlii for case law queries to prioritize Zimbabwe Legal Information Institute
+    if (detectedType === "case" && !enhanced.toLowerCase().includes("zimlii")) {
+      enhanced = `${enhanced} site:zimlii.org`;
+      console.log(
+        "[Query Enhancer] Added zimlii site filter for case law query"
+      );
     }
 
     console.log(`[Query Enhancer] Original: "${query}"`);

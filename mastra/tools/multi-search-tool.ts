@@ -144,7 +144,9 @@ export const multiSearchTool = createTool({
       // Get search count from decompose step
       const decomposeStep = result.steps.decompose;
       const searchCount =
-        (decomposeStep?.output as any)?.subQueries?.length || 1;
+        decomposeStep && "output" in decomposeStep
+          ? (decomposeStep.output as any)?.subQueries?.length || 1
+          : 1;
 
       console.log(
         `[Multi-Search Tool] Successfully completed. Searches: ${searchCount}, Sources: ${output.sources.length}, Tokens: ${output.totalTokens}`
