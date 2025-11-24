@@ -6,6 +6,7 @@ import type {
 } from "ai";
 import { type ClassValue, clsx } from "clsx";
 import { formatISO } from "date-fns";
+import { nanoid } from "nanoid";
 import { twMerge } from "tailwind-merge";
 import type { DBMessage, Document } from "@/lib/db/schema";
 import { ChatSDKError, type ErrorCode } from "./errors";
@@ -63,17 +64,18 @@ export async function fetchWithErrorHandlers(
 
 export function getLocalStorage(key: string) {
   if (typeof window !== "undefined") {
-    return JSON.parse(localStorage.getItem(key) || "[]");
+    try {
+      return JSON.parse(localStorage.getItem(key) || "[]");
+    } catch (e) {
+      console.error(`Failed to parse localStorage key "${key}":`, e);
+      return [];
+    }
   }
   return [];
 }
 
 export function generateUUID(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  return nanoid();
 }
 
 type ResponseMessageWithoutId = CoreToolMessage | CoreAssistantMessage;

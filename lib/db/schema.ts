@@ -36,7 +36,7 @@ export const user = pgTable("User", {
 export type User = InferSelectModel<typeof user>;
 
 export const chat = pgTable("Chat", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  id: text("id").primaryKey().notNull(), // Changed from uuid to text for nanoid support
   createdAt: timestamp("createdAt").notNull(),
   title: text("title").notNull(),
   userId: uuid("userId")
@@ -54,7 +54,7 @@ export type Chat = InferSelectModel<typeof chat>;
 // Read the migration guide at https://chat-sdk.dev/docs/migration-guides/message-parts
 export const messageDeprecated = pgTable("Message", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
-  chatId: uuid("chatId")
+  chatId: text("chatId") // Changed from uuid to text for nanoid support
     .notNull()
     .references(() => chat.id),
   role: varchar("role").notNull(),
@@ -65,8 +65,8 @@ export const messageDeprecated = pgTable("Message", {
 export type MessageDeprecated = InferSelectModel<typeof messageDeprecated>;
 
 export const message = pgTable("Message_v2", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  chatId: uuid("chatId")
+  id: text("id").primaryKey().notNull(), // Changed from uuid to text for nanoid support
+  chatId: text("chatId") // Changed from uuid to text for nanoid support
     .notNull()
     .references(() => chat.id),
   role: varchar("role").notNull(),
@@ -82,7 +82,7 @@ export type DBMessage = InferSelectModel<typeof message>;
 export const voteDeprecated = pgTable(
   "Vote",
   {
-    chatId: uuid("chatId")
+    chatId: text("chatId") // Changed from uuid to text for nanoid support
       .notNull()
       .references(() => chat.id),
     messageId: uuid("messageId")
@@ -102,10 +102,10 @@ export type VoteDeprecated = InferSelectModel<typeof voteDeprecated>;
 export const vote = pgTable(
   "Vote_v2",
   {
-    chatId: uuid("chatId")
+    chatId: text("chatId") // Changed from uuid to text for nanoid support
       .notNull()
       .references(() => chat.id),
-    messageId: uuid("messageId")
+    messageId: text("messageId")
       .notNull()
       .references(() => message.id),
     isUpvoted: boolean("isUpvoted").notNull(),
@@ -171,12 +171,11 @@ export type Suggestion = InferSelectModel<typeof suggestion>;
 export const stream = pgTable(
   "Stream",
   {
-    id: uuid("id").notNull().defaultRandom(),
-    chatId: uuid("chatId").notNull(),
+    id: text("id").primaryKey().notNull(), // Changed from uuid to text for nanoid support
+    chatId: text("chatId").notNull(), // Changed from uuid to text for nanoid support
     createdAt: timestamp("createdAt").notNull(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.id] }),
     chatRef: foreignKey({
       columns: [table.chatId],
       foreignColumns: [chat.id],

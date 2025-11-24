@@ -2,6 +2,8 @@
 export const MAX_INPUT_LENGTH = 10_000; // 10k characters for user input
 export const MAX_MESSAGE_LENGTH = 50_000; // For AI responses
 
+import sanitizeHtml from "sanitize-html";
+
 export type SanitizationResult = {
   sanitized: string;
   isValid: boolean;
@@ -61,7 +63,7 @@ function removeControlCharacters(text: string): string {
 
 /**
  * Sanitize user input to prevent XSS, SQL injection, and other attacks
- * This should be used for all user-generated content before processing
+ * Uses sanitize-html to strip dangerous tags while preserving safe text
  */
 export function sanitizeUserInput(input: string): SanitizationResult {
   const errors: string[] = [];
@@ -92,12 +94,32 @@ export function sanitizeUserInput(input: string): SanitizationResult {
     .replace(/\n{4,}/g, "\n\n\n") // Limit to max 3 consecutive newlines
     .trim(); // Just trim start/end
 
-  // Remove dangerous patterns but DON'T escape HTML
-  // HTML escaping should be done at render time, not during input processing
-  sanitizedInput = sanitizedInput
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/javascript:/gi, "")
-    .replace(/on\w+\s*=/gi, "");
+  // Use sanitize-html to sanitize HTML/scripts
+  // We allow standard text formatting but strip scripts, iframes, etc.
+  // IMPORTANT: Use 'recursiveEscape' mode to preserve plain text content
+  // Without this, plain text messages get stripped entirely
+  sanitizedInput = sanitizeHtml(sanitizedInput, {
+    allowedTags: [
+      "b",
+      "i",
+      "em",
+      "strong",
+      "a",
+      "p",
+      "br",
+      "ul",
+      "ol",
+      "li",
+      "code",
+      "pre",
+    ],
+    allowedAttributes: {
+      a: ["href", "target", "rel"],
+    },
+    // KEY FIX: Escape disallowed tags instead of removing them
+    // This preserves plain text while converting dangerous tags to safe text
+    disallowedTagsMode: "recursiveEscape",
+  });
 
   // Final check - if sanitized is empty, it's invalid
   if (!sanitizedInput || sanitizedInput.trim().length === 0) {
@@ -115,7 +137,7 @@ export function sanitizeUserInput(input: string): SanitizationResult {
 
 /**
  * Sanitize markdown/HTML output before rendering
- * This is a simplified version - for production consider using DOMPurify
+ * Uses sanitize-html to ensure no XSS in AI responses
  */
 export function sanitizeMarkdownOutput(markdown: string): string {
   if (!markdown || markdown.trim().length === 0) {
@@ -131,11 +153,39 @@ export function sanitizeMarkdownOutput(markdown: string): string {
     )}\n\n[Content truncated...]`;
   }
 
-  // Remove dangerous patterns
-  sanitized = sanitized
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/javascript:/gi, "")
-    .replace(/on\w+\s*=/gi, "");
+  // Use sanitize-html for robust sanitization
+  // Allow more tags for markdown output (tables, headings, etc.)
+  sanitized = sanitizeHtml(sanitized, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "img",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
+      "pre",
+      "code",
+      "span",
+      "div",
+    ]),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      img: ["src", "alt", "title"],
+      a: ["href", "target", "rel"],
+      code: ["class"],
+      span: ["class"],
+      div: ["class"],
+    },
+    // Disallow dangerous attributes
+    disallowedTagsMode: "discard",
+  });
 
   return sanitized;
 }

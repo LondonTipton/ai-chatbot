@@ -69,8 +69,15 @@ export async function POST(request: Request) {
 
   try {
     const json = await request.json();
+    logger.log(
+      "[chat/route] Received request body:",
+      JSON.stringify(json, null, 2)
+    );
     requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
+    logger.log("[chat/route] Schema validation passed");
+  } catch (error) {
+    logger.error("[chat/route] Schema validation failed:", error);
+    logger.error("[chat/route] Error details:", JSON.stringify(error, null, 2));
     return new ChatSDKError("bad_request:api").toResponse();
   }
 

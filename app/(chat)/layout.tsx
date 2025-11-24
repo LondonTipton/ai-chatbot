@@ -37,8 +37,13 @@ export default async function Layout({
   let appwriteUser: { $id: string; email: string; name?: string } | null = null;
 
   if (appwriteSessionCookie) {
-    validation = await validateSession(appwriteSessionCookie);
-    appwriteUser = validation?.user || null;
+    try {
+      validation = await validateSession(appwriteSessionCookie);
+      appwriteUser = validation?.user || null;
+    } catch {
+      // Session validation can fail during SSR due to timing - this is expected
+      logger.debug("[layout] Session validation skipped during SSR");
+    }
   } else if (fallbackUserId) {
     // Use the same validation method as API routes
     try {

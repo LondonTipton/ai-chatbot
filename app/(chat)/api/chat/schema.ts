@@ -15,9 +15,9 @@ const filePartSchema = z.object({
 const partSchema = z.union([textPartSchema, filePartSchema]);
 
 export const postRequestBodySchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1), // Changed from uuid() to accept nanoid format
   message: z.object({
-    id: z.string().uuid(),
+    id: z.string().min(1), // Changed from uuid() to accept nanoid format
     role: z.enum(["user"]),
     parts: z.array(partSchema),
   }),
