@@ -94,8 +94,8 @@ export function createAccount(
 
 /**
  * Create an email/password session (login)
- * For SSR: We need to create a session token using the Users API (admin SDK)
- * after verifying credentials with the client SDK
+ * Simplified approach: Just create the session and return it
+ * The session created by the client SDK is valid and can be used directly
  */
 export function createEmailSession(
   email: string,
@@ -108,50 +108,22 @@ export function createEmailSession(
       const config = getAppwriteConfig();
       logger.log("[AUTH] Config loaded, endpoint:", config.endpoint);
 
-      // Step 1: Verify credentials using client SDK
+      // Create session using client SDK - this verifies credentials and creates a valid session
       const client = new Client()
         .setEndpoint(config.endpoint)
         .setProject(config.projectId);
 
       const account = new Account(client);
 
-      logger.log("[AUTH] Verifying credentials...");
-      const tempSession = await account.createEmailPasswordSession(
-        email,
-        password
-      );
-      logger.log("[AUTH] Credentials verified, user ID:", tempSession.userId);
+      logger.log("[AUTH] Creating email/password session...");
+      const session = await account.createEmailPasswordSession(email, password);
 
-      // Step 2: Create a session token for this user using Users API (admin)
-      const { users } = createAdminClient();
+      logger.log("[AUTH] Session created successfully");
+      logger.log("[AUTH] Session ID:", session.$id);
+      logger.log("[AUTH] User ID:", session.userId);
+      logger.log("[AUTH] Session secret length:", session.secret?.length || 0);
 
-      logger.log("[AUTH] Creating session token for user:", tempSession.userId);
-      const sessionToken = await users.createSession(tempSession.userId);
-
-      logger.log("[AUTH] Session token created successfully");
-      logger.log(
-        "[AUTH] Token secret length:",
-        sessionToken.secret?.length || 0
-      );
-      logger.log("[AUTH] Token user ID:", sessionToken.userId);
-
-      // Step 3: Delete the temporary session we created for verification
-      // Use the session client with the temp session to delete it
-      try {
-        const { account: sessionAccount } = createSessionClient(
-          tempSession.secret
-        );
-        await sessionAccount.deleteSession(tempSession.$id);
-        logger.log("[AUTH] Temporary verification session deleted");
-      } catch (deleteError) {
-        // Silently ignore - Appwrite will automatically clean up expired sessions
-        logger.debug(
-          "[AUTH] Temp session cleanup skipped (will expire automatically):",
-          deleteError
-        );
-      }
-
-      return sessionToken;
+      return session;
     } catch (error) {
       logger.error("[AUTH] Error creating session:", error);
       throw handleAppwriteError(error);
