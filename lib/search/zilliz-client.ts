@@ -149,10 +149,10 @@ export class ZillizClient {
     }
     
     return results.map((hit) => {
-      let metadata = {};
+      let parsedMetadata = {};
       try {
         if (hit.metadata) {
-          metadata =
+          parsedMetadata =
             typeof hit.metadata === "string"
               ? JSON.parse(hit.metadata)
               : hit.metadata;
@@ -168,7 +168,8 @@ export class ZillizClient {
         source: hit.source || "",
         source_file: hit.source_file || "",
         chunk_index: hit.chunk_index || 0,
-        ...metadata,
+        metadata: parsedMetadata,  // Keep metadata as an object
+        ...parsedMetadata,  // Also spread for backward compatibility
       };
     });
   }
