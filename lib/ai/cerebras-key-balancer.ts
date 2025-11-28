@@ -129,9 +129,9 @@ class CerebrasKeyBalancer {
         .filter((key) => key.startsWith("CEREBRAS_API_KEY"))
         .map((key) => ({
           id: key,
-          value: process.env[key] as string,
+          value: (process.env[key] as string).trim(),
         }))
-        .filter((k) => k.value);
+        .filter((k) => k.value && k.value.startsWith("csk-"));
 
       if (this.keys.length === 0) {
         logger.warn("[Cerebras Balancer] ⚠️ No CEREBRAS_API_KEYs found");
@@ -235,7 +235,16 @@ class CerebrasKeyBalancer {
 
     // Check if we have any keys
     if (this.keys.length === 0) {
-      const fallbackKey = process.env.CEREBRAS_API_KEY;
+      let fallbackKey = process.env.CEREBRAS_API_KEY;
+      if (!fallbackKey) {
+        const anyKey = Object.keys(process.env).find(
+          (k) => k.startsWith("CEREBRAS_API_KEY") && process.env[k]?.startsWith("csk-")
+        );
+        if (anyKey) {
+          fallbackKey = process.env[anyKey];
+        }
+      }
+
       if (fallbackKey) {
         logger.warn("[Cerebras Balancer] ⚠️ Using fallback key");
         return createCerebras({ apiKey: fallbackKey });
@@ -408,7 +417,18 @@ export function getBalancedCerebrasProviderSync(): ReturnType<
   }
 
   // Fallback to direct provider if not initialized yet
-  const fallbackKey = process.env.CEREBRAS_API_KEY;
+  let fallbackKey = process.env.CEREBRAS_API_KEY;
+
+  // If no main key, try to find ANY key starting with CEREBRAS_API_KEY_
+  if (!fallbackKey) {
+    const anyKey = Object.keys(process.env).find(
+      (k) => k.startsWith("CEREBRAS_API_KEY") && process.env[k]?.startsWith("csk-")
+    );
+    if (anyKey) {
+      fallbackKey = process.env[anyKey];
+    }
+  }
+
   if (fallbackKey) {
     _cachedSyncProvider = createCerebras({ apiKey: fallbackKey });
 

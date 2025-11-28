@@ -1,6 +1,8 @@
 import "server-only";
 
 import { Agent } from "@mastra/core/agent";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
+import { createLogger } from "@/lib/logger";
 import { createToolsWithContext } from "@/lib/services/tool-context-factory";
 import { legalSearchTool } from "../tools/legal-search-tool";
 import { tavilyExtractTool } from "../tools/tavily-extract";
@@ -108,7 +110,7 @@ Remember: You are a research assistant, not a lawyer. Always remind users to con
       // Use Cerebras provider directly for tool calling support
       const { createCerebras } = require("@ai-sdk/cerebras");
       const cerebras = createCerebras({
-        apiKey: process.env.CEREBRAS_API_KEY,
+        model: getBalancedCerebrasProviderSync()("gpt-oss-120b"),
       });
       console.log(
         "[Mastra] legal-agent-factory → Using Cerebras gpt-oss-120b with tool support"

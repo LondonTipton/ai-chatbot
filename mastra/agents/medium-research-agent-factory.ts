@@ -1,6 +1,8 @@
 import "server-only";
 
 import { Agent } from "@mastra/core/agent";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
+import { createLogger } from "@/lib/logger";
 import { createToolsWithContext } from "@/lib/services/tool-context-factory";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
@@ -34,7 +36,7 @@ When user requests any of these, MUST call createDocument tool:
 
 When creating documents:
 1. First search for information if needed using tavilySearchAdvancedTool
-2. THEN call createDocument({ title: "...", kind: "text" })
+2. THEN call createDocument({ title: "...", kind: "text" });
 3. DO NOT write document content in your response
 4. Provide brief guidance after tool creates the document
 
@@ -61,7 +63,10 @@ Example approach for "Find cases about property rights in Zimbabwe":
 Example approach for "Create a document about employment law":
 - Search 1: "Zimbabwe employment law Labour Act regulations"
 - Search 2: "employment contracts termination procedures Zimbabwe"
-- THEN: Call createDocument({ title: "Employment Law Overview", kind: "text" })
+- THEN: Call createDocument({
+  title: "Employment Law Overview",
+  kind: "text"
+})
 - Respond: "I've created a comprehensive employment law document for you..."
 
 Remember: You have a maximum of 4 tool calls. Use them strategically.`,
@@ -70,7 +75,7 @@ Remember: You have a maximum of 4 tool calls. Use them strategically.`,
       // Use Cerebras provider directly for tool calling support
       const { createCerebras } = require("@ai-sdk/cerebras");
       const cerebras = createCerebras({
-        apiKey: process.env.CEREBRAS_API_KEY,
+        model: getBalancedCerebrasProviderSync()("gpt-oss-120b"),
       });
       console.log(
         "[Mastra] medium-research-agent-factory → Using Cerebras gpt-oss-120b with tool support"

@@ -105,7 +105,8 @@ async function main() {
   );
 
   // Verify environment variables
-  if (!process.env.CEREBRAS_API_KEY) {
+  const hasKey = Object.keys(process.env).some(k => k.startsWith("CEREBRAS_API_KEY"));
+  if (!hasKey) {
     log("✗ Error: CEREBRAS_API_KEY not found in environment", colors.red);
     process.exit(1);
   }

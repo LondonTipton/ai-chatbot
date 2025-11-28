@@ -1,6 +1,8 @@
 import "server-only";
 
 import { Agent } from "@mastra/core/agent";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
+import { createLogger } from "@/lib/logger";
 import { createToolsWithContext } from "@/lib/services/tool-context-factory";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
@@ -34,7 +36,7 @@ IMPORTANT: If the user asks you to create any kind of document, you must use the
       // Use Cerebras provider directly for tool calling support
       const { createCerebras } = require("@ai-sdk/cerebras");
       const cerebras = createCerebras({
-        apiKey: process.env.CEREBRAS_API_KEY,
+        model: getBalancedCerebrasProviderSync()("gpt-oss-120b"),
       });
       console.log(
         "[Mastra] search-agent-factory → Using Cerebras gpt-oss-120b with tool support"

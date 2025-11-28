@@ -102,13 +102,11 @@ export function createEmailSession(
   password: string
 ): Promise<Models.Session> {
   return retryWithBackoff(async () => {
+    const config = getAppwriteConfig();
+    let clientSession: Models.Session;
+
+    // Step 1: Verify credentials using Client SDK
     try {
-      logger.log("[AUTH] Starting two-step authentication...");
-
-      const config = getAppwriteConfig();
-
-      // Step 1: Verify credentials using Client SDK
-      // We use the web SDK to verify password. This will throw if credentials are invalid.
       const { Client: WebClient, Account: WebAccount } = await import("appwrite");
       
       const client = new WebClient()
@@ -117,32 +115,30 @@ export function createEmailSession(
 
       const account = new WebAccount(client);
 
-      logger.log("[AUTH] Step 1: Verifying credentials...");
       // This creates a session but in SSR it might lack the secret
-      const clientSession = await account.createEmailPasswordSession(email, password) as unknown as Models.Session;
-      
-      logger.log("[AUTH] Credentials verified. User ID:", clientSession.userId);
+      clientSession = await account.createEmailPasswordSession(email, password) as unknown as Models.Session;
+    } catch (error) {
+      logger.error("[AUTH] Step 1 Failed (Invalid Credentials):", error);
+      throw handleAppwriteError(error);
+    }
 
-      // Step 2: Create valid session with Admin SDK
-      // This guarantees we get a session secret
-      logger.log("[AUTH] Step 2: Generating server session...");
+    // Step 2: Create valid session with Admin SDK
+    try {
       const { users } = createAdminClient();
       const adminSession = await users.createSession(clientSession.userId);
 
-      logger.log("[AUTH] Server session created. Secret length:", adminSession.secret?.length || 0);
-
-      // Cleanup: Delete the temporary client session to avoid clutter
+      // Cleanup: Delete the temporary client session
       try {
-        await users.deleteSession(clientSession.userId, clientSession.$id);
-        logger.log("[AUTH] Temporary client session cleaned up");
+        const { users: adminUsers } = createAdminClient();
+        await adminUsers.deleteSession(clientSession.userId, clientSession.$id);
       } catch (cleanupError) {
         logger.warn("[AUTH] Failed to cleanup temporary session:", cleanupError);
-        // Not fatal
       }
 
       return adminSession;
     } catch (error) {
-      logger.error("[AUTH] Error creating session:", error);
+      logger.error("[AUTH] Step 2 Failed (Admin Session Creation):", error);
+      console.error("[CRITICAL AUTH ERROR] Failed to create session via Admin SDK. Check API Key permissions (users.write).", error);
       throw handleAppwriteError(error);
     }
   }, "createEmailSession");

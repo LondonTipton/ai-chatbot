@@ -11,7 +11,8 @@ import { autoAgent } from "../../mastra/agents/auto-agent";
 describe("AUTO Agent", () => {
   beforeAll(() => {
     // Verify required environment variables
-    if (!process.env.CEREBRAS_API_KEY) {
+    const hasKey = Object.keys(process.env).some(k => k.startsWith("CEREBRAS_API_KEY"));
+    if (!hasKey) {
       throw new Error("CEREBRAS_API_KEY is required for AUTO agent tests");
     }
     if (!process.env.TAVILY_API_KEY) {

@@ -52,12 +52,7 @@ export async function setSessionCookie(
     return;
   }
 
-  logger.log("[session] Setting session cookies:", {
-    sessionIdLength: sessionId.length,
-    secretLength: sessionSecret.length,
-    secretPreview: `${sessionSecret.substring(0, 5)}...`,
-    cookieName: sessionCookieName,
-  });
+  logger.log("[session] Setting session cookies");
 
   // Set the Appwrite session cookie with the secret (JWT token)
   // This is used by Appwrite SDKs for authentication
