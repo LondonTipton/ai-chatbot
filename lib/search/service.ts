@@ -149,15 +149,22 @@ export class SearchService {
 
       // Get the appropriate database connection
       const dbUrls = DB_CONFIG[source as keyof typeof DB_CONFIG];
-      if (!dbUrls || dbUrls.length === 0) {
-        console.warn(`No DB configured for source: ${source}`);
+      
+      // If source is not a known category (might be a doc_id),
+      // try all databases to find the record
+      const databasesToTry = dbUrls && dbUrls.length > 0 
+        ? dbUrls 
+        : Object.values(DB_CONFIG).flat();
+      
+      if (databasesToTry.length === 0) {
+        console.warn(`No DB configured and no databases to search for source: ${source}`);
         results.push({ ...result, text: "[DB NOT CONFIGURED]" });
         continue;
       }
 
       // Try each database until we find the record
       let found = false;
-      for (const dbUrl of dbUrls) {
+      for (const dbUrl of databasesToTry) {
         try {
           const sql = neon(dbUrl);
           // Convert chunkIndex to integer if it's a string
@@ -192,7 +199,13 @@ export class SearchService {
 
           // Strategy 2: If no doc_id or not found, try positional match using source_file
           if (!found && sourceFile) {
-            const rows = await sql`
+            // Check if source is a valid category
+            const validSources = ["CaseLaw", "LawPortal", "Zimlii"];
+            const isValidSource = validSources.includes(source);
+            
+            // If source is valid, filter by it. Otherwise, just use source_file
+            const rows = isValidSource
+              ? await sql`
                   SELECT full_text, metadata, doc_id
                   FROM legal_documents
                   WHERE source = ${source}
@@ -200,7 +213,15 @@ export class SearchService {
                   ORDER BY chunk_index ASC
                   OFFSET ${chunkIndexInt}
                   LIMIT 1
-              `;
+                `
+              : await sql`
+                  SELECT full_text, metadata, doc_id
+                  FROM legal_documents
+                  WHERE source_file = ${sourceFile}
+                  ORDER BY chunk_index ASC
+                  OFFSET ${chunkIndexInt}
+                  LIMIT 1
+                `;
 
             if (rows.length > 0) {
               const row = rows[0];

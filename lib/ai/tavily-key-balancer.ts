@@ -40,9 +40,9 @@ class TavilyKeyBalancer {
         logger.warn("[Tavily Balancer] ⚠️ Missing Redis credentials");
       }
 
-      // Load API keys from environment
+      // Load API keys from environment (only numbered keys like TAVILY_API_KEY_1, etc.)
       this.keys = Object.keys(process.env)
-        .filter((key) => key.startsWith("TAVILY_API_KEY"))
+        .filter((key) => key.startsWith("TAVILY_API_KEY") && key !== "TAVILY_API_KEY")
         .map((key) => ({
           id: key,
           value: process.env[key] as string,
