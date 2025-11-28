@@ -1,4 +1,4 @@
-import { Account, Client, ID, type Models } from "node-appwrite";
+import { ID, type Models } from "node-appwrite";
 import { createLogger } from "@/lib/logger";
 
 const logger = createLogger("appwrite/auth");
@@ -103,27 +103,44 @@ export function createEmailSession(
 ): Promise<Models.Session> {
   return retryWithBackoff(async () => {
     try {
-      logger.log("[AUTH] Creating email session for:", email);
+      logger.log("[AUTH] Starting two-step authentication...");
 
       const config = getAppwriteConfig();
-      logger.log("[AUTH] Config loaded, endpoint:", config.endpoint);
 
-      // Create session using client SDK - this verifies credentials and creates a valid session
-      const client = new Client()
+      // Step 1: Verify credentials using Client SDK
+      // We use the web SDK to verify password. This will throw if credentials are invalid.
+      const { Client: WebClient, Account: WebAccount } = await import("appwrite");
+      
+      const client = new WebClient()
         .setEndpoint(config.endpoint)
         .setProject(config.projectId);
 
-      const account = new Account(client);
+      const account = new WebAccount(client);
 
-      logger.log("[AUTH] Creating email/password session...");
-      const session = await account.createEmailPasswordSession(email, password);
+      logger.log("[AUTH] Step 1: Verifying credentials...");
+      // This creates a session but in SSR it might lack the secret
+      const clientSession = await account.createEmailPasswordSession(email, password) as unknown as Models.Session;
+      
+      logger.log("[AUTH] Credentials verified. User ID:", clientSession.userId);
 
-      logger.log("[AUTH] Session created successfully");
-      logger.log("[AUTH] Session ID:", session.$id);
-      logger.log("[AUTH] User ID:", session.userId);
-      logger.log("[AUTH] Session secret length:", session.secret?.length || 0);
+      // Step 2: Create valid session with Admin SDK
+      // This guarantees we get a session secret
+      logger.log("[AUTH] Step 2: Generating server session...");
+      const { users } = createAdminClient();
+      const adminSession = await users.createSession(clientSession.userId);
 
-      return session;
+      logger.log("[AUTH] Server session created. Secret length:", adminSession.secret?.length || 0);
+
+      // Cleanup: Delete the temporary client session to avoid clutter
+      try {
+        await users.deleteSession(clientSession.userId, clientSession.$id);
+        logger.log("[AUTH] Temporary client session cleaned up");
+      } catch (cleanupError) {
+        logger.warn("[AUTH] Failed to cleanup temporary session:", cleanupError);
+        // Not fatal
+      }
+
+      return adminSession;
     } catch (error) {
       logger.error("[AUTH] Error creating session:", error);
       throw handleAppwriteError(error);
@@ -269,12 +286,22 @@ export function createVerification(
   verificationUrl: string
 ): Promise<Models.Token> {
   return retryWithBackoff(async () => {
-    const { account } = createSessionClient(sessionId);
-
     try {
+      const config = getAppwriteConfig();
+      
+      // Use Client SDK for verification to ensure consistency with session handling
+      const { Client: WebClient, Account: WebAccount } = await import("appwrite");
+
+      const client = new WebClient()
+        .setEndpoint(config.endpoint)
+        .setProject(config.projectId)
+        .setSession(sessionId); // sessionId here is the secret
+
+      const account = new WebAccount(client);
+
       const token = await account.createVerification(verificationUrl);
       logger.log("[AUTH] Verification email sent successfully");
-      return token;
+      return token as unknown as Models.Token;
     } catch (error) {
       logger.error("[AUTH] Failed to send verification email:", error);
       throw handleAppwriteError(error);
