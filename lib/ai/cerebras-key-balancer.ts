@@ -233,8 +233,8 @@ class CerebrasKeyBalancer {
       return this.cachedProvider.provider;
     }
 
-    // Fallback if Redis or keys missing
-    if (!this.redis || this.keys.length === 0) {
+    // Check if we have any keys
+    if (this.keys.length === 0) {
       const fallbackKey = process.env.CEREBRAS_API_KEY;
       if (fallbackKey) {
         logger.warn("[Cerebras Balancer] ⚠️ Using fallback key");
@@ -247,62 +247,84 @@ class CerebrasKeyBalancer {
     const now = Date.now();
 
     try {
-      // Local Round Robin Selection
-      for (let i = 0; i < this.keys.length; i++) {
-        const keyIndex = (this.localIndex + i) % this.keys.length;
-        const selectedKey = this.keys[keyIndex];
+      // Local Round Robin Selection with Redis health checks
+      if (this.redis) {
+        for (let i = 0; i < this.keys.length; i++) {
+          const keyIndex = (this.localIndex + i) % this.keys.length;
+          const selectedKey = this.keys[keyIndex];
 
-        // Check if key is disabled
-        const disabledUntil = await this.redis.get<number>(
-          `${REDIS_KEY_PREFIX_HEALTH}${selectedKey.id}:disabled`
-        );
-
-        if (disabledUntil && disabledUntil > now) {
-          logger.debug(
-            `[Cerebras Balancer] Key ${
-              selectedKey.id
-            } disabled until ${new Date(disabledUntil).toISOString()}`
+          // Check if key is disabled
+          const disabledUntil = await this.redis.get<number>(
+            `${REDIS_KEY_PREFIX_HEALTH}${selectedKey.id}:disabled`
           );
-          continue;
+
+          if (disabledUntil && disabledUntil > now) {
+            logger.debug(
+              `[Cerebras Balancer] Key ${
+                selectedKey.id
+              } disabled until ${new Date(disabledUntil).toISOString()}`
+            );
+            continue;
+          }
+
+          // Update local index
+          this.localIndex = (keyIndex + 1) % this.keys.length;
+          this.currentKeyId = selectedKey.id;
+
+          // Track usage stats asynchronously
+          Promise.all([
+            this.redis.incr(`cerebras:key:usage:${selectedKey.id}`),
+            this.redis.set(`cerebras:key:lastused:${selectedKey.id}`, now),
+          ]).catch((err) => logger.error("Failed to update usage stats", err));
+
+          logger.log(`[Cerebras Balancer] ✅ Selected key: ${selectedKey.id}`);
+
+          const provider = createCerebras({ apiKey: selectedKey.value });
+
+          // Cache for rapid-fire requests
+          this.cachedProvider = {
+            provider,
+            keyId: selectedKey.id,
+            expiresAt: Date.now() + this.CACHE_TTL_MS,
+          };
+
+          return provider;
         }
 
-        // Update local index
-        this.localIndex = (keyIndex + 1) % this.keys.length;
-        this.currentKeyId = selectedKey.id;
-
-        // Track usage stats asynchronously
-        Promise.all([
-          this.redis.incr(`cerebras:key:usage:${selectedKey.id}`),
-          this.redis.set(`cerebras:key:lastused:${selectedKey.id}`, now),
-        ]).catch((err) => logger.error("Failed to update usage stats", err));
-
-        logger.log(`[Cerebras Balancer] ✅ Selected key: ${selectedKey.id}`);
-
-        const provider = createCerebras({ apiKey: selectedKey.value });
-
-        // Cache for rapid-fire requests
-        this.cachedProvider = {
-          provider,
-          keyId: selectedKey.id,
-          expiresAt: Date.now() + this.CACHE_TTL_MS,
-        };
-
-        return provider;
+        // All keys disabled - emergency fallback
+        logger.error("[Cerebras Balancer] ❌ All keys disabled!");
+        this.currentKeyId = this.keys[0].id;
+        return createCerebras({ apiKey: this.keys[0].value });
       }
-
-      // All keys disabled - emergency fallback
-      logger.error("[Cerebras Balancer] ❌ All keys disabled!");
-      this.currentKeyId = this.keys[0].id;
-      return createCerebras({ apiKey: this.keys[0].value });
     } catch (error) {
       logger.error("[Cerebras Balancer] ❌ Redis error:", error);
-
-      // Fallback to random key
-      const fallbackKey =
-        this.keys[Math.floor(Math.random() * this.keys.length)];
-      this.currentKeyId = fallbackKey.id;
-      return createCerebras({ apiKey: fallbackKey.value });
+      // Fall through to local rotation
     }
+
+    // Redis unavailable or error - use local round-robin rotation
+    logger.warn(
+      "[Cerebras Balancer] ⚠️ Using local rotation (Redis unavailable)"
+    );
+    const keyIndex = this.localIndex % this.keys.length;
+    const selectedKey = this.keys[keyIndex];
+
+    this.localIndex = (this.localIndex + 1) % this.keys.length;
+    this.currentKeyId = selectedKey.id;
+
+    logger.log(
+      `[Cerebras Balancer] ✅ Selected key: ${selectedKey.id} (local rotation)`
+    );
+
+    const provider = createCerebras({ apiKey: selectedKey.value });
+
+    // Cache for rapid-fire requests
+    this.cachedProvider = {
+      provider,
+      keyId: selectedKey.id,
+      expiresAt: Date.now() + this.CACHE_TTL_MS,
+    };
+
+    return provider;
   }
 
   /**
