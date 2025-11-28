@@ -82,7 +82,10 @@ export const tavilySearch = ({ dataStream }: TavilySearchProps = {}) =>
       try {
         // Validate maxResults constraints (since we can't use .min/.max with Cerebras)
         const maxResults = Math.min(Math.max(rawMaxResults, 1), 10);
-        const apiKey = process.env.TAVILY_API_KEY;
+        
+        // Get load-balanced API key
+        const { getTavilyBalancer } = await import("@/lib/ai/tavily-key-balancer");
+        const apiKey = await getTavilyBalancer().getApiKey(1);
 
         if (!apiKey) {
           throw new Error(

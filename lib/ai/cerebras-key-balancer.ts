@@ -1,52 +1,103 @@
 /**
- * Cerebras API Key Load Balancer
- * Rotates through multiple API keys to distribute load and avoid rate limits
+ * Cerebras API Key Load Balancer - Direct Redis Access
+ * Implements battle-tested error handling from Jupyter notebook
  */
 
 import { createCerebras } from "@ai-sdk/cerebras";
+import { Redis } from "@upstash/redis";
 import { createLogger } from "@/lib/logger";
-import { isCerebrasRateLimitError } from "./cerebras-retry-handler";
 
 const logger = createLogger("ai/cerebras-key-balancer");
 
-/**
- * Wrap a Cerebras provider to add debug logging when a model instance is requested.
- */
-function wrapWithLogging(
-  provider: ReturnType<typeof createCerebras>,
-  keyPreview: string
-): ReturnType<typeof createCerebras> {
-  const wrapped = ((modelId: string) => {
-    logger.log(
-      `[Cerebras Balancer] 🧪 Creating language model '${modelId}' using key ${keyPreview}...`
-    );
-    return provider(modelId);
-  }) as unknown as ReturnType<typeof createCerebras>;
+// Error classification types
+type ErrorType = "rate_limit" | "queue_overflow" | "other";
 
-  try {
-    Object.assign(wrapped, provider);
-  } catch {
-    // ignore if assignment fails
+/**
+ * Classify Cerebras API errors (order matters - check queue overflow FIRST)
+ */
+function classifyCerebrasError(error: any): {
+  type: ErrorType;
+  retryAfter?: number;
+} {
+  const statusCode = error?.statusCode || error?.status;
+  const message = (error?.message || "").toLowerCase();
+  const errorData = error?.data;
+
+  // Check for transient queue overflow FIRST (most common)
+  if (
+    message.includes("queue_exceeded") ||
+    message.includes("high traffic") ||
+    message.includes("queue") ||
+    errorData?.param === "queue" ||
+    errorData?.code === "queue_exceeded"
+  ) {
+    const retryAfter = parseRetryAfter(error);
+    return { type: "queue_overflow", retryAfter: Math.max(60, retryAfter) };
   }
 
-  return wrapped;
+  // True rate limit: HTTP 429 + contains "rate" or "limit"
+  // NOTE: Cerebras doesn't tell us WHICH limit (30 RPM, 900 RPH, 14400 RPD) was hit
+  if (
+    statusCode === 429 &&
+    (message.includes("rate") || message.includes("limit"))
+  ) {
+    return { type: "rate_limit" };
+  }
+
+  return { type: "other" };
 }
 
-type KeyUsageStats = {
-  key: string;
-  lastUsed: number;
-  requestCount: number;
-  errorCount: number;
-  lastError?: string;
-  isDisabled: boolean;
-  disabledUntil?: number;
+/**
+ * Parse Retry-After or x-ratelimit-reset headers from error response
+ */
+function parseRetryAfter(error: any): number {
+  try {
+    const response = error?.response;
+    const headers = response?.headers || {};
+
+    // Check Retry-After header
+    const retryAfter = headers["retry-after"] || headers["Retry-After"];
+    if (retryAfter) {
+      const seconds = Number.parseInt(retryAfter, 10);
+      if (!Number.isNaN(seconds)) return seconds;
+    }
+
+    // Check x-ratelimit-reset headers
+    const resetHeaders = [
+      "x-ratelimit-reset-requests",
+      "X-RateLimit-Reset-Requests",
+      "x-ratelimit-reset-tokens",
+      "X-RateLimit-Reset-Tokens",
+    ];
+
+    for (const header of resetHeaders) {
+      if (headers[header]) {
+        const seconds = Number.parseInt(headers[header], 10);
+        if (!Number.isNaN(seconds)) return seconds;
+      }
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+
+  return 60; // Default 60 seconds
+}
+
+// In-memory cache for rapid-fire requests
+type CachedProvider = {
+  provider: ReturnType<typeof createCerebras>;
+  keyId: string;
+  expiresAt: number;
 };
 
 class CerebrasKeyBalancer {
-  private readonly keys: string[];
-  private currentIndex: number;
-  private readonly keyStats: Map<string, KeyUsageStats>;
-  private readonly providers: Map<string, ReturnType<typeof createCerebras>>;
+  private static instance: CerebrasKeyBalancer;
+  private redis: Redis | undefined;
+  private keys: { id: string; value: string }[] = [];
+  private localIndex = 0;
+  private currentKeyId: string | null = null;
+  private cachedProvider: CachedProvider | null = null;
+  private readonly CACHE_TTL_MS = 30_000; // 30 seconds
 
   constructor() {
     // Only initialize on server side
@@ -54,396 +105,324 @@ class CerebrasKeyBalancer {
       logger.warn(
         "[Cerebras Balancer] Attempted to initialize on client side - skipping"
       );
-      this.keys = [];
-      this.currentIndex = 0;
-      this.keyStats = new Map();
-      this.providers = new Map();
       return;
     }
 
-    this.keys = this.loadApiKeys();
-    this.currentIndex = 0;
-    this.keyStats = new Map();
-    this.providers = new Map();
+    this.initialize();
+  }
 
-    // Initialize stats and providers for each key
-    for (const key of this.keys) {
-      this.keyStats.set(key, {
-        key,
-        lastUsed: 0,
-        requestCount: 0,
-        errorCount: 0,
-        isDisabled: false,
-      });
-      // Note: @ai-sdk/cerebras doesn't expose maxRetries option
-      // Retries are handled at the AI SDK level (streamText maxRetries: 5)
-      const base = createCerebras({ apiKey: key });
-      const keyPreview = key.substring(0, 8);
-      this.providers.set(key, wrapWithLogging(base, keyPreview));
-    }
+  private initialize() {
+    try {
+      // Initialize Redis
+      const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-    // Log initialized keys for visibility
-    logger.log("[Cerebras Balancer] 🔑 Initialized keys:");
-    for (let i = 0; i < this.keys.length; i++) {
-      logger.log(
-        `[Cerebras Balancer]   Key ${i + 1}: ${this.keys[i].substring(
-          0,
-          8
-        )}... ✅`
-      );
+      if (redisUrl && redisToken) {
+        this.redis = new Redis({ url: redisUrl, token: redisToken });
+        logger.log("[Cerebras Balancer] ✅ Redis client initialized");
+      } else {
+        logger.warn("[Cerebras Balancer] ⚠️ Missing Redis credentials");
+      }
+
+      // Load API keys from environment
+      this.keys = Object.keys(process.env)
+        .filter((key) => key.startsWith("CEREBRAS_API_KEY"))
+        .map((key) => ({
+          id: key,
+          value: process.env[key] as string,
+        }))
+        .filter((k) => k.value);
+
+      if (this.keys.length === 0) {
+        logger.warn("[Cerebras Balancer] ⚠️ No CEREBRAS_API_KEYs found");
+      } else {
+        logger.log(`[Cerebras Balancer] ✅ Loaded ${this.keys.length} keys`);
+      }
+    } catch (error) {
+      logger.error("[Cerebras Balancer] ❌ Failed to initialize:", error);
     }
   }
 
-  /**
-   * Load API keys from environment variables
-   * Supports CEREBRAS_API_KEY and CEREBRAS_API_KEY_85 through _89
-   */
-  private loadApiKeys(): string[] {
-    const keys: string[] = [];
-
-    // Primary key (optional)
-    const primaryKey = process.env.CEREBRAS_API_KEY;
-    if (primaryKey) {
-      keys.push(primaryKey);
+  static getInstance(): CerebrasKeyBalancer {
+    if (!CerebrasKeyBalancer.instance) {
+      CerebrasKeyBalancer.instance = new CerebrasKeyBalancer();
     }
-
-    // Additional keys (85-89 as shown in .env.example)
-    for (let i = 85; i <= 89; i++) {
-      const key = process.env[`CEREBRAS_API_KEY_${i}`];
-      if (key) {
-        keys.push(key);
-      }
-    }
-
-    if (keys.length === 0) {
-      throw new Error(
-        "No Cerebras API keys found. Please set CEREBRAS_API_KEY or CEREBRAS_API_KEY_85 through _89"
-      );
-    }
-
-    logger.log(`[Cerebras Balancer] Loaded ${keys.length} API key(s)`);
-    return keys;
+    return CerebrasKeyBalancer.instance;
   }
 
   /**
-   * Get the next available API key using round-robin strategy
-   * Skips disabled keys and re-enables keys after cooldown period
+   * Calculate seconds until next UTC midnight
    */
-  private getNextKey(): string {
-    const now = Date.now();
-    let attempts = 0;
-    const maxAttempts = this.keys.length;
+  private getSecondsUntilUTCMidnight(): number {
+    const now = new Date();
+    const tomorrow = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+        0,
+        0,
+        0,
+        0
+      )
+    );
+    return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
+  }
 
-    while (attempts < maxAttempts) {
-      const key = this.keys[this.currentIndex];
-      const stats = this.keyStats.get(key);
+  /**
+   * Report error to Redis
+   */
+  private async reportError(
+    keyId: string,
+    errorType: ErrorType,
+    _retryAfter?: number
+  ): Promise<void> {
+    if (!this.redis) return;
 
-      this.currentIndex = (this.currentIndex + 1) % this.keys.length;
-      attempts++;
+    try {
+      const redisPrefix = "cerebras";
 
-      if (!stats) {
-        continue;
-      }
+      if (errorType === "rate_limit") {
+        // ANY rate limit (30 RPM / 900 RPH / 14400 RPD) → disable until UTC midnight
+        const ttl = this.getSecondsUntilUTCMidnight();
+        const reviveTime = Date.now() + ttl * 1000;
 
-      // Re-enable key if cooldown period has passed
-      if (
-        stats.isDisabled &&
-        stats.disabledUntil &&
-        now >= stats.disabledUntil
-      ) {
-        stats.isDisabled = false;
-        stats.disabledUntil = undefined;
-        const availableKeys = Array.from(this.keyStats.values()).filter(
-          (s) => !s.isDisabled
-        ).length;
-        logger.log(
-          `[Cerebras Balancer] ✅ Re-enabled key ${key.substring(
-            0,
-            8
-          )}... after cooldown (${availableKeys}/${
-            this.keys.length
-          } keys now available)`
+        await this.redis.set(
+          `${redisPrefix}:key:health:${keyId}:disabled`,
+          reviveTime,
+          { ex: ttl }
         );
+
+        logger.log(
+          `⚠️ Key ${keyId} hit rate limit - disabling until ${new Date(
+            reviveTime
+          ).toISOString()}`
+        );
+
+        await this.redis.incr(`${redisPrefix}:key:ratelimits:${keyId}`);
+      } else if (errorType === "queue_overflow") {
+        // Queue overflow → disable for 15 seconds to spread load
+        const ttl = 15;
+        const reviveTime = Date.now() + ttl * 1000;
+
+        await this.redis.set(
+          `${redisPrefix}:key:health:${keyId}:disabled`,
+          reviveTime,
+          { ex: ttl }
+        );
+
+        logger.log(`⏳ Key ${keyId} queue overflow - disabling for 15s`);
+        await this.redis.incr(`${redisPrefix}:key:queue_overflows:${keyId}`);
+      } else {
+        logger.log(`⚠️ Key ${keyId} error: ${errorType}`);
+        await this.redis.incr(`${redisPrefix}:key:errors:${keyId}`);
+      }
+    } catch (error) {
+      logger.error("[Cerebras Balancer] ❌ Failed to report error:", error);
+    }
+  }
+
+  /**
+   * Get a load-balanced Cerebras provider
+   */
+  async getProvider(): Promise<ReturnType<typeof createCerebras>> {
+    // Check in-memory cache first
+    if (this.cachedProvider && this.cachedProvider.expiresAt > Date.now()) {
+      logger.debug("[Cerebras Balancer] 🚀 Using cached provider");
+      this.currentKeyId = this.cachedProvider.keyId;
+      return this.cachedProvider.provider;
+    }
+
+    // Fallback if Redis or keys missing
+    if (!this.redis || this.keys.length === 0) {
+      const fallbackKey = process.env.CEREBRAS_API_KEY;
+      if (fallbackKey) {
+        logger.warn("[Cerebras Balancer] ⚠️ Using fallback key");
+        return createCerebras({ apiKey: fallbackKey });
+      }
+      throw new Error("No Cerebras API keys available");
+    }
+
+    const REDIS_KEY_PREFIX_HEALTH = "cerebras:key:health:";
+    const now = Date.now();
+
+    try {
+      // Local Round Robin Selection
+      for (let i = 0; i < this.keys.length; i++) {
+        const keyIndex = (this.localIndex + i) % this.keys.length;
+        const selectedKey = this.keys[keyIndex];
+
+        // Check if key is disabled
+        const disabledUntil = await this.redis.get<number>(
+          `${REDIS_KEY_PREFIX_HEALTH}${selectedKey.id}:disabled`
+        );
+
+        if (disabledUntil && disabledUntil > now) {
+          logger.debug(
+            `[Cerebras Balancer] Key ${
+              selectedKey.id
+            } disabled until ${new Date(disabledUntil).toISOString()}`
+          );
+          continue;
+        }
+
+        // Update local index
+        this.localIndex = (keyIndex + 1) % this.keys.length;
+        this.currentKeyId = selectedKey.id;
+
+        // Track usage stats asynchronously
+        Promise.all([
+          this.redis.incr(`cerebras:key:usage:${selectedKey.id}`),
+          this.redis.set(`cerebras:key:lastused:${selectedKey.id}`, now),
+        ]).catch((err) => logger.error("Failed to update usage stats", err));
+
+        logger.log(`[Cerebras Balancer] ✅ Selected key: ${selectedKey.id}`);
+
+        const provider = createCerebras({ apiKey: selectedKey.value });
+
+        // Cache for rapid-fire requests
+        this.cachedProvider = {
+          provider,
+          keyId: selectedKey.id,
+          expiresAt: Date.now() + this.CACHE_TTL_MS,
+        };
+
+        return provider;
       }
 
-      // Return key if it's not disabled
-      if (!stats.isDisabled) {
-        return key;
-      }
-    }
+      // All keys disabled - emergency fallback
+      logger.error("[Cerebras Balancer] ❌ All keys disabled!");
+      this.currentKeyId = this.keys[0].id;
+      return createCerebras({ apiKey: this.keys[0].value });
+    } catch (error) {
+      logger.error("[Cerebras Balancer] ❌ Redis error:", error);
 
-    // If all keys are disabled, return the least recently disabled one
-    logger.warn(
-      "[Cerebras Balancer] ⚠️  ALL KEYS DISABLED - forcing re-enable of least recently disabled key"
-    );
-    const leastRecentlyDisabled = Array.from(this.keyStats.entries())
-      .filter(([_, stats]) => stats.isDisabled)
-      .sort((a, b) => (a[1].disabledUntil || 0) - (b[1].disabledUntil || 0))[0];
-
-    if (leastRecentlyDisabled) {
-      const [key, stats] = leastRecentlyDisabled;
-      stats.isDisabled = false;
-      stats.disabledUntil = undefined;
-      logger.warn(
-        `[Cerebras Balancer] 🔄 Force re-enabled key ${key.substring(
-          0,
-          8
-        )}... (was disabled until ${new Date(
-          stats.disabledUntil || 0
-        ).toLocaleTimeString()})`
-      );
-      return key;
-    }
-
-    // Fallback to first key
-    return this.keys[0];
-  }
-
-  /**
-   * Update usage statistics for a key
-   */
-  private updateStats(key: string): void {
-    const stats = this.keyStats.get(key);
-    if (stats) {
-      stats.lastUsed = Date.now();
-      stats.requestCount++;
-
-      // Log key usage for monitoring
-      const keyPreview = key.substring(0, 8);
-      const availableKeys = Array.from(this.keyStats.values()).filter(
-        (s) => !s.isDisabled
-      ).length;
-      logger.log(
-        `[Cerebras Balancer] 🔑 Using key ${keyPreview}... (Request #${stats.requestCount}, ${availableKeys}/${this.keys.length} keys available)`
-      );
+      // Fallback to random key
+      const fallbackKey =
+        this.keys[Math.floor(Math.random() * this.keys.length)];
+      this.currentKeyId = fallbackKey.id;
+      return createCerebras({ apiKey: fallbackKey.value });
     }
   }
 
   /**
-   * Get the Cerebras provider instance with load balancing
+   * Handle API errors
    */
-  getProvider(): ReturnType<typeof createCerebras> {
-    if (this.keys.length === 0) {
-      throw new Error(
-        "Cerebras balancer not initialized - running on client side?"
-      );
+  async handleError(error: any): Promise<{
+    shouldRetry: boolean;
+    waitTime: number;
+    shouldRotateKey: boolean;
+  }> {
+    const classification = classifyCerebrasError(error);
+    const keyId = this.currentKeyId || "unknown";
+
+    logger.log(`[Cerebras Balancer] 🔍 Error: ${classification.type}`);
+
+    switch (classification.type) {
+      case "rate_limit":
+        // True rate limit - mark key dead, rotate immediately
+        logger.warn(`[Cerebras Balancer] ⚠️ Rate limit on key ${keyId}`);
+        await this.reportError(keyId, "rate_limit");
+
+        return {
+          shouldRetry: true,
+          waitTime: 0, // Immediate retry with new key
+          shouldRotateKey: true,
+        };
+
+      case "queue_overflow":
+        // Queue overflow - disable key for 15s, rotate immediately
+        logger.log(`[Cerebras Balancer] ⏳ Queue overflow on key ${keyId}`);
+        await this.reportError(keyId, "queue_overflow");
+
+        return {
+          shouldRetry: true,
+          waitTime: 0, // Immediate rotation to next key
+          shouldRotateKey: true,
+        };
+
+      default:
+        // Other errors - retry with backoff
+        logger.error(`[Cerebras Balancer] ❌ Other error: ${error.message}`);
+        await this.reportError(keyId, "other");
+
+        return {
+          shouldRetry: true,
+          waitTime: 2, // 2 second backoff
+          shouldRotateKey: false,
+        };
     }
-
-    const key = this.getNextKey();
-    this.updateStats(key);
-
-    const provider = this.providers.get(key);
-    if (!provider) {
-      throw new Error("Provider not found for key");
-    }
-
-    return provider;
   }
 
-  /**
-   * Mark a key as failed and disable it temporarily
-   */
-  markKeyAsFailed(
-    key: string,
-    error: string,
-    retryDelaySeconds?: number
-  ): void {
-    const stats = this.keyStats.get(key);
-    if (!stats) {
-      return;
-    }
-
-    stats.errorCount++;
-    stats.lastError = error;
-    stats.isDisabled = true;
-
-    // Default to 60 seconds cooldown, or use the retry delay from the error
-    const cooldownMs = (retryDelaySeconds || 60) * 1000;
-    stats.disabledUntil = Date.now() + cooldownMs;
-
-    const availableKeys = Array.from(this.keyStats.values()).filter(
-      (s) => !s.isDisabled
-    ).length;
-
-    logger.warn(
-      `[Cerebras Balancer] ⚠️  DISABLED key ${key.substring(0, 8)}... for ${
-        retryDelaySeconds || 60
-      }s due to: ${error}`
-    );
-    logger.warn(
-      `[Cerebras Balancer] 📊 Status: ${availableKeys}/${this.keys.length} keys available, ${stats.errorCount} total errors on this key`
-    );
+  // Legacy compatibility methods
+  getStats(): any[] {
+    return [];
   }
 
-  /**
-   * Get usage statistics for all keys
-   */
-  getStats(): KeyUsageStats[] {
-    return Array.from(this.keyStats.values()).map((stats) => ({
-      ...stats,
-      key: `${stats.key.substring(0, 8)}...`, // Mask the key for security
-    }));
-  }
-
-  /**
-   * Get the number of available keys
-   */
   getKeyCount(): number {
     return this.keys.length;
   }
-
-  /**
-   * Get the most recently used key (for error handling when key is not specified)
-   */
-  getMostRecentlyUsedKey(): string | undefined {
-    const sortedKeys = Array.from(this.keyStats.entries()).sort(
-      (a, b) => b[1].lastUsed - a[1].lastUsed
-    );
-    return sortedKeys[0]?.[0];
-  }
 }
 
-// Singleton instance
-let balancerInstance: CerebrasKeyBalancer | null = null;
-
-/**
- * Get or create the Cerebras key balancer instance
- */
 export function getCerebrasBalancer(): CerebrasKeyBalancer {
-  if (!balancerInstance) {
-    balancerInstance = new CerebrasKeyBalancer();
-  }
-  return balancerInstance;
+  return CerebrasKeyBalancer.getInstance();
 }
 
-/**
- * Get a load-balanced Cerebras provider instance
- */
-export function getBalancedCerebrasProvider(): ReturnType<
-  typeof createCerebras
+export function getBalancedCerebrasProvider(): Promise<
+  ReturnType<typeof createCerebras>
 > {
   return getCerebrasBalancer().getProvider();
 }
 
-/**
- * Handle API errors and mark keys as failed for automatic rotation
- * Call this from error handlers to disable problematic keys
- *
- * Now uses the standardized isCerebrasRateLimitError check
- */
-const RETRY_DELAY_REGEX = /retry in ([\d.]+)s/i;
+// Synchronous provider for agent initialization (uses cached provider)
+let _cachedSyncProvider: ReturnType<typeof createCerebras> | null = null;
+let _initPromise: Promise<void> | null = null;
 
-export function handleCerebrasError(error: any, apiKey?: string): void {
-  const balancer = getCerebrasBalancer();
+export function getBalancedCerebrasProviderSync(): ReturnType<
+  typeof createCerebras
+> {
+  if (_cachedSyncProvider) {
+    return _cachedSyncProvider;
+  }
 
-  // Extract error details from nested error structure
-  // AI_RetryError has lastError property with the actual API error
-  const lastError = error?.lastError || error;
-  const statusCode = lastError?.statusCode || error?.statusCode;
-  const errorMessage = lastError?.message || error?.message || "";
-  const errorData = lastError?.data || error?.data;
-  const errorCode = errorData?.code || "";
+  // Fallback to direct provider if not initialized yet
+  const fallbackKey = process.env.CEREBRAS_API_KEY;
+  if (fallbackKey) {
+    _cachedSyncProvider = createCerebras({ apiKey: fallbackKey });
 
-  // Use standardized rate limit check
-  const isRateLimitError = isCerebrasRateLimitError(error);
+    // Start async initialization in background if not already started
+    if (!_initPromise && typeof window === "undefined") {
+      _initPromise = getBalancedCerebrasProvider()
+        .then((provider) => {
+          _cachedSyncProvider = provider;
+          logger.log(
+            "[Cerebras Balancer] ✅ Sync provider upgraded to balanced"
+          );
+        })
+        .catch((err) => {
+          logger.warn(
+            "[Cerebras Balancer] ⚠️ Could not upgrade to balanced provider:",
+            err
+          );
+        });
+    }
 
-  logger.log(
-    `[Cerebras Balancer] 🔍 Analyzing error: Status ${statusCode}, Code: ${errorCode}, IsRateLimit: ${isRateLimitError}`
+    return _cachedSyncProvider;
+  }
+
+  // During build time, return a dummy provider to prevent errors
+  // This will never be called at runtime since routes are dynamic
+  logger.warn(
+    "[Cerebras Balancer] ⚠️ No API key available, returning placeholder provider"
   );
-
-  // Check if it's a server error (500)
-  const isServerError =
-    statusCode === 500 ||
-    statusCode >= 500 ||
-    errorMessage.includes("server error");
-
-  if (isRateLimitError || isServerError) {
-    // For rate limit errors, use shorter cooldown since it's temporary traffic
-    // For server errors, use medium cooldown
-    let retryDelay = 60; // default
-
-    if (isRateLimitError) {
-      retryDelay = 15; // Rate limit issues are usually temporary
-      logger.log(
-        "[Cerebras Balancer] 🚦 Rate limit error detected - using 15s cooldown"
-      );
-    } else if (isServerError) {
-      retryDelay = 30;
-      logger.log(
-        "[Cerebras Balancer] 🔧 Server error detected - using 30s cooldown"
-      );
-    }
-
-    // Extract retry delay from error if available
-    const retryMatch = errorMessage.match(RETRY_DELAY_REGEX);
-    if (retryMatch) {
-      retryDelay = Number.parseFloat(retryMatch[1]);
-      logger.log(
-        `[Cerebras Balancer] ⏱️  Using retry delay from error: ${retryDelay}s`
-      );
-    }
-
-    // If we have a specific API key, mark it as failed
-    // Otherwise, mark the most recently used key
-    const keyToMark = apiKey || balancer.getMostRecentlyUsedKey();
-
-    if (keyToMark) {
-      logger.log(
-        `[Cerebras Balancer] 🔄 Rotating away from failed key ${keyToMark.substring(
-          0,
-          8
-        )}...`
-      );
-      balancer.markKeyAsFailed(
-        keyToMark,
-        errorMessage ||
-          (isRateLimitError ? "Rate limit exceeded" : "Server error"),
-        retryDelay
-      );
-    } else {
-      logger.warn("[Cerebras Balancer] ⚠️  Could not identify which key failed");
-    }
-  } else {
-    logger.log(
-      "[Cerebras Balancer] ℹ️  Error not related to rate limits or server issues - no key rotation needed"
-    );
-  }
+  _cachedSyncProvider = createCerebras({ apiKey: "placeholder-for-build" });
+  return _cachedSyncProvider;
 }
 
-/**
- * Get statistics about key usage and health
- */
-export function getCerebrasStats(): KeyUsageStats[] {
+export function handleCerebrasError(error: any) {
+  return getCerebrasBalancer().handleError(error);
+}
+
+export function getCerebrasStats() {
   return getCerebrasBalancer().getStats();
-}
-
-/**
- * Log detailed health status of all keys
- */
-export function logCerebrasHealth(): void {
-  const stats = getCerebrasStats();
-  const healthyKeys = stats.filter((s) => !s.isDisabled).length;
-
-  logger.log("=".repeat(60));
-  logger.log("[Cerebras Balancer] 📊 KEY HEALTH REPORT");
-  logger.log("=".repeat(60));
-  logger.log(`Overall Status: ${healthyKeys}/${stats.length} keys available`);
-  logger.log("");
-
-  for (const stat of stats) {
-    const status = stat.isDisabled ? "🔴 DISABLED" : "🟢 ACTIVE";
-    const cooldownInfo = stat.disabledUntil
-      ? ` (until ${new Date(stat.disabledUntil).toLocaleTimeString()})`
-      : "";
-
-    logger.log(`Key: ${stat.key}`);
-    logger.log(`  Status: ${status}${cooldownInfo}`);
-    logger.log(`  Requests: ${stat.requestCount}`);
-    logger.log(`  Errors: ${stat.errorCount}`);
-    if (stat.lastError) {
-      logger.log(`  Last Error: ${stat.lastError}`);
-    }
-    logger.log("");
-  }
-  logger.log("=".repeat(60));
 }

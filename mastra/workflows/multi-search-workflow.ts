@@ -148,6 +148,7 @@ const multiSearchStep = createStep({
       const { tavilySearchAdvancedTool } = await import(
         "../tools/tavily-search-advanced"
       );
+      const { legalSearchTool } = await import("../tools/legal-search-tool");
 
       const allResults = [];
       let totalResults = 0;
@@ -159,36 +160,85 @@ const multiSearchStep = createStep({
           `[Multi-Search] Search ${i + 1}/${subQueries.length}: ${subQuery}`
         );
 
-        // Enhance each sub-query
-        const enhancedQuery = await enhanceSearchQuery(
-          subQuery,
-          conversationHistory || []
+        // Enhance the sub-query with variations and HyDE
+        const enhanced = await enhanceSearchQuery(
+            subQuery,
+            conversationHistory || []
         );
 
-        console.log(`[Multi-Search] Enhanced: ${enhancedQuery}`);
+        console.log(`[Multi-Search] Sub-query ${i+1} enhanced variations:`, enhanced.variations.length);
 
-        // Execute search
-        const searchResults = await tavilySearchAdvancedTool.execute({
-          context: {
-            query: enhancedQuery,
-            maxResults: 5, // 5 results per sub-query
-            jurisdiction,
-            includeRawContent: true,
-          },
-          runtimeContext,
+        // Prepare parallel search promises
+        // 1. Tavily search (use first variation + Zimbabwe context)
+        const tavilyQuery = enhanced.variations[0];
+        const tavilyPromise = tavilySearchAdvancedTool.execute({
+            context: {
+                query: tavilyQuery,
+                maxResults: 5, // Fewer results per sub-query
+                includeRawContent: true,
+                jurisdiction: jurisdiction || "Zimbabwe"
+            },
+            runtimeContext
         });
 
-        const results = searchResults.results || [];
-        totalResults += results.length;
+        // 2. Legal searches (Variations + HyDE)
+        // For multi-search, we use variations + HyDE but with lower topK
+        const legalQueries = [
+            enhanced.hydePassage,
+            ...enhanced.variations
+        ];
+
+        const legalPromise = legalSearchTool.execute({
+            context: {
+                queries: legalQueries, // Use batch input
+                topK: 5 // 5 results per variation
+            },
+            runtimeContext
+        }).catch(err => {
+            console.error(`[Multi-Search] Legal search failed for sub-query ${i+1}:`, err);
+            return { results: [], batchResults: [] };
+        });
+
+        // Execute all searches for this sub-query
+        const [tavilyResults, legalResultsOutput] = await Promise.all([
+            tavilyPromise,
+            legalPromise
+        ]);
+
+        // Merge legal results
+        const allLegalResults = legalResultsOutput.results || [];
+        
+        // Deduplicate legal results by docId
+        const uniqueLegalResults = Array.from(
+            new Map(allLegalResults.map(item => [item.docId, item])).values()
+        );
+
+        // Sort by score
+        uniqueLegalResults.sort((a, b) => b.score - a.score);
+        
+        // Take top 10 unique legal results
+        const finalLegalResults = uniqueLegalResults.slice(0, 10);
+
+        const mergedResults = [
+            ...finalLegalResults.map((r: any) => ({
+                title: `${r.source} - ${r.sourceFile}`,
+                url: `legal-db://${r.docId}`,
+                content: r.text,
+                score: r.score
+            })),
+            ...(tavilyResults.results || [])
+        ];
+
+        totalResults += mergedResults.length;
 
         allResults.push({
           subQuery,
-          enhancedQuery,
-          results,
+          enhancedQuery: enhanced.variations[0], // Use primary variation for display
+          results: mergedResults,
         });
 
         console.log(
-          `[Multi-Search] Search ${i + 1} found ${results.length} results`
+          `[Multi-Search] Search ${i + 1} found ${mergedResults.length} results (Legal: ${finalLegalResults.length}, Web: ${tavilyResults.results?.length || 0})`
         );
       }
 

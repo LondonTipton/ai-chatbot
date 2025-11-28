@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getAllTools } from "../../../mastra/tools";
-import { getBalancedCerebrasProvider } from "../cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "../cerebras-key-balancer";
 
 /**
  * Recommendations Sub-Agent
@@ -108,7 +108,7 @@ For each issue:
 Implementing these recommendations will create a more robust, clear, and legally sound document that protects both parties' interests.`,
 
   model: () => {
-    const provider = getBalancedCerebrasProvider();
+    const provider = getBalancedCerebrasProviderSync();
     return provider("gpt-oss-120b");
   },
 

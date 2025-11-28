@@ -15,9 +15,9 @@
  */
 
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 
 export const contentSummarizerAgent = new Agent({
   name: "Content Summarizer",

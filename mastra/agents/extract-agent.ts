@@ -1,12 +1,12 @@
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 import { tavilyExtractTool } from "../tools/tavily-extract";
 
 /**
  * Initialize the Cerebras provider ONCE at module load time
  * This prevents multiple provider instances during streaming
  */
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 console.log("[Mastra] extract-agent → Cerebras provider initialized");
 
 /**

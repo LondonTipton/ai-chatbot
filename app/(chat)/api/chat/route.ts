@@ -46,13 +46,22 @@ export function getStreamContext() {
       globalStreamContext = createResumableStreamContext({
         waitUntil: after,
       });
+      logger.log(
+        "[Resumable Streams] ✅ Context initialized successfully - automatic stream recovery enabled"
+      );
     } catch (error: any) {
       if (error.message.includes("REDIS_URL")) {
-        logger.log(
-          " > Resumable streams are disabled due to missing REDIS_URL"
+        logger.warn(
+          "[Resumable Streams] ⚠️  DISABLED - REDIS_URL environment variable is missing"
+        );
+        logger.warn(
+          "[Resumable Streams] 💡 Add REDIS_URL to .env.local to enable automatic stream recovery on connection loss"
         );
       } else {
-        logger.error(error);
+        logger.error(
+          "[Resumable Streams] ❌ Initialization failed:",
+          error
+        );
       }
     }
   }
@@ -446,276 +455,288 @@ export async function POST(request: Request) {
         );
       }
 
-      // Use AI SDK v5's native toUIMessageStreamResponse()
-      // This is the official pattern from @mastra/ai-sdk documentation
-      const response = mastraStream.toUIMessageStreamResponse({
-        onFinish: async ({ messages }: { messages: any[] }) => {
-          // Save assistant messages to database
-          try {
-            logger.log("[Mastra] 💾 Saving assistant message to database", {
-              messageCount: messages.length,
-            });
+      // Get stream context for resumability
+      const streamContext = getStreamContext();
 
-            const assistantMessages = messages.filter(
-              (msg: any) => msg.role === "assistant"
-            );
+      // Import resumable stream wrapper
+      const { createResumableMastraStream } = await import(
+        "@/lib/ai/mastra-sdk-integration"
+      );
 
-            if (assistantMessages.length > 0) {
-              // Log if workflow tool was used (check for tool calls in messages)
-              const hasToolCalls = assistantMessages.some((msg: any) =>
-                msg.parts?.some(
-                  (part: any) =>
-                    part.type === "tool-call" &&
-                    part.toolName === "advancedSearchWorkflow"
-                )
+      // Create resumable stream with callbacks
+      const response = await createResumableMastraStream(
+        mastraStream,
+        streamId,
+        streamContext,
+        {
+          onFinish: async ({ messages }: { messages: any[] }) => {
+            // Save assistant messages to database
+            try {
+              logger.log("[Mastra] 💾 Saving assistant message to database", {
+                messageCount: messages.length,
+              });
+
+              const assistantMessages = messages.filter(
+                (msg: any) => msg.role === "assistant"
               );
 
-              if (hasToolCalls) {
-                logger.log(
-                  "[Mastra] 🔧 Workflow tool 'advancedSearchWorkflow' was invoked during this interaction"
-                );
-              }
-
-              // Log createDocument tool invocations
-              const hasCreateDocumentCalls = assistantMessages.some(
-                (msg: any) =>
+              if (assistantMessages.length > 0) {
+                // Log if workflow tool was used (check for tool calls in messages)
+                const hasToolCalls = assistantMessages.some((msg: any) =>
                   msg.parts?.some(
                     (part: any) =>
                       part.type === "tool-call" &&
-                      part.toolName === "createDocument"
+                      part.toolName === "advancedSearchWorkflow"
                   )
-              );
-
-              if (hasCreateDocumentCalls) {
-                logger.log(
-                  "[Mastra] 📄 Document creation tool 'createDocument' was successfully invoked"
                 );
 
-                // Extract createDocument tool results to log document details
+                if (hasToolCalls) {
+                  logger.log(
+                    "[Mastra] 🔧 Workflow tool 'advancedSearchWorkflow' was invoked during this interaction"
+                  );
+                }
+
+                // Log createDocument tool invocations
+                const hasCreateDocumentCalls = assistantMessages.some(
+                  (msg: any) =>
+                    msg.parts?.some(
+                      (part: any) =>
+                        part.type === "tool-call" &&
+                        part.toolName === "createDocument"
+                    )
+                );
+
+                if (hasCreateDocumentCalls) {
+                  logger.log(
+                    "[Mastra] 📄 Document creation tool 'createDocument' was successfully invoked"
+                  );
+
+                  // Extract createDocument tool results to log document details
+                  for (const msg of assistantMessages) {
+                    for (const part of msg.parts || []) {
+                      if (
+                        part.type === "tool-call" &&
+                        part.toolName === "createDocument"
+                      ) {
+                        logger.log(
+                          `[Mastra] 📝 Document created: "${part.args?.title}" (kind: ${part.args?.kind})`
+                        );
+                      }
+                      if (
+                        part.type === "tool-result" &&
+                        part.toolName === "createDocument"
+                      ) {
+                        try {
+                          const result =
+                            typeof part.content === "string"
+                              ? JSON.parse(part.content)
+                              : part.content;
+                          logger.log(
+                            `[Mastra] ✅ Document creation result: ID=${result.id}, Title="${result.title}"`
+                          );
+                        } catch (_) {
+                          logger.log(
+                            "[Mastra] ✅ Document creation completed successfully"
+                          );
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // Log all tool calls for analysis
+                // NOTE: Mastra workflows use part.type = "tool-{toolName}" instead of "tool-call"
+                const allToolCalls = assistantMessages.flatMap(
+                  (msg: any) =>
+                    msg.parts
+                      ?.filter(
+                        (part: any) =>
+                          part.type === "tool-call" ||
+                          part.type?.startsWith("tool-")
+                      )
+                      .map((part: any) => {
+                        // Extract tool name from part.toolName or part.type
+                        if (part.toolName) {
+                          return part.toolName;
+                        }
+                        if (part.type?.startsWith("tool-")) {
+                          return part.type.substring(5); // Remove "tool-" prefix
+                        }
+                        return "unknown-tool";
+                      }) || []
+                );
+
+                if (allToolCalls.length > 0) {
+                  logger.log(
+                    `[Mastra] 🔨 Tools invoked in this interaction: ${allToolCalls.join(
+                      ", "
+                    )}`
+                  );
+                }
+
+                // 🚨 CITATION VALIDATION: Check for hallucinations before saving
+                const hasToolUsage = allToolCalls.some(
+                  (toolName: string) =>
+                    [
+                      "quickFactSearch",
+                      "standardResearch",
+                      "deepResearch",
+                      "comprehensiveResearch",
+                      "multiSearch",
+                      "tavilySearchAdvancedTool",
+                      "advancedSearchWorkflowTool",
+                    ].includes(toolName) ||
+                    toolName?.toLowerCase().includes("search") ||
+                    toolName?.toLowerCase().includes("research") ||
+                    toolName?.toLowerCase().includes("workflow")
+                );
+
+                // Debug logging for tool detection
+                if (allToolCalls.length > 0) {
+                  logger.log(
+                    `[Validator] 🔍 Tool detection: ${allToolCalls.length} tools called, hasToolUsage=${hasToolUsage}`
+                  );
+                  logger.log(
+                    `[Validator] 🔍 Tool names: ${allToolCalls.join(", ")}`
+                  );
+                }
+
+                const responseText =
+                  assistantMessages[0]?.content ||
+                  assistantMessages[0]?.parts
+                    ?.filter((p: any) => p.type === "text")
+                    .map((p: any) => p.text)
+                    .join(" ") ||
+                  "";
+
+                // Extract raw tool results for citation verification
+                const rawToolResults: any[] = [];
+
                 for (const msg of assistantMessages) {
                   for (const part of msg.parts || []) {
-                    if (
-                      part.type === "tool-call" &&
-                      part.toolName === "createDocument"
-                    ) {
-                      logger.log(
-                        `[Mastra] 📝 Document created: "${part.args?.title}" (kind: ${part.args?.kind})`
-                      );
-                    }
-                    if (
-                      part.type === "tool-result" &&
-                      part.toolName === "createDocument"
-                    ) {
+                    // Check for tool results with rawResults field
+                    if (part.type === "tool-result") {
                       try {
                         const result =
                           typeof part.content === "string"
                             ? JSON.parse(part.content)
                             : part.content;
-                        logger.log(
-                          `[Mastra] ✅ Document creation result: ID=${result.id}, Title="${result.title}"`
-                        );
-                      } catch (_) {
-                        logger.log(
-                          "[Mastra] ✅ Document creation completed successfully"
-                        );
+
+                        // Extract rawResults if available
+                        if (
+                          result?.rawResults &&
+                          Array.isArray(result.rawResults)
+                        ) {
+                          rawToolResults.push(...result.rawResults);
+                          logger.log(
+                            `[Validator] 📊 Extracted ${result.rawResults.length} raw results from ${part.toolName}`
+                          );
+                        }
+                      } catch {
+                        // Ignore parse errors
                       }
                     }
                   }
                 }
-              }
 
-              // Log all tool calls for analysis
-              // NOTE: Mastra workflows use part.type = "tool-{toolName}" instead of "tool-call"
-              const allToolCalls = assistantMessages.flatMap(
-                (msg: any) =>
-                  msg.parts
-                    ?.filter(
-                      (part: any) =>
-                        part.type === "tool-call" ||
-                        part.type?.startsWith("tool-")
-                    )
-                    .map((part: any) => {
-                      // Extract tool name from part.toolName or part.type
-                      if (part.toolName) {
-                        return part.toolName;
-                      }
-                      if (part.type?.startsWith("tool-")) {
-                        return part.type.substring(5); // Remove "tool-" prefix
-                      }
-                      return "unknown-tool";
-                    }) || []
-              );
-
-              if (allToolCalls.length > 0) {
                 logger.log(
-                  `[Mastra] 🔨 Tools invoked in this interaction: ${allToolCalls.join(
-                    ", "
-                  )}`
-                );
-              }
-
-              // 🚨 CITATION VALIDATION: Check for hallucinations before saving
-              const hasToolUsage = allToolCalls.some(
-                (toolName: string) =>
-                  [
-                    "quickFactSearch",
-                    "standardResearch",
-                    "deepResearch",
-                    "comprehensiveResearch",
-                    "multiSearch",
-                    "tavilySearchAdvancedTool",
-                    "advancedSearchWorkflowTool",
-                  ].includes(toolName) ||
-                  toolName?.toLowerCase().includes("search") ||
-                  toolName?.toLowerCase().includes("research") ||
-                  toolName?.toLowerCase().includes("workflow")
-              );
-
-              // Debug logging for tool detection
-              if (allToolCalls.length > 0) {
-                logger.log(
-                  `[Validator] 🔍 Tool detection: ${allToolCalls.length} tools called, hasToolUsage=${hasToolUsage}`
-                );
-                logger.log(
-                  `[Validator] 🔍 Tool names: ${allToolCalls.join(", ")}`
-                );
-              }
-
-              const responseText =
-                assistantMessages[0]?.content ||
-                assistantMessages[0]?.parts
-                  ?.filter((p: any) => p.type === "text")
-                  .map((p: any) => p.text)
-                  .join(" ") ||
-                "";
-
-              // Extract raw tool results for citation verification
-              const rawToolResults: any[] = [];
-
-              for (const msg of assistantMessages) {
-                for (const part of msg.parts || []) {
-                  // Check for tool results with rawResults field
-                  if (part.type === "tool-result") {
-                    try {
-                      const result =
-                        typeof part.content === "string"
-                          ? JSON.parse(part.content)
-                          : part.content;
-
-                      // Extract rawResults if available
-                      if (
-                        result?.rawResults &&
-                        Array.isArray(result.rawResults)
-                      ) {
-                        rawToolResults.push(...result.rawResults);
-                        logger.log(
-                          `[Validator] 📊 Extracted ${result.rawResults.length} raw results from ${part.toolName}`
-                        );
-                      }
-                    } catch {
-                      // Ignore parse errors
-                    }
-                  }
-                }
-              }
-
-              logger.log(
-                `[Validator] 📊 Total raw results for verification: ${rawToolResults.length}`
-              );
-
-              // Validate citations with raw tool results
-              const validation = validateCitations(
-                responseText,
-                hasToolUsage,
-                rawToolResults.length > 0 ? rawToolResults : undefined
-              );
-
-              if (!validation.isValid) {
-                logger.error(
-                  "[Validator] ❌ Invalid citations detected:",
-                  validation.violations
-                );
-                logger.error(
-                  `[Validator] Citation count: ${validation.citationCount}, Tool used: ${hasToolUsage}`
+                  `[Validator] 📊 Total raw results for verification: ${rawToolResults.length}`
                 );
 
-                if (
-                  validation.unverifiedCitations &&
-                  validation.unverifiedCitations.length > 0
-                ) {
+                // Validate citations with raw tool results
+                const validation = validateCitations(
+                  responseText,
+                  hasToolUsage,
+                  rawToolResults.length > 0 ? rawToolResults : undefined
+                );
+
+                if (!validation.isValid) {
                   logger.error(
-                    `[Validator] 🚨 Unverified citations: ${validation.unverifiedCitations.join(
-                      ", "
-                    )}`
+                    "[Validator] ❌ Invalid citations detected:",
+                    validation.violations
+                  );
+                  logger.error(
+                    `[Validator] Citation count: ${validation.citationCount}, Tool used: ${hasToolUsage}`
+                  );
+
+                  if (
+                    validation.unverifiedCitations &&
+                    validation.unverifiedCitations.length > 0
+                  ) {
+                    logger.error(
+                      `[Validator] 🚨 Unverified citations: ${validation.unverifiedCitations.join(
+                        ", "
+                      )}`
+                    );
+                  }
+                }
+
+                if (validation.suspiciousPatterns.length > 0) {
+                  logger.warn(
+                    "[Validator] ⚠️ Suspicious patterns detected:",
+                    validation.suspiciousPatterns
                   );
                 }
+
+                // Log verification metrics
+                if (validation.sourceGroundingRate !== undefined) {
+                  logger.log(
+                    `[Validator] 📈 Source grounding rate: ${(
+                      validation.sourceGroundingRate * 100
+                    ).toFixed(1)}%`
+                  );
+                  logger.log(
+                    `[Validator] ✅ Verified: ${
+                      validation.verifiedCitations?.length || 0
+                    }, ❌ Unverified: ${
+                      validation.unverifiedCitations?.length || 0
+                    }`
+                  );
+                }
+
+                await saveMessages({
+                  messages: assistantMessages.map((currentMessage: any) => ({
+                    id: currentMessage.id,
+                    role: currentMessage.role,
+                    parts: currentMessage.parts,
+                    createdAt: new Date(),
+                    attachments: [],
+                    chatId: id,
+                  })),
+                });
+
+                logger.log("[Mastra] ✅ Assistant message saved successfully");
               }
 
-              if (validation.suspiciousPatterns.length > 0) {
-                logger.warn(
-                  "[Validator] ⚠️ Suspicious patterns detected:",
-                  validation.suspiciousPatterns
-                );
-              }
-
-              // Log verification metrics
-              if (validation.sourceGroundingRate !== undefined) {
-                logger.log(
-                  `[Validator] 📈 Source grounding rate: ${(
-                    validation.sourceGroundingRate * 100
-                  ).toFixed(1)}%`
-                );
-                logger.log(
-                  `[Validator] ✅ Verified: ${
-                    validation.verifiedCitations?.length || 0
-                  }, ❌ Unverified: ${
-                    validation.unverifiedCitations?.length || 0
-                  }`
-                );
-              }
-
-              await saveMessages({
-                messages: assistantMessages.map((currentMessage: any) => ({
-                  id: currentMessage.id,
-                  role: currentMessage.role,
-                  parts: currentMessage.parts,
-                  createdAt: new Date(),
-                  attachments: [],
-                  chatId: id,
-                })),
-              });
-
-              logger.log("[Mastra] ✅ Assistant message saved successfully");
+              // Commit transaction on success
+              await commitTransaction(txId);
+              logger.log(`[Usage] Committed transaction ${txId}`);
+            } catch (err) {
+              logger.error("[Mastra] ❌ Failed to save assistant message:", err);
+              // Rollback transaction on error
+              await rollbackTransaction(txId);
+              logger.log(
+                `[Usage] Rolled back transaction ${txId} due to save error`
+              );
             }
-
-            // Commit transaction on success
-            await commitTransaction(txId);
-            logger.log(`[Usage] Committed transaction ${txId}`);
-          } catch (err) {
-            logger.error("[Mastra] ❌ Failed to save assistant message:", err);
+          },
+          onError: async ({ error }: { error: Error | string }) => {
+            logger.error("[Mastra] ❌ Stream error:", error);
             // Rollback transaction on error
-            await rollbackTransaction(txId);
-            logger.log(
-              `[Usage] Rolled back transaction ${txId} due to save error`
-            );
-          }
-        },
-        onError: async ({ error }: { error: Error | string }) => {
-          logger.error("[Mastra] ❌ Stream error:", error);
-          // Rollback transaction on error
-          try {
-            await rollbackTransaction(txId);
-            logger.log(
-              `[Usage] Rolled back transaction ${txId} due to stream error`
-            );
-          } catch (err) {
-            logger.error(
-              `[Usage] Failed to rollback transaction ${txId}:`,
-              err
-            );
-          }
-        },
-      });
+            try {
+              await rollbackTransaction(txId);
+              logger.log(
+                `[Usage] Rolled back transaction ${txId} due to stream error`
+              );
+            } catch (err) {
+              logger.error(
+                `[Usage] Failed to rollback transaction ${txId}:`,
+                err
+              );
+            }
+          },
+        }
+      );
 
       return response;
     } catch (error) {

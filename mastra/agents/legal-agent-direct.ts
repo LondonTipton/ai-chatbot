@@ -1,11 +1,11 @@
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 
 /**
  * Initialize the Cerebras provider ONCE at module load time
  * This prevents multiple provider instances during streaming
  */
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 
 /**
  * Direct Legal AI Agent (NO TOOLS)

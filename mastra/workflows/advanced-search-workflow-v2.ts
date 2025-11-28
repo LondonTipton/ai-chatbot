@@ -68,57 +68,109 @@ const searchStep = createStep({
         "../agents/query-enhancer-agent"
       );
 
-      // Enhance query with conversation context
-      const enhancedQuery = await enhanceSearchQuery(
+      // Enhance query with variations and HyDE
+      const enhanced = await enhanceSearchQuery(
         query,
         conversationHistory || []
       );
 
-      console.log("[Advanced Search V2] Enhanced query:", enhancedQuery);
+      console.log("[Advanced Search V2] Enhanced variations:", enhanced.variations.length);
+      console.log("[Advanced Search V2] HyDE passage length:", enhanced.hydePassage.length);
 
-      // Import Tavily advanced tool
+      // Import Tavily tool
       const { tavilySearchAdvancedTool } = await import(
         "../tools/tavily-search-advanced"
       );
+      const { legalSearchTool } = await import("../tools/legal-search-tool");
 
-      // Call Tavily with advanced configuration (includes raw content)
-      const searchResults = await tavilySearchAdvancedTool.execute({
-        context: {
-          query: enhancedQuery,
-          maxResults: 10, // Advanced search: 10 results with full content
-          jurisdiction: jurisdiction || "Zimbabwe",
-          includeRawContent: true, // Full source text for deep analysis
-        },
-        runtimeContext,
-      });
-
-      console.log(
-        "[Advanced Search V2] Tavily results:",
-        searchResults.results.length
-      );
-
-      // Format raw results for Chat Agent (including full content)
-      let response = "";
-
-      if (searchResults.results.length > 0) {
-        response = `SEARCH RESULTS FOR: "${query}"\n\n`;
-        response += `Found ${searchResults.results.length} results with full content:\n\n`;
-
-        searchResults.results.forEach((result: any, i: number) => {
-          response += `--- RESULT ${i + 1} ---\n`;
-          response += `Title: ${result.title}\n`;
-          response += `URL: ${result.url}\n`;
-          response += `Relevance Score: ${result.score}\n`;
-          response += `Summary:\n${result.content}\n\n`;
-
-          // Include raw content if available (full source text)
-          if (result.rawContent) {
-            response += `Full Source Text:\n${result.rawContent}\n\n`;
-          }
+      // Prepare parallel search promises
+      // 1. Tavily search (use first variation + Zimbabwe context)
+      const tavilyQuery = enhanced.variations[0];
+      const tavilyPromise = tavilySearchAdvancedTool.execute({
+          context: {
+            query: tavilyQuery,
+            maxResults: 10,
+            includeRawContent: true,
+            jurisdiction: jurisdiction || "Zimbabwe",
+          },
+          runtimeContext,
         });
 
-        response += `\nINSTRUCTIONS: Analyze these search results with their full source text and provide a comprehensive, detailed answer to the user's question. Use ALL relevant information from the results above. Cite sources using [Title](URL) format. You have access to the complete source text for deep analysis.`;
+      // 2. Legal searches (Variations + HyDE)
+      // For advanced search, we use all 3 variations + HyDE
+      const legalQueries = [
+          enhanced.hydePassage,
+          ...enhanced.variations
+      ];
+
+      const legalPromise = legalSearchTool.execute({
+        context: {
+            queries: legalQueries, // Use batch input
+            topK: 20 // 20 results per variation
+        },
+        runtimeContext
+      }).catch(err => {
+        console.error("[Advanced Search V2] Legal search failed:", err);
+        return { results: [], batchResults: [] };
+      });
+
+      // Execute all searches
+      const [tavilyResults, legalResultsOutput] = await Promise.all([
+        tavilyPromise,
+        legalPromise
+      ]);
+
+      // Merge legal results
+      const allLegalResults = legalResultsOutput.results || [];
+      
+      // Deduplicate legal results by docId
+      const uniqueLegalResults = Array.from(
+          new Map(allLegalResults.map(item => [item.docId, item])).values()
+      );
+
+      // Sort by score
+      uniqueLegalResults.sort((a, b) => b.score - a.score);
+      
+      // Take top 20 unique legal results
+      const finalLegalResults = uniqueLegalResults.slice(0, 20);
+
+      console.log(
+        "[Advanced Search V2] Results - Tavily:",
+        tavilyResults.results.length,
+        "Legal (Unique):",
+        finalLegalResults.length
+      );
+
+      // Format raw results for Chat Agent
+      let response = "";
+
+      // Add Legal Results first
+      if (finalLegalResults.length > 0) {
+          response += `INTERNAL LEGAL DATABASE RESULTS (${finalLegalResults.length}):\n\n`;
+          finalLegalResults.forEach((result: any, i: number) => {
+              response += `--- LEGAL RESULT ${i + 1} ---\n`;
+              response += `Source: ${result.source} (${result.sourceFile})\n`;
+              response += `Relevance Score: ${result.score}\n`;
+              response += `Content:\n${result.text}\n\n`;
+          });
+          response += `WEB SEARCH RESULTS (${tavilyResults.results.length}):\n\n`;
       } else {
+          response += `SEARCH RESULTS FOR: "${query}"\n\n`;
+          response += `WEB SEARCH RESULTS (${tavilyResults.results.length}):\n\n`;
+      }
+
+      // Add Tavily Results
+      tavilyResults.results.forEach((result: any) => {
+        response += `--- WEB RESULT ${result.position} ---\n`;
+        response += `Title: ${result.title}\n`;
+        response += `URL: ${result.url}\n`;
+        response += `Content:\n${result.content}\n\n`;
+        if (result.rawContent) {
+           response += `Full Content Preview:\n${result.rawContent.substring(0, 500)}...\n\n`;
+        }
+      });
+      
+      if (tavilyResults.results.length === 0 && finalLegalResults.length === 0) {
         response = `No search results found for: "${query}"
 
 This might be because:
@@ -130,13 +182,21 @@ I recommend:
 - Rephrasing the query
 - Checking specialized legal databases
 - Consulting with a legal practitioner`;
+      } else {
+          response += `\nINSTRUCTIONS: Analyze these search results and provide a comprehensive answer to the user's question. Use ALL relevant information from the results above. Cite sources using [Title](URL) format.`;
       }
 
       // Extract sources for metadata
-      const sources = searchResults.results.map((r: any) => ({
-        title: r.title,
-        url: r.url,
-      }));
+      const sources = [
+          ...finalLegalResults.map((r: any) => ({
+              title: `${r.source} - ${r.sourceFile}`,
+              url: `legal-db://${r.docId || 'unknown'}`,
+          })),
+          ...tavilyResults.results.map((r: any) => ({
+            title: r.title,
+            url: r.url,
+          }))
+      ];
 
       // Check if summarization is needed (>50K tokens)
       const { estimateTokens, shouldSummarize } = await import(
@@ -159,7 +219,7 @@ I recommend:
         const summarizationResult = await summarizeLegalContent(response, {
           query,
           jurisdiction: jurisdiction || "Zimbabwe",
-          sourceCount: searchResults.results.length,
+          sourceCount: sources.length,
         });
 
         response = summarizationResult.summarizedContent;
@@ -190,7 +250,7 @@ I recommend:
         sources,
         totalTokens,
         summarized,
-        rawResults: searchResults,
+        rawResults: tavilyResults,
       };
     } catch (error) {
       console.error("[Advanced Search V2] Error:", error);

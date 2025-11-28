@@ -2,6 +2,7 @@ import "server-only";
 
 import { Agent } from "@mastra/core/agent";
 import { createToolsWithContext } from "@/lib/services/tool-context-factory";
+import { legalSearchTool } from "../tools/legal-search-tool";
 import { tavilyExtractTool } from "../tools/tavily-extract";
 import { tavilySearchTool } from "../tools/tavily-search";
 
@@ -118,6 +119,7 @@ Remember: You are a research assistant, not a lawyer. Always remind users to con
     tools: {
       tavilySearch: tavilySearchTool,
       tavilyExtract: tavilyExtractTool,
+      legalSearch: legalSearchTool,
       createDocument: contextTools.createDocument,
       updateDocument: contextTools.updateDocument,
       requestSuggestions: contextTools.requestSuggestions,

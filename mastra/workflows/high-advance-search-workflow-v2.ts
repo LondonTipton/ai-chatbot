@@ -70,12 +70,12 @@ const searchStep = createStep({
       );
 
       // Enhance query with conversation context
-      const enhancedQuery = await enhanceSearchQuery(
+      const enhanced = await enhanceSearchQuery(
         query,
         conversationHistory || []
       );
 
-      console.log("[High-Advanced Search V2] Enhanced query:", enhancedQuery);
+      console.log("[High-Advanced Search V2] Enhanced query:", enhanced);
 
       // Import Tavily advanced tool
       const { tavilySearchAdvancedTool } = await import(
@@ -85,7 +85,7 @@ const searchStep = createStep({
       // Call Tavily with high-advanced configuration (20 results, no raw content)
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
-          query: enhancedQuery,
+          query: enhanced.variations[0] || query,
           maxResults: 20, // High-advanced: 20 results for breadth
           jurisdiction: jurisdiction || "Zimbabwe",
           includeRawContent: false, // Summaries only for pattern analysis

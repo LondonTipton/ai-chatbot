@@ -32,7 +32,8 @@ export const tavilyAdvancedSearch = tool({
     logger.log(`[tavilyAdvancedSearch] 📊 maxResults: ${maxResults}`);
 
     try {
-      const apiKey = process.env.TAVILY_API_KEY;
+      const { getTavilyBalancer } = await import("@/lib/ai/tavily-key-balancer");
+      const apiKey = await getTavilyBalancer().getApiKey(2);
 
       if (!apiKey) {
         logger.error("[tavilyAdvancedSearch] ❌ TAVILY_API_KEY not configured");

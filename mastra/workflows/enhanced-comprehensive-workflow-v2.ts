@@ -81,41 +81,97 @@ const initialSearchStep = createStep({
         "../agents/query-enhancer-agent"
       );
 
-      // Enhance query
-      const enhancedQuery = await enhanceSearchQuery(
+      // Enhance query with variations and HyDE
+      const enhanced = await enhanceSearchQuery(
         query,
         conversationHistory || []
       );
 
-      console.log("[Enhanced Comprehensive V2] Enhanced query:", enhancedQuery);
+      console.log("[Enhanced Workflow V2] Enhanced variations:", enhanced.variations.length);
+      console.log("[Enhanced Workflow V2] HyDE passage length:", enhanced.hydePassage.length);
 
-      // Import Tavily advanced tool
+      // Import Tavily tool
       const { tavilySearchAdvancedTool } = await import(
         "../tools/tavily-search-advanced"
       );
+      const { legalSearchTool } = await import("../tools/legal-search-tool");
 
-      // Initial search with raw content
-      const searchResults = await tavilySearchAdvancedTool.execute({
+      // Prepare parallel search promises
+      // 1. Tavily search (use first variation + Zimbabwe context)
+      const tavilyQuery = enhanced.variations[0];
+      const tavilyPromise = tavilySearchAdvancedTool.execute({
+          context: {
+            query: tavilyQuery,
+            maxResults: 15,
+            includeRawContent: true,
+            jurisdiction: jurisdiction || "Zimbabwe",
+          },
+          runtimeContext,
+        });
+
+      // 2. Legal searches (Variations + HyDE)
+      // For enhanced search, we use all variations + HyDE
+      const legalQueries = [
+          enhanced.hydePassage,
+          ...enhanced.variations
+      ];
+
+      const legalPromise = legalSearchTool.execute({
         context: {
-          query: enhancedQuery,
-          jurisdiction,
-          maxResults: 15, // Enhanced: 15 results for initial search
-          includeRawContent: true, // Full content for deep analysis
+            queries: legalQueries, // Use batch input
+            topK: 30 // 30 results per variation
         },
-        runtimeContext,
+        runtimeContext
+      }).catch(err => {
+        console.error("[Enhanced Comprehensive V2] Legal search failed:", err);
+        return { results: [], batchResults: [] };
       });
 
-      console.log(
-        "[Enhanced Comprehensive V2] Initial results:",
-        searchResults.results.length
+      // Execute all searches
+      const [tavilyResults, legalResultsOutput] = await Promise.all([
+        tavilyPromise,
+        legalPromise
+      ]);
+
+      // Merge legal results
+      const allLegalResults = legalResultsOutput.results || [];
+      
+      // Deduplicate legal results by docId
+      const uniqueLegalResults = Array.from(
+          new Map(allLegalResults.map(item => [item.docId, item])).values()
       );
 
-      // Format results
-      let initialResults = `INITIAL COMPREHENSIVE SEARCH RESULTS FOR: "${query}"\n\n`;
-      initialResults += `Found ${searchResults.results.length} results with full content:\n\n`;
+      // Sort by score
+      uniqueLegalResults.sort((a, b) => b.score - a.score);
+      
+      // Take top 30 unique legal results
+      const finalLegalResults = uniqueLegalResults.slice(0, 30);
 
-      searchResults.results.forEach((result: any, i: number) => {
-        initialResults += `--- RESULT ${i + 1} ---\n`;
+      console.log(
+        "[Enhanced Workflow V2] Results - Tavily:",
+        tavilyResults.results.length,
+        "Legal (Unique):",
+        finalLegalResults.length
+      );
+
+      // Format raw results for Chat Agent
+      let initialResults = "";
+
+      // Add Legal Results first
+      if (finalLegalResults.length > 0) {
+          initialResults += `INTERNAL LEGAL DATABASE RESULTS (${finalLegalResults.length}):\n\n`;
+          finalLegalResults.forEach((result: any, i: number) => {
+              initialResults += `--- LEGAL RESULT ${i + 1} ---\n`;
+              initialResults += `Source: ${result.source} (${result.sourceFile})\n`;
+              initialResults += `Relevance Score: ${result.score}\n`;
+              initialResults += `Content:\n${result.text}\n\n`;
+          });
+      }
+      
+      // Then add Web Results
+      initialResults += `WEB SEARCH RESULTS (${tavilyResults.results.length}):\n\n`;
+      tavilyResults.results.forEach((result: any, i: number) => {
+        initialResults += `--- WEB RESULT ${i + 1} ---\n`;
         initialResults += `Title: ${result.title}\n`;
         initialResults += `URL: ${result.url}\n`;
         initialResults += `Relevance Score: ${result.score}\n`;
@@ -126,10 +182,17 @@ const initialSearchStep = createStep({
         }
       });
 
-      const initialSources = searchResults.results.map((r: any) => ({
-        title: r.title,
-        url: r.url,
-      }));
+      // Extract sources for metadata
+      const initialSources = [
+          ...finalLegalResults.map((r: any) => ({
+              title: `${r.source} - ${r.sourceFile}`,
+              url: `legal-db://${r.docId || 'unknown'}`,
+          })),
+          ...tavilyResults.results.map((r: any) => ({
+            title: r.title,
+            url: r.url,
+          }))
+      ];
 
       return {
         query,
@@ -208,11 +271,11 @@ const gapAnalysisStep = createStep({
     try {
       // Import gap analyzer agent
       const { Agent } = await import("@mastra/core/agent");
-      const { getBalancedCerebrasProvider } = await import(
+      const { getBalancedCerebrasProviderSync } = await import(
         "@/lib/ai/cerebras-key-balancer"
       );
 
-      const cerebrasProvider = getBalancedCerebrasProvider();
+      const cerebrasProvider = getBalancedCerebrasProviderSync();
 
       const gapAnalyzerAgent = new Agent({
         name: "Gap Analyzer",
@@ -496,11 +559,11 @@ const chatAgentStep = createStep({
     try {
       // Import Chat Agent
       const { Agent } = await import("@mastra/core/agent");
-      const { getBalancedCerebrasProvider } = await import(
+      const { getBalancedCerebrasProviderSync } = await import(
         "@/lib/ai/cerebras-key-balancer"
       );
 
-      const cerebrasProvider = getBalancedCerebrasProvider();
+      const cerebrasProvider = getBalancedCerebrasProviderSync();
 
       const chatAgent = new Agent({
         name: "Chat Agent",

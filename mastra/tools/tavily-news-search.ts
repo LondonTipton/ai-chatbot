@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getTavilyBalancer } from "@/lib/ai/tavily-key-balancer";
 import {
   type DomainStrategy,
   getExcludeDomains,
@@ -138,10 +139,11 @@ export const tavilyNewsSearchTool = createTool({
     };
 
     // Validate environment
-    if (!process.env.TAVILY_API_KEY) {
-      throw new Error(
-        "TAVILY_API_KEY is not configured. Please set the environment variable."
-      );
+    // Get API key from load balancer (Cost: 1 credit for basic/news search)
+    const apiKey = await getTavilyBalancer().getApiKey(1);
+
+    if (!apiKey) {
+      throw new Error("Failed to retrieve Tavily API key from load balancer");
     }
 
     // Use query directly - it's already enhanced by query-enhancer-agent
@@ -162,7 +164,7 @@ export const tavilyNewsSearchTool = createTool({
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         const requestBody: Record<string, unknown> = {
-          api_key: process.env.TAVILY_API_KEY,
+          api_key: apiKey,
           query: enhancedQuery,
           topic: "news", // Use news topic for time-sensitive queries
           days: days || 7, // Time filtering parameter

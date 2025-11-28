@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { getTavilyBalancer } from "../tavily-key-balancer";
 
 /**
  * Tavily QNA Search Tool (OPTIMIZED)
@@ -27,7 +28,7 @@ export const tavilyQna = tool({
     const startTime = Date.now();
 
     try {
-      const apiKey = process.env.TAVILY_API_KEY;
+      const apiKey = await getTavilyBalancer().getApiKey(2);
 
       if (!apiKey) {
         throw new Error(

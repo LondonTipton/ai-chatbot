@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 
 /**
  * Breadth Synthesis Agent
@@ -22,7 +22,7 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
  *
  * Updated: November 6, 2025 - Set explicit token limits
  */
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 console.log("[Mastra] breadth-synthesis-agent → Cerebras provider initialized");
 
 export const breadthSynthesisAgent = new Agent({

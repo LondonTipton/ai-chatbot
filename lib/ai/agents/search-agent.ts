@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getAllTools } from "../../../mastra/tools";
-import { getBalancedCerebrasProvider } from "../cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "../cerebras-key-balancer";
 
 /**
  * Search Sub-Agent
@@ -54,7 +54,7 @@ Most promising for extraction: URLs 1 and 3
 Gap identified: Need more on remedies for breach`,
 
   model: () => {
-    const provider = getBalancedCerebrasProvider();
+    const provider = getBalancedCerebrasProviderSync();
     return provider("gpt-oss-120b");
   },
 

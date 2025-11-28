@@ -1,12 +1,12 @@
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 import { tavilySearchAdvancedTool } from "../tools/tavily-search-advanced";
 
 /**
  * Initialize the Cerebras provider ONCE at module load time
  * This prevents multiple provider instances during streaming
  */
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 console.log("[Mastra] search-agent → Cerebras provider initialized");
 
 /**

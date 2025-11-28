@@ -4,6 +4,9 @@ import { mastra } from "@/mastra";
 
 const logger = createLogger("mastra-test/route");
 
+// Prevent static generation
+export const dynamic = "force-dynamic";
+
 /**
  * Test endpoint for Mastra legal agent
  *

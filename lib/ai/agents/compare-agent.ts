@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getAllTools } from "../../../mastra/tools";
-import { getBalancedCerebrasProvider } from "../cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "../cerebras-key-balancer";
 
 /**
  * Compare and Analyze Sub-Agent
@@ -133,7 +133,7 @@ Zimbabwe case law establishes clear requirements for contract formation through 
 All cases are binding authority from the High Court and Supreme Court of Zimbabwe.`,
 
   model: () => {
-    const provider = getBalancedCerebrasProvider();
+    const provider = getBalancedCerebrasProviderSync();
     return provider("gpt-oss-120b");
   },
 

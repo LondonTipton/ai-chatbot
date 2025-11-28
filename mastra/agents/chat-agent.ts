@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 import { createDocumentTool } from "../tools/create-document";
 import { deepResearchTool } from "../tools/deep-research-tool";
 import { multiSearchTool } from "../tools/multi-search-tool";
@@ -10,7 +10,7 @@ import { updateDocumentTool } from "../tools/update-document";
 /**
  * Initialize the Cerebras provider ONCE at module load time
  */
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 
 /**
  * Chat Agent with Tiered Research Workflows

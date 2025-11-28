@@ -1,7 +1,7 @@
 import "server-only";
 
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 import { createToolsWithContext } from "@/lib/services/tool-context-factory";
 import { getAllTools } from "@/mastra/tools";
 
@@ -75,7 +75,7 @@ User: "What are the requirements for a valid contract in Zimbabwe?"
 Remember: You are designed for legal professionals. Provide direct, factual information without excessive disclaimers. Focus on accuracy and thoroughness.`,
 
     model: () => {
-      const provider = getBalancedCerebrasProvider();
+      const provider = getBalancedCerebrasProviderSync();
       return provider("llama-3.3-70b");
     },
 

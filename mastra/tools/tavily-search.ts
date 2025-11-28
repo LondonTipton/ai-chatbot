@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getTavilyBalancer } from "@/lib/ai/tavily-key-balancer";
 
 /**
  * Tavily Search Tool - SIMPLIFIED to match MCP
@@ -43,14 +44,17 @@ export const tavilySearchTool = createTool({
       maxResults?: number;
     };
 
-    if (!process.env.TAVILY_API_KEY) {
-      throw new Error("TAVILY_API_KEY is not configured");
+    // Get API key from load balancer (Cost: 1 credit for basic search)
+    const apiKey = await getTavilyBalancer().getApiKey(1);
+    
+    if (!apiKey) {
+      throw new Error("Failed to retrieve Tavily API key from load balancer");
     }
 
     try {
       // MINIMAL CONFIGURATION - Exactly like MCP
       const requestBody = {
-        api_key: process.env.TAVILY_API_KEY,
+        api_key: apiKey,
         query,
         max_results: maxResults,
       };

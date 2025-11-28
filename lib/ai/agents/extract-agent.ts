@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getAllTools } from "../../../mastra/tools";
-import { getBalancedCerebrasProvider } from "../cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "../cerebras-key-balancer";
 
 /**
  * Extract Sub-Agent
@@ -63,7 +63,7 @@ Key content:
 Ready for analysis.`,
 
   model: () => {
-    const provider = getBalancedCerebrasProvider();
+    const provider = getBalancedCerebrasProviderSync();
     return provider("gpt-oss-120b");
   },
 

@@ -67,7 +67,7 @@ export async function streamMastraAgent(
           "@/lib/services/tool-context-factory"
         );
         const { Agent } = await import("@mastra/core/agent");
-        const { getBalancedCerebrasProvider } = await import(
+        const { getBalancedCerebrasProviderSync } = await import(
           "@/lib/ai/cerebras-key-balancer"
         );
 
@@ -85,7 +85,7 @@ export async function streamMastraAgent(
           "@/mastra/tools/deep-research-tool"
         );
 
-        const cerebrasProvider = getBalancedCerebrasProvider();
+        const cerebrasProvider = getBalancedCerebrasProviderSync();
         const contextTools = createToolsWithContext(options.userId);
 
         // Import main chat agent to get its instructions
@@ -288,7 +288,7 @@ export async function streamMastraAgentWithHistory(
           "@/lib/services/tool-context-factory"
         );
         const { Agent } = await import("@mastra/core/agent");
-        const { getBalancedCerebrasProvider } = await import(
+        const { getBalancedCerebrasProviderSync } = await import(
           "@/lib/ai/cerebras-key-balancer"
         );
 
@@ -306,7 +306,7 @@ export async function streamMastraAgentWithHistory(
           "@/mastra/tools/deep-research-tool"
         );
 
-        const cerebrasProvider = getBalancedCerebrasProvider();
+        const cerebrasProvider = getBalancedCerebrasProviderSync();
         const contextTools = createToolsWithContext(options.userId);
 
         // Import main chat agent to get its instructions
@@ -423,5 +423,65 @@ export async function streamMastraAgentWithHistory(
     );
     handleCerebrasError(error);
     throw error;
+  }
+}
+
+/**
+ * Wrap a Mastra stream with resumable stream context
+ * Enables automatic recovery if connection is lost during streaming
+ *
+ * @param stream - Mastra agent stream (from agent.stream())
+ * @param streamId - Unique stream identifier for recovery
+ * @param streamContext - Resumable stream context (from getStreamContext())
+ * @param callbacks - onFinish and onError callbacks for stream lifecycle
+ * @returns Response object with resumable stream
+ */
+export async function createResumableMastraStream(
+  stream: any,
+  streamId: string,
+  streamContext: any,
+  callbacks?: {
+    onFinish?: (result: { messages: any[] }) => Promise<void>;
+    onError?: (result: { error: Error | string }) => Promise<void>;
+  }
+) {
+  logger.log("[Mastra SDK] Creating resumable stream wrapper", {
+    streamId: streamId.substring(0, 8),
+    hasContext: !!streamContext,
+  });
+
+  if (!streamContext) {
+    // Fallback to regular stream if context not available
+    logger.warn(
+      "[Mastra SDK] ⚠️  No resumable context - using regular stream (no recovery on disconnect)"
+    );
+    return stream.toUIMessageStreamResponse(callbacks);
+  }
+
+  // Create the base stream response with callbacks
+  const baseStreamResponse = stream.toUIMessageStreamResponse(callbacks);
+
+  // Wrap in resumable stream context for automatic recovery
+  try {
+    const resumableStream = await streamContext.resumableStream(
+      streamId,
+      () => baseStreamResponse
+    );
+
+    logger.log(
+      "[Mastra SDK] ✅ Resumable stream created successfully - connection recovery enabled"
+    );
+
+    return new Response(resumableStream, {
+      status: 200,
+      headers: baseStreamResponse.headers,
+    });
+  } catch (error) {
+    logger.error(
+      "[Mastra SDK] ❌ Failed to create resumable stream, falling back to regular stream:",
+      error
+    );
+    // Fallback to regular stream if resumable wrapper fails
+    return baseStreamResponse;
   }
 }

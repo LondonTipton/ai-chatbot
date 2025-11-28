@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 
 /**
  * Depth Analysis Agent
@@ -21,7 +21,7 @@ import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
  *
  * Updated: November 6, 2025 - Set explicit token limits
  */
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 console.log("[Mastra] depth-analysis-agent → Cerebras provider initialized");
 
 export const depthAnalysisAgent = new Agent({

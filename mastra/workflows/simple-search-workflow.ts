@@ -74,20 +74,20 @@ const searchCoordinatorStep = createStep({
       );
 
       // Enhance query with conversation context
-      const enhancedQuery = await enhanceSearchQuery(
+      const enhanced = await enhanceSearchQuery(
         query,
         conversationHistory || []
       );
 
-      console.log("[Simple Search Workflow] Enhanced query:", enhancedQuery);
+      console.log("[Simple Search Workflow] Enhanced query:", enhanced);
 
       // Import Tavily tool
       const { tavilySearchTool } = await import("../tools/tavily-search");
 
-      // Call Tavily directly
+      // Call Tavily directly - use first variation as primary query
       const searchResults = await tavilySearchTool.execute({
         context: {
-          query: enhancedQuery,
+          query: enhanced.variations[0] || query,
           maxResults: 20,
         },
         runtimeContext,

@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getAllTools } from "../../../mastra/tools";
-import { getBalancedCerebrasProvider } from "../cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "../cerebras-key-balancer";
 
 /**
  * Analyze Sub-Agent
@@ -83,7 +83,7 @@ A valid contract in Zimbabwe requires four essential elements: offer, acceptance
 3. [URL] - Statutory Requirements`,
 
   model: () => {
-    const provider = getBalancedCerebrasProvider();
+    const provider = getBalancedCerebrasProviderSync();
     return provider("gpt-oss-120b");
   },
 

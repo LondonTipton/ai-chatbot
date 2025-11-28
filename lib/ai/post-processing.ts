@@ -67,84 +67,86 @@ export async function postProcessAssistantResponse(
     Array.isArray(activeTools) &&
     activeTools.includes("tavilyAdvancedSearch")
   ) {
-    try {
-      const apiKey = process.env.TAVILY_API_KEY;
-      if (!apiKey) {
-        throw new Error("Missing TAVILY_API_KEY");
-      }
+  try {
+    const { getTavilyBalancer } = await import("@/lib/ai/tavily-key-balancer");
+    const apiKey = await getTavilyBalancer().getApiKey();
 
-      const body = {
-        api_key: apiKey,
+    if (!apiKey) {
+      throw new Error("Missing TAVILY_API_KEY");
+    }
+
+    const body = {
+      api_key: apiKey,
+      query: userQueryText,
+      search_depth: "advanced",
+      include_answer: true,
+      include_raw_content: false,
+      max_results: 5,
+    } as const;
+
+    const resp = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    let tavilyResult: any;
+    if (resp.ok) {
+      const data = await resp.json();
+      const formattedResults =
+        data.results?.map((r: any, i: number) => ({
+          position: i + 1,
+          title: r.title,
+          url: r.url,
+          content: r.content,
+          relevanceScore: r.score,
+          publishedDate: r.published_date || "Not available",
+        })) || [];
+      tavilyResult = {
+        query: data.query,
+        answer: data.answer || "No comprehensive answer available",
+        results: formattedResults,
+        totalResults: formattedResults.length,
+        searchDepth: "advanced",
+      };
+    } else {
+      const txt = await resp.text();
+      tavilyResult = {
         query: userQueryText,
-        search_depth: "advanced",
-        include_answer: true,
-        include_raw_content: false,
-        max_results: 5,
-      } as const;
+        answer: `Search failed during fallback: ${resp.status} ${txt}`,
+        results: [],
+        totalResults: 0,
+        searchDepth: "advanced",
+        error: true,
+      };
+    }
 
-      const resp = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+    // Attach synthetic tool-result for synthesis
+    lastAssistant.parts.push({
+      type: "tool-result",
+      toolName: "tavilyAdvancedSearch",
+      result: tavilyResult,
+    } as MessagePart);
 
-      let tavilyResult: any;
-      if (resp.ok) {
-        const data = await resp.json();
-        const formattedResults =
-          data.results?.map((r: any, i: number) => ({
-            position: i + 1,
-            title: r.title,
-            url: r.url,
-            content: r.content,
-            relevanceScore: r.score,
-            publishedDate: r.published_date || "Not available",
-          })) || [];
-        tavilyResult = {
-          query: data.query,
-          answer: data.answer || "No comprehensive answer available",
-          results: formattedResults,
-          totalResults: formattedResults.length,
-          searchDepth: "advanced",
-        };
-      } else {
-        const txt = await resp.text();
-        tavilyResult = {
-          query: userQueryText,
-          answer: `Search failed during fallback: ${resp.status} ${txt}`,
-          results: [],
-          totalResults: 0,
-          searchDepth: "advanced",
-          error: true,
-        };
-      }
-
-      // Attach synthetic tool-result for synthesis
-      lastAssistant.parts.push({
-        type: "tool-result",
-        toolName: "tavilyAdvancedSearch",
-        result: tavilyResult,
-      } as MessagePart);
-
-      const synthesized = ensureMessageHasText(lastAssistant as Message);
-      if (synthesized) {
-        changed = true;
-      } else {
-        // Final defensive fallback text
-        lastAssistant.parts.push({
-          type: "text",
-          text: "I couldn’t generate a response from the search results. Please rephrase your question or ask for a summary of specific points you care about (e.g., protections, remedies, procedures).",
-        });
-        changed = true;
-      }
-    } catch {
-      // As a last resort, add a friendly message
+    const synthesized = ensureMessageHasText(lastAssistant as Message);
+    if (synthesized) {
+      changed = true;
+    } else {
+      // Final defensive fallback text
       lastAssistant.parts.push({
         type: "text",
-        text: "The follow-up processing step encountered an issue while summarizing results. Please try again or rephrase your question.",
+        text: "I couldn’t generate a response from the search results. Please rephrase your question or ask for a summary of specific points you care about (e.g., protections, remedies, procedures).",
       });
       changed = true;
     }
+  } catch {
+    // As a last resort, add a friendly message
+    lastAssistant.parts.push({
+      type: "text",
+      text: "The follow-up processing step encountered an issue while summarizing results. Please try again or rephrase your question.",
+    });
+    changed = true;
+  }
   }
 
   return { changed, messages };

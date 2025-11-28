@@ -1,6 +1,6 @@
 import { Mastra } from "@mastra/core";
 import { createLogger } from "@/lib/logger";
-import { getBalancedCerebrasProvider } from "./cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "./cerebras-key-balancer";
 
 const logger = createLogger("ai/mastra-config");
 
@@ -24,7 +24,7 @@ const logger = createLogger("ai/mastra-config");
 export function createMastraInstance() {
   // Verify Cerebras provider is available
   try {
-    getBalancedCerebrasProvider();
+    getBalancedCerebrasProviderSync();
     logger.log("[Mastra Config] Cerebras provider initialized successfully");
   } catch (error) {
     logger.error(

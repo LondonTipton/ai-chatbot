@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getTavilyBalancer } from "@/lib/ai/tavily-key-balancer";
 import { estimateTokens } from "@/lib/utils/token-estimation";
 
 /**
@@ -99,10 +100,11 @@ export const tavilyContextSearchTool = createTool({
     const { query, maxTokens, jurisdiction, includeDomains } = context;
 
     // Validate environment
-    if (!process.env.TAVILY_API_KEY) {
-      throw new Error(
-        "TAVILY_API_KEY is not configured. Please set the environment variable."
-      );
+    // Get API key from load balancer (Cost: 2 credits for advanced search context)
+    const apiKey = await getTavilyBalancer().getApiKey(2);
+
+    if (!apiKey) {
+      throw new Error("Failed to retrieve Tavily API key from load balancer");
     }
 
     // Use query directly - it's already enhanced by query-enhancer-agent
@@ -120,7 +122,7 @@ export const tavilyContextSearchTool = createTool({
       try {
         // Build request body
         const requestBody: any = {
-          api_key: process.env.TAVILY_API_KEY,
+          api_key: apiKey,
           query: enhancedQuery,
           search_depth: "advanced", // Use advanced search for better quality
           max_tokens: maxTokens,

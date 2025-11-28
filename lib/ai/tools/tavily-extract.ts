@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 import type { ChatMessage } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
+import { getTavilyBalancer } from "../tavily-key-balancer";
 import { summarizeContent } from "./summarize-content";
 
 const logger = createLogger("tools/tavily-extract");
@@ -90,7 +91,9 @@ export const tavilyExtract = ({ dataStream }: TavilyExtractProps = {}) =>
           );
         }
 
-        const apiKey = process.env.TAVILY_API_KEY;
+        // Calculate cost based on number of URLs (1 credit per 5 URLs)
+        const cost = Math.max(1, Math.ceil(urls.length / 5));
+        const apiKey = await getTavilyBalancer().getApiKey(cost);
 
         if (!apiKey) {
           throw new Error(

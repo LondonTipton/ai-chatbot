@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getTavilyBalancer } from "@/lib/ai/tavily-key-balancer";
 import {
   type DomainStrategy,
   getExcludeDomains,
@@ -49,13 +50,16 @@ export const tavilyQnaTool = createTool({
       domainStrategy?: DomainStrategy;
     };
 
-    if (!process.env.TAVILY_API_KEY) {
-      throw new Error("TAVILY_API_KEY is not configured");
+    // Get API key from load balancer (Cost: 2 credits for QnA/advanced)
+    const apiKey = await getTavilyBalancer().getApiKey(2);
+
+    if (!apiKey) {
+      throw new Error("Failed to retrieve Tavily API key from load balancer");
     }
 
     try {
       const requestBody: Record<string, unknown> = {
-        api_key: process.env.TAVILY_API_KEY,
+        api_key: apiKey,
         query,
         search_depth: "basic",
         include_answer: true,

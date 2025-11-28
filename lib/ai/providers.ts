@@ -7,13 +7,13 @@ import { isTestEnvironment } from "../constants";
 const logger = createLogger("ai/providers");
 
 // Cerebras provider with load balancing (primary)
-const getCerebrasProvider = () => {
+const getCerebrasProvider = async () => {
   if (typeof window === "undefined") {
     try {
       const balancer =
         require("./cerebras-key-balancer").getBalancedCerebrasProvider();
       logger.log("[Providers] Using Cerebras key balancer");
-      return balancer;
+      return await balancer;
     } catch (error) {
       logger.warn(
         "[Providers] Cerebras balancer not available, falling back to direct provider:",
@@ -26,13 +26,13 @@ const getCerebrasProvider = () => {
 };
 
 // Gemini provider with load balancing (fallback for image generation)
-const getGoogleProvider = () => {
+const getGoogleProvider = async () => {
   if (typeof window === "undefined") {
     try {
       const balancer =
         require("./gemini-key-balancer").getBalancedGoogleProvider();
       logger.log("[Providers] Using Gemini key balancer");
-      return balancer;
+      return await balancer;
     } catch (error) {
       logger.warn(
         "[Providers] Gemini balancer not available, falling back to direct provider:",
@@ -44,8 +44,12 @@ const getGoogleProvider = () => {
   return google;
 };
 
-const cerebrasProvider = getCerebrasProvider();
-const googleProvider = getGoogleProvider();
+const cerebrasProviderPromise = getCerebrasProvider();
+const googleProviderPromise = getGoogleProvider();
+
+// Await providers at module level
+const cerebrasProvider = await cerebrasProviderPromise;
+const googleProvider = await googleProviderPromise;
 logger.log("[Providers] Cerebras provider initialized:", !!cerebrasProvider);
 logger.log("[Providers] Google provider initialized:", !!googleProvider);
 

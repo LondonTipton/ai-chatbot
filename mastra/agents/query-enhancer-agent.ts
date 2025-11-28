@@ -9,223 +9,89 @@
  */
 
 import { Agent } from "@mastra/core/agent";
-import { getBalancedCerebrasProvider } from "@/lib/ai/cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "@/lib/ai/cerebras-key-balancer";
 
-const cerebrasProvider = getBalancedCerebrasProvider();
+const cerebrasProvider = getBalancedCerebrasProviderSync();
 
 export const queryEnhancerAgent = new Agent({
   name: "Query Enhancer",
   instructions: `You are a search query enhancement specialist for Zimbabwe legal research.
 
-Your task: Transform user queries into optimal search queries for legal databases.
+Your task: Transform user queries into multiple semantic variations and a hypothetical answer (HyDE) to maximize retrieval from vector databases.
+
+OUTPUT FORMAT:
+You must return a valid JSON object with the following structure:
+{
+  "variations": ["string", "string", "string"],
+  "hydePassage": "string"
+}
 
 RULES:
-1. Keep it concise - add 3-7 relevant keywords maximum
-2. For legal cases: Add "Supreme Court", "case law", "judgment", "legal case"
-3. For statutes: Add "legislation", "statute", "law"
-4. For general queries: Add "Zimbabwe" and relevant legal domain
-5. Use conversation context to understand what user is really asking
-6. If user mentions a case name, preserve it exactly
-7. Always include "Zimbabwe" unless already present
-8. For case law queries, zimlii.org will be automatically added as a site filter
+1. "variations": Generate 3 distinct search queries:
+   - Variation 1: Natural language question (e.g., "What are the grounds for unfair dismissal?")
+   - Variation 2: Legal keyword string (e.g., "unfair dismissal grounds Section 12B Labour Act")
+   - Variation 3: Alternative phrasing or related concept (e.g., "termination without cause requirements")
+2. "hydePassage": Generate a Hypothetical Document Embedding (HyDE) passage:
+   - Write a short (3-4 sentences) hypothetical legal paragraph that *would* answer the user's question.
+   - Use plausible legal language, citing relevant acts (e.g., Labour Act, Constitution) if known.
+   - Do NOT hallucinate specific case citations unless you are 100% sure. Focus on statutory language and legal principles.
+3. Always include "Zimbabwe" context in at least one variation if not implicit.
+4. Preserve specific case names if provided by the user.
 
 EXAMPLES:
 
-Input: "What about the zuva case?"
-Context: Previous question was about Labour Act
-Output: zuva case Zimbabwe Supreme Court employment labour judgment
+Input: "can i be fired without notice?"
+Output:
+{
+  "variations": [
+    "Can an employee be dismissed without notice in Zimbabwe?",
+    "termination on notice provisions Labour Act Zimbabwe",
+    "dismissal without notice requirements and exemptions"
+  ],
+  "hydePassage": "In terms of the Labour Act [Chapter 28:01], no employer shall terminate a contract of employment on notice unless the termination is in terms of an employment code or the employee typically agrees. Dismissal without notice is generally reserved for acts of gross misconduct inconsistent with the fulfillment of the express or implied conditions of the contract of employment."
+}
 
-Input: "Don Nyamande v Zuva Petroleum"
-Context: None
-Output: Don Nyamande v Zuva Petroleum Zimbabwe Supreme Court case law judgment
-
-Input: "Section 12B"
-Context: Discussing Labour Act
-Output: Section 12B Labour Act Zimbabwe legislation statute
-
-Input: "How to register a company?"
-Context: None
-Output: company registration Zimbabwe incorporation business law
-
-Input: "What did the court say?"
-Context: Previous question about Zuva case
-Output: Zuva Petroleum Nyamande Zimbabwe Supreme Court judgment ruling
-
-Input: "SC 43/15"
-Context: None
-Output: SC 43/15 Zimbabwe Supreme Court case law judgment
-
-Input: "landmark cases"
-Context: Discussing Labour Act
-Output: landmark cases Labour Act Zimbabwe Supreme Court employment
-
-CRITICAL: 
-- Output ONLY the enhanced query
-- No explanations, no quotes, no extra text
-- Maximum 15 words in output
-- Preserve exact case names and citations from input`,
+Input: "Don Nyamande case"
+Output:
+{
+  "variations": [
+    "Don Nyamande v Zuva Petroleum Supreme Court judgment",
+    "common law right to terminate on notice Nyamande case",
+    "impact of Zuva Petroleum judgment on labour law"
+  ],
+  "hydePassage": "The Supreme Court judgment in Don Nyamande v Zuva Petroleum confirmed the common law right of an employer to terminate a contract of employment on notice. This ruling established that Section 12B of the Labour Act did not abolish the employer's right to terminate on notice, leading to subsequent legislative amendments to protect employees from arbitrary termination."
+}`,
 
   model: () => cerebrasProvider("llama-3.3-70b"),
   tools: {},
 });
 
 /**
- * Query enhancement cache for common patterns
- * Key: query + context hash, Value: enhanced query
+ * Query enhancement cache
  */
 const enhancementCache = new Map<
   string,
-  { enhanced: string; timestamp: number }
+  { enhanced: any; timestamp: number }
 >();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
 const MAX_CACHE_SIZE = 1000;
 
 /**
- * Case indicators for query type detection (module-level for performance)
- */
-const CASE_INDICATORS = [
-  /\sv\s/i, // "X v Y" pattern
-  /case/i,
-  /judgment/i,
-  /ruling/i,
-  /court/i,
-  /appellant/i,
-  /respondent/i,
-  /\[20\d{2}\]/i, // Citation like [2023]
-  /sc\s*\d+/i, // SC 43/15
-  /zwsc|zwhhc|zwcc/i, // Court codes
-];
-
-/**
- * Statute indicators for query type detection (module-level for performance)
- */
-const STATUTE_INDICATORS = [
-  /act/i,
-  /section/i,
-  /chapter/i,
-  /statute/i,
-  /legislation/i,
-  /law/i,
-  /provision/i,
-  /clause/i,
-];
-
-/**
- * Detect query type for targeted enhancement
- */
-function detectQueryType(query: string): "case" | "statute" | "general" {
-  const queryLower = query.toLowerCase();
-
-  // Check for case indicators
-  if (CASE_INDICATORS.some((pattern) => pattern.test(queryLower))) {
-    return "case";
-  }
-
-  // Check for statute indicators
-  if (STATUTE_INDICATORS.some((pattern) => pattern.test(queryLower))) {
-    return "statute";
-  }
-
-  return "general";
-}
-
-/**
- * Create cache key from query and context
+ * Create cache key
  */
 function createCacheKey(query: string, context: string): string {
-  // Simple hash function for cache key
   const str = `${query}|${context}`;
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = (hash << 5) - hash + char;
-    hash &= hash; // Convert to 32-bit integer
+    hash &= hash;
   }
   return `${query.substring(0, 50)}_${hash}`;
 }
 
 /**
- * Clean up expired cache entries
- */
-function cleanCache() {
-  const now = Date.now();
-  for (const [key, value] of enhancementCache.entries()) {
-    if (now - value.timestamp > CACHE_TTL) {
-      enhancementCache.delete(key);
-    }
-  }
-
-  // If cache is still too large, remove oldest entries
-  if (enhancementCache.size > MAX_CACHE_SIZE) {
-    const entries = Array.from(enhancementCache.entries()).sort(
-      (a, b) => a[1].timestamp - b[1].timestamp
-    );
-
-    const toRemove = entries.slice(0, enhancementCache.size - MAX_CACHE_SIZE);
-    for (const [key] of toRemove) {
-      enhancementCache.delete(key);
-    }
-  }
-}
-
-/**
- * Create smart fallback enhancement when LLM fails
- */
-function createSmartFallback(query: string): string {
-  console.log("[Query Enhancer] Creating smart fallback");
-
-  // If query is already long, focus it
-  const words = query.split(/\s+/);
-  if (words.length > 15) {
-    const keyTerms: string[] = [];
-
-    // Keep statute references
-    if (query.match(/labour act|act|section \d+/i)) {
-      keyTerms.push("Labour Act");
-    }
-
-    // Keep case law indicators
-    if (query.match(/case law|cases|precedent/i)) {
-      keyTerms.push("case law");
-    }
-
-    // Keep court references
-    if (query.match(/supreme court|high court/i)) {
-      keyTerms.push("Supreme Court");
-    } else {
-      keyTerms.push("court");
-    }
-
-    // Add Zimbabwe if not present
-    if (!query.toLowerCase().includes("zimbabwe")) {
-      keyTerms.push("Zimbabwe");
-    }
-
-    // Add judgment for legal queries
-    keyTerms.push("judgment");
-
-    const focused = keyTerms.join(" ");
-    console.log(
-      `[Query Enhancer] Focused from ${words.length} words to: ${focused}`
-    );
-    return focused;
-  }
-
-  // For shorter queries, just add Zimbabwe if missing
-  if (!query.toLowerCase().includes("zimbabwe")) {
-    return `${query} Zimbabwe`;
-  }
-
-  return query;
-}
-
-/**
  * Enhance a search query using conversation context
- *
- * @param query - The user's search query
- * @param conversationHistory - Recent conversation messages (uses last 5-7 messages)
- * @param options - Optional configuration
- * @returns Enhanced query string
  */
 export async function enhanceSearchQuery(
   query: string,
@@ -233,135 +99,75 @@ export async function enhanceSearchQuery(
   options: {
     maxContextMessages?: number;
     useCache?: boolean;
-    queryType?: "case" | "statute" | "general" | "auto";
   } = {}
-): Promise<string> {
-  const {
-    maxContextMessages = 5,
-    useCache = true,
-    queryType = "auto",
-  } = options;
+): Promise<{ variations: string[]; hydePassage: string }> {
+  const { maxContextMessages = 5, useCache = true } = options;
 
   try {
-    // Detect query type if auto
-    const detectedType =
-      queryType === "auto" ? detectQueryType(query) : queryType;
-
-    // Build context from recent conversation (last 5 messages by default)
+    // Build context
     const recentContext = conversationHistory
       .slice(-maxContextMessages)
       .map((msg) => `${msg.role}: ${msg.content.substring(0, 200)}`)
       .join("\n");
 
-    // Check cache if enabled
+    // Check cache
     if (useCache) {
       const cacheKey = createCacheKey(query, recentContext);
       const cached = enhancementCache.get(cacheKey);
 
       if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
         console.log(`[Query Enhancer] Cache hit for: "${query}"`);
-        console.log(`[Query Enhancer] Cached enhanced: "${cached.enhanced}"`);
         return cached.enhanced;
       }
     }
 
-    // Build type-specific enhancement instructions
-    let typeInstructions = "";
-    switch (detectedType) {
-      case "case":
-        typeInstructions =
-          "\nQUERY TYPE: Legal case - Prioritize: case name, court, citation, judgment, ruling";
-        break;
-      case "statute":
-        typeInstructions =
-          "\nQUERY TYPE: Statute/legislation - Prioritize: act name, section, chapter, provision";
-        break;
-      default:
-        typeInstructions =
-          "\nQUERY TYPE: General legal query - Prioritize: legal domain, Zimbabwe context";
-        break;
-    }
-
     const prompt = `${
       recentContext ? `CONVERSATION CONTEXT:\n${recentContext}\n\n` : ""
-    }USER QUERY: ${query}${typeInstructions}
+    }USER QUERY: ${query}
 
-ENHANCED QUERY:`;
+Generate the JSON object with variations and HyDE passage.`;
 
     const result = await queryEnhancerAgent.generate(prompt, {
-      maxSteps: 1,
+      output: {
+        type: "object",
+        properties: {
+          variations: {
+            type: "array",
+            items: { type: "string" },
+          },
+          hydePassage: { type: "string" },
+        },
+      },
     });
 
-    let enhanced = result.text.trim();
-
-    // Clean up common explanation patterns
-    enhanced = enhanced
-      .replace(/^(here'?s?|the enhanced query is:?|enhanced:)/i, "")
-      .replace(/^["']|["']$/g, "") // Remove quotes
-      .trim();
-
-    // Validation: ensure output is reasonable
-    if (enhanced.length > 250) {
-      console.warn("[Query Enhancer] Output too long, using smart fallback");
-      return createSmartFallback(query);
-    }
-
-    // Check for explanation patterns (multiple sentences)
-    if (enhanced.includes("\n") || enhanced.match(/\.\s+[A-Z]/)) {
-      console.warn(
-        "[Query Enhancer] Output contains explanation, extracting query"
-      );
-      const lines = enhanced.split("\n");
-      const queryLine = lines.find(
-        (line) => !line.match(/^(here|the|this|enhanced)/i) && line.length > 10
-      );
-      if (queryLine) {
-        enhanced = queryLine.trim();
-      } else {
-        return createSmartFallback(query);
-      }
-    }
-
-    // If enhanced is too short or empty, use fallback
-    if (enhanced.length < 5) {
-      console.warn("[Query Enhancer] Output too short, using smart fallback");
-      return createSmartFallback(query);
-    }
-
-    // Add zimlii for case law queries to prioritize Zimbabwe Legal Information Institute
-    if (detectedType === "case" && !enhanced.toLowerCase().includes("zimlii")) {
-      enhanced = `${enhanced} site:zimlii.org`;
-      console.log(
-        "[Query Enhancer] Added zimlii site filter for case law query"
-      );
-    }
+    const enhanced = result.object as {
+      variations: string[];
+      hydePassage: string;
+    };
 
     console.log(`[Query Enhancer] Original: "${query}"`);
-    console.log(`[Query Enhancer] Type: ${detectedType}`);
-    console.log(`[Query Enhancer] Enhanced: "${enhanced}"`);
+    console.log("[Query Enhancer] Variations:", enhanced.variations);
+    console.log(
+      `[Query Enhancer] HyDE: "${enhanced.hydePassage.substring(0, 50)}..."`
+    );
 
-    // Cache the result if enabled
+    // Cache result
     if (useCache) {
       const cacheKey = createCacheKey(query, recentContext);
       enhancementCache.set(cacheKey, {
         enhanced,
         timestamp: Date.now(),
       });
-
-      // Clean cache periodically
-      if (enhancementCache.size > MAX_CACHE_SIZE * 0.9) {
-        cleanCache();
-      }
-
-      console.log(
-        `[Query Enhancer] Cached result (cache size: ${enhancementCache.size})`
-      );
     }
 
     return enhanced;
   } catch (error) {
     console.error("[Query Enhancer] Error:", error);
-    return createSmartFallback(query);
+    // Fallback
+    return {
+      variations: [`${query} Zimbabwe`, `${query} legal`, query],
+      hydePassage: `${query} This is a legal issue in Zimbabwe regarding ${query}.`,
+    };
   }
 }
 

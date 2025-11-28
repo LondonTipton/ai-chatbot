@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getTavilyBalancer } from "@/lib/ai/tavily-key-balancer";
 import { estimateTokens } from "@/lib/utils/token-estimation";
 
 /**
@@ -45,8 +46,12 @@ export const tavilyExtractTool = createTool({
       );
     }
 
-    if (!process.env.TAVILY_API_KEY) {
-      throw new Error("TAVILY_API_KEY is not configured");
+    // Calculate cost based on number of URLs (1 credit per 5 URLs)
+    const cost = Math.max(1, Math.ceil(urls.length / 5));
+    const apiKey = await getTavilyBalancer().getApiKey(cost);
+
+    if (!apiKey) {
+      throw new Error("Failed to retrieve Tavily API key from load balancer");
     }
 
     try {
@@ -56,7 +61,7 @@ export const tavilyExtractTool = createTool({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          api_key: process.env.TAVILY_API_KEY,
+          api_key: apiKey,
           urls,
         }),
       });

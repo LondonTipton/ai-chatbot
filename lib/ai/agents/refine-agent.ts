@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getAllTools } from "../../../mastra/tools";
-import { getBalancedCerebrasProvider } from "../cerebras-key-balancer";
+import { getBalancedCerebrasProviderSync } from "../cerebras-key-balancer";
 
 /**
  * Refine Sub-Agent
@@ -103,7 +103,7 @@ NOW IT IS AGREED as follows:
 Note: This document complies with the Labour Act [Chapter 28:01] and includes all mandatory provisions. Optional clauses for consideration: restraint of trade, garden leave provisions.`,
 
   model: () => {
-    const provider = getBalancedCerebrasProvider();
+    const provider = getBalancedCerebrasProviderSync();
     return provider("gpt-oss-120b");
   },
 

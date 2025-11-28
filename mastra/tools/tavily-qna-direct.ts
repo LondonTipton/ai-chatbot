@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { getTavilyBalancer } from "@/lib/ai/tavily-key-balancer";
 import { estimateTokens } from "@/lib/utils/token-estimation";
 
 /**
@@ -51,10 +52,11 @@ export const tavilyQnaDirectTool = createTool({
     const { query } = context;
 
     // Validate environment
-    if (!process.env.TAVILY_API_KEY) {
-      throw new Error(
-        "TAVILY_API_KEY is not configured. Please set the environment variable."
-      );
+    // Get API key from load balancer (Cost: 1 credit for basic QnA)
+    const apiKey = await getTavilyBalancer().getApiKey(1);
+
+    if (!apiKey) {
+      throw new Error("Failed to retrieve Tavily API key from load balancer");
     }
 
     // Retry logic configuration
@@ -72,7 +74,7 @@ export const tavilyQnaDirectTool = createTool({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            api_key: process.env.TAVILY_API_KEY,
+            api_key: apiKey,
             query,
             search_depth: "basic",
             include_answer: true,

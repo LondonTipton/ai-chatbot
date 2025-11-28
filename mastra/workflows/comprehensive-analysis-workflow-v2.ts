@@ -76,12 +76,12 @@ const initialSearchStep = createStep({
       );
 
       // Enhance query
-      const enhancedQuery = await enhanceSearchQuery(
+      const enhanced = await enhanceSearchQuery(
         query,
         conversationHistory || []
       );
 
-      console.log("[Comprehensive V2] Enhanced query:", enhancedQuery);
+      console.log("[Comprehensive V2] Enhanced query:", enhanced);
 
       // Import Tavily advanced tool
       const { tavilySearchAdvancedTool } = await import(
@@ -91,7 +91,7 @@ const initialSearchStep = createStep({
       // Initial search with raw content
       const searchResults = await tavilySearchAdvancedTool.execute({
         context: {
-          query: enhancedQuery,
+          query: enhanced.variations[0] || query,
           maxResults: 10,
           jurisdiction: jurisdiction || "Zimbabwe",
           includeRawContent: true, // Full content for initial analysis
@@ -258,11 +258,11 @@ const gapAnalysisStep = createStep({
     try {
       // Import gap analyzer agent
       const { Agent } = await import("@mastra/core/agent");
-      const { getBalancedCerebrasProvider } = await import(
+      const { getBalancedCerebrasProviderSync } = await import(
         "@/lib/ai/cerebras-key-balancer"
       );
 
-      const cerebrasProvider = getBalancedCerebrasProvider();
+      const cerebrasProvider = getBalancedCerebrasProviderSync();
 
       const gapAnalyzerAgent = new Agent({
         name: "Gap Analyzer",
