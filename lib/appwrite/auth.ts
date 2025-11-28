@@ -136,15 +136,18 @@ export function createEmailSession(
       logger.log("[AUTH] Token user ID:", sessionToken.userId);
 
       // Step 3: Delete the temporary session we created for verification
-      // Note: This may fail if the session doesn't have account scope (which is expected)
-      // Appwrite will automatically clean up expired sessions, so this is not critical
+      // Use the session client with the temp session to delete it
       try {
-        await account.deleteSession(tempSession.$id);
+        const { account: sessionAccount } = createSessionClient(
+          tempSession.secret
+        );
+        await sessionAccount.deleteSession(tempSession.$id);
         logger.log("[AUTH] Temporary verification session deleted");
-      } catch {
-        // Silently ignore - this is expected to fail for guest sessions without account scope
+      } catch (deleteError) {
+        // Silently ignore - Appwrite will automatically clean up expired sessions
         logger.debug(
-          "[AUTH] Temp session cleanup skipped (will expire automatically)"
+          "[AUTH] Temp session cleanup skipped (will expire automatically):",
+          deleteError
         );
       }
 
