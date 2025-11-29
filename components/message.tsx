@@ -2,21 +2,13 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import equal from "fast-deep-equal";
 import { motion } from "framer-motion";
-// CITATION SYSTEM IMPORTS - Uncomment when enabling citation system
-// import {
-//   CheckCircleIcon,
-//   ChevronDownIcon,
-//   ClockIcon,
-//   WrenchIcon,
-// } from "lucide-react";
-import { memo, useState } from "react";
-// import { Badge } from "@/components/ui/badge";
-// import { CollapsibleTrigger } from "@/components/ui/collapsible";
+import { memo, useState, useMemo, useCallback } from "react";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
-// import { CitationResult } from "./citation-result";
+import { CitationResult } from "./citation-result";
 import { useDataStream } from "./data-stream-provider";
+import { cleanupVerboseCitations } from "@/lib/citations/citation-processor";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { MessageContent } from "./elements/message";
@@ -140,8 +132,12 @@ const PurePreviewMessage = ({
 
             if (type === "text") {
               if (mode === "view") {
-                // Temporarily disable thinking tokens filter for debugging
-                const displayText = part.text;
+                // Clean up verbose inline citations for assistant messages
+                // The actual sources are shown in the CitationResult component below
+                let displayText = part.text;
+                if (message.role === "assistant") {
+                  displayText = cleanupVerboseCitations(displayText);
+                }
 
                 // Don't render empty messages
                 if (!displayText.trim()) {
@@ -377,6 +373,11 @@ const PurePreviewMessage = ({
             return null;
           })}
 
+          {/* Citation Display for Assistant Messages */}
+          {message.role === "assistant" && !isLoading && (
+            <MessageCitations message={message} />
+          )}
+
           {!isReadonly && (
             <MessageActions
               chatId={chatId}
@@ -392,6 +393,162 @@ const PurePreviewMessage = ({
     </motion.div>
   );
 };
+
+/**
+ * Extract and display citations from message tool results
+ * Deduplicates legal DB sources by document ID (combines chunks from same document)
+ */
+function MessageCitations({ message }: { message: ChatMessage }) {
+  const citations = useMemo(() => {
+    const webSources: any[] = [];
+    const legalDbSources = new Map<string, any>(); // Key by docId to deduplicate chunks
+
+    for (const part of message.parts || []) {
+      // Check for tool results
+      if ((part as any).type === "tool-result" || (part as any).output) {
+        const result = (part as any).result || (part as any).output;
+        if (!result) continue;
+
+        try {
+          const data = typeof result === "string" ? JSON.parse(result) : result;
+
+          // Extract from rawResults (workflow tools - usually Tavily)
+          if (data?.rawResults && Array.isArray(data.rawResults)) {
+            for (const r of data.rawResults) {
+              if (r.url && !r.url.startsWith("legal-db://")) {
+                webSources.push({
+                  title: r.title,
+                  url: r.url,
+                  content: r.content?.substring(0, 400),
+                  relevanceScore: r.score || r.relevanceScore,
+                  publishedDate: r.publishedDate || r.published_date,
+                  isWeb: true,
+                });
+              }
+            }
+          }
+
+          // Extract from results array
+          if (data?.results && Array.isArray(data.results)) {
+            for (const r of data.results) {
+              // Legal DB format - deduplicate by docId
+              if (r.source && r.sourceFile && r.text) {
+                const docId = r.docId || r.sourceFile;
+                const existing = legalDbSources.get(docId);
+
+                if (existing) {
+                  // Combine chunks - keep highest score, append content
+                  existing.relevanceScore = Math.max(
+                    existing.relevanceScore || 0,
+                    r.score || 0
+                  );
+                  // Append content if not too long
+                  if (existing.content.length < 800) {
+                    existing.content +=
+                      "\n\n---\n\n" + r.text?.substring(0, 300);
+                  }
+                  existing.chunkCount = (existing.chunkCount || 1) + 1;
+                } else {
+                  legalDbSources.set(docId, {
+                    title: `${r.source} - ${r.sourceFile}`.replace(
+                      /\.json$/,
+                      ""
+                    ),
+                    url: `legal-db://${docId}`,
+                    content: r.text?.substring(0, 400),
+                    relevanceScore: r.score,
+                    docId,
+                    isLegalDb: true,
+                    chunkCount: 1,
+                  });
+                }
+              } else if (r.url && !r.url.startsWith("legal-db://")) {
+                // Tavily format
+                webSources.push({
+                  title: r.title,
+                  url: r.url,
+                  content: r.content?.substring(0, 400),
+                  relevanceScore: r.score || r.relevanceScore,
+                  publishedDate: r.publishedDate || r.published_date,
+                  isWeb: true,
+                });
+              }
+            }
+          }
+
+          // Extract from sources array
+          if (data?.sources && Array.isArray(data.sources)) {
+            for (const s of data.sources) {
+              if (s.url?.startsWith("legal-db://")) {
+                const docId = s.url.replace("legal-db://", "");
+                if (!legalDbSources.has(docId)) {
+                  legalDbSources.set(docId, {
+                    title: s.title,
+                    url: s.url,
+                    content: s.content?.substring(0, 400) || s.snippet,
+                    relevanceScore: s.score,
+                    docId,
+                    isLegalDb: true,
+                  });
+                }
+              } else if (s.url) {
+                webSources.push({
+                  title: s.title,
+                  url: s.url,
+                  content: s.content?.substring(0, 400) || s.snippet,
+                  relevanceScore: s.score,
+                  isWeb: true,
+                });
+              }
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+
+    // Deduplicate web sources by URL
+    const seenUrls = new Set<string>();
+    const uniqueWebSources = webSources.filter((s) => {
+      if (!s.url || seenUrls.has(s.url)) return false;
+      seenUrls.add(s.url);
+      return true;
+    });
+
+    // Convert legal DB map to array and sort by score
+    const legalDbArray = Array.from(legalDbSources.values()).sort(
+      (a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)
+    );
+
+    // Sort web sources by score
+    uniqueWebSources.sort(
+      (a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)
+    );
+
+    // Combine: legal DB first (more authoritative), then web sources
+    const combined = [...legalDbArray, ...uniqueWebSources];
+
+    // Add position numbers and limit to 40
+    return combined.slice(0, 40).map((s, idx) => ({
+      ...s,
+      position: idx + 1,
+    }));
+  }, [message.parts]);
+
+  if (citations.length === 0) return null;
+
+  return (
+    <div className="mt-4 px-2 md:px-0">
+      <CitationResult
+        sources={citations}
+        collapsible={true}
+        defaultExpanded={false}
+        showMetadata={true}
+      />
+    </div>
+  );
+}
 
 export const PreviewMessage = memo(
   PurePreviewMessage,

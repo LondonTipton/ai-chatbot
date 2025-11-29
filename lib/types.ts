@@ -70,6 +70,22 @@ export type CustomUIDataTypes = {
     maxAttempts: number;
     isRetrying: boolean;
   };
+  citations: {
+    citations: Array<{
+      id: string;
+      marker: string;
+      title: string;
+      url: string;
+      snippet: string;
+      type: string;
+      confidence: number;
+    }>;
+    metadata: {
+      totalCitations: number;
+      verifiedCount: number;
+      averageConfidence: number;
+    };
+  };
 };
 
 export type ChatMessage = UIMessage<

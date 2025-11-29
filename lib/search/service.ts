@@ -114,10 +114,8 @@ export class SearchService {
   private async fetchFullText(
     vectorResults: SearchResult[]
   ): Promise<SearchResult[]> {
-    const results: SearchResult[] = [];
-
-    // DB Configuration (loaded from env)
-    const DB_CONFIG = {
+    // DB Configuration
+    const DB_URLS = {
       CaseLaw: [
         process.env.NEON_CASELAW_1,
         process.env.NEON_CASELAW_2,
@@ -128,13 +126,15 @@ export class SearchService {
         process.env.NEON_LAWPORTAL_2,
         process.env.NEON_LAWPORTAL_3,
       ].filter(Boolean) as string[],
-      Zimlii: [process.env.NEON_ZIMLII_1, process.env.NEON_ZIMLII_2].filter(
-        Boolean
-      ) as string[],
+      Zimlii: [process.env.NEON_ZIMLII_1].filter(Boolean) as string[], // Only DB 1 has data
     };
 
-    for (const result of vectorResults) {
-      // Fix: Destructure snake_case properties from Zilliz result
+    console.log(
+      `[Neon Fetch] 🚀 Processing ${vectorResults.length} results in parallel`
+    );
+
+    // Process ALL results in parallel
+    const resultPromises = vectorResults.map(async (result) => {
       const {
         source,
         source_file: sourceFile,
@@ -142,171 +142,117 @@ export class SearchService {
         metadata,
       } = result;
 
-      console.log("[Neon Fetch] 🔍 Processing result:", {
-        source,
-        sourceFile,
-        chunkIndex,
-        metadataType: typeof metadata,
-        metadataPreview:
-          metadata === undefined
-            ? "undefined"
-            : typeof metadata === "string"
-              ? metadata.substring(0, 100)
-              : JSON.stringify(metadata).substring(0, 100),
-      });
-
-      // Extract docId from metadata if available
       const docId =
         metadata?.doc_id ||
         (typeof metadata === "string" ? JSON.parse(metadata).doc_id : null);
 
-      console.log("[Neon Fetch] 📋 Extracted doc_id:", docId);
+      const chunkIndexInt =
+        typeof chunkIndex === "string"
+          ? Number.parseInt(chunkIndex, 10)
+          : chunkIndex;
 
-      // Get the appropriate database connection
-      const dbUrls = DB_CONFIG[source as keyof typeof DB_CONFIG];
+      // Smart database selection based on source
+      let databasesToQuery: string[] = [];
 
-      // If source is not a known category (might be a doc_id),
-      // try all databases to find the record
-      const databasesToTry =
-        dbUrls && dbUrls.length > 0 ? dbUrls : Object.values(DB_CONFIG).flat();
-
-      console.log("[Neon Fetch] 🗄️ Database strategy:", {
-        sourceMatchesCategory: !!dbUrls,
-        databaseCount: databasesToTry.length,
-        willTryAllDatabases: !dbUrls || dbUrls.length === 0,
-      });
-
-      if (databasesToTry.length === 0) {
-        console.warn(`[Neon Fetch] ❌ No DB configured for source: ${source}`);
-        results.push({ ...result, text: "[DB NOT CONFIGURED]" });
-        continue;
+      if (source === "CaseLaw") {
+        // CaseLaw: Zilliz stores LOCAL chunk indices (0-n per doc), not global
+        // We cannot use chunk_index for database routing since it's local
+        // Must query all CaseLaw DBs in parallel to find the document
+        databasesToQuery = DB_URLS.CaseLaw;
+      } else if (source === "Zimlii") {
+        // Zimlii only has data in DB 1
+        databasesToQuery = DB_URLS.Zimlii;
+      } else if (source === "LawPortal") {
+        // LawPortal: must try all DBs (data distributed by doc, not by range)
+        databasesToQuery = DB_URLS.LawPortal;
+      } else {
+        // Unknown source: try all
+        databasesToQuery = Object.values(DB_URLS).flat();
       }
 
-      // Try each database until we find the record
-      let found = false;
-      let dbAttempt = 0;
-      for (const dbUrl of databasesToTry) {
-        dbAttempt++;
-        console.log(`[Neon Fetch] 🔄 DB Attempt ${dbAttempt}/${databasesToTry.length}`);
-        
+      if (databasesToQuery.length === 0) {
+        return { ...result, text: "[DB NOT CONFIGURED]" };
+      }
+
+      // CaseLaw uses global indices, others use local (0-n per doc)
+      const usesGlobalIndex = source === "CaseLaw";
+
+      // Query selected databases in parallel
+      const dbPromises = databasesToQuery.map(async (dbUrl) => {
         try {
           const sql = neon(dbUrl);
-          // Convert chunkIndex to integer if it's a string
-          const chunkIndexInt =
-            typeof chunkIndex === "string"
-              ? Number.parseInt(chunkIndex, 10)
-              : chunkIndex;
 
-          // Strategy 1: Try positional match using doc_id (most reliable)
           if (docId) {
-            // CaseLaw uses sequential global chunk indices (need OFFSET)
-            // LawPortal and Zimlii use per-document chunk indices (need direct match)
-            const usesGlobalIndex = source === "CaseLaw";
-            
-            console.log(`[Neon Fetch] 📝 Strategy 1: doc_id=${docId}, chunk_index=${chunkIndexInt}, query_type=${usesGlobalIndex ? 'OFFSET' : 'DIRECT'}`);
-            
             const rows = usesGlobalIndex
               ? await sql`
-                  SELECT full_text, metadata, doc_id
-                  FROM legal_documents
-                  WHERE doc_id = ${docId}
-                  ORDER BY chunk_index ASC
-                  OFFSET ${chunkIndexInt}
-                  LIMIT 1
+                  WITH numbered_chunks AS (
+                    SELECT full_text, metadata, doc_id,
+                      ROW_NUMBER() OVER (PARTITION BY doc_id ORDER BY chunk_index ASC) - 1 as local_index
+                    FROM legal_documents WHERE doc_id = ${docId}
+                  )
+                  SELECT full_text, metadata, doc_id FROM numbered_chunks
+                  WHERE local_index = ${chunkIndexInt} LIMIT 1
                 `
               : await sql`
-                  SELECT full_text, metadata, doc_id
-                  FROM legal_documents
-                  WHERE doc_id = ${docId}
-                    AND chunk_index = ${chunkIndexInt}
-                  LIMIT 1
+                  SELECT full_text, metadata, doc_id FROM legal_documents
+                  WHERE doc_id = ${docId} AND chunk_index = ${chunkIndexInt} LIMIT 1
                 `;
-            
-            console.log(`[Neon Fetch] 📊 Strategy 1: ${rows.length} rows`);
 
             if (rows.length > 0) {
-              const row = rows[0];
-              results.push({
-                ...result,
-                docId: row.doc_id,
-                text: row.full_text,
-                metadata: { ...result.metadata, ...row.metadata },
-              });
-              found = true;
-              break;
+              return { row: rows[0] };
             }
           }
 
-          // Strategy 2: If no doc_id or not found, try positional match using source_file
-          if (!found && sourceFile) {
-            // Check if source is a valid category
-            const validSources = ["CaseLaw", "LawPortal", "Zimlii"];
-            const isValidSource = validSources.includes(source);
-            const usesGlobalIndex = source === "CaseLaw";
-
-            console.log(`[Neon Fetch] 📝 Strategy 2: source_file=${sourceFile}, chunk_index=${chunkIndexInt}, filter_source=${isValidSource ? source : 'NONE'}, query_type=${usesGlobalIndex ? 'OFFSET' : 'DIRECT'}`);
-
-            // Different query based on index type and source validity
-            let rows;
-            if (isValidSource) {
-              rows = usesGlobalIndex
-                ? await sql`
-                    SELECT full_text, metadata, doc_id
-                    FROM legal_documents
-                    WHERE source = ${source}
-                      AND source_file = ${sourceFile}
-                    ORDER BY chunk_index ASC
-                    OFFSET ${chunkIndexInt}
-                    LIMIT 1
-                  `
-                : await sql`
-                    SELECT full_text, metadata, doc_id
-                    FROM legal_documents
-                    WHERE source = ${source}
-                      AND source_file = ${sourceFile}
-                      AND chunk_index = ${chunkIndexInt}
-                    LIMIT 1
-                  `;
-            } else {
-              // Unknown source - try direct match (safer fallback)
-              rows = await sql`
-                SELECT full_text, metadata, doc_id
-                FROM legal_documents
-                WHERE source_file = ${sourceFile}
-                  AND chunk_index = ${chunkIndexInt}
-                LIMIT 1
-              `;
-            }
-
-            console.log(`[Neon Fetch] 📊 Strategy 2: ${rows.length} rows`);
+          if (sourceFile) {
+            const rows = usesGlobalIndex
+              ? await sql`
+                  WITH numbered_chunks AS (
+                    SELECT full_text, metadata, doc_id,
+                      ROW_NUMBER() OVER (PARTITION BY source_file ORDER BY chunk_index ASC) - 1 as local_index
+                    FROM legal_documents WHERE source = ${source} AND source_file = ${sourceFile}
+                  )
+                  SELECT full_text, metadata, doc_id FROM numbered_chunks
+                  WHERE local_index = ${chunkIndexInt} LIMIT 1
+                `
+              : await sql`
+                  SELECT full_text, metadata, doc_id FROM legal_documents
+                  WHERE source = ${source} AND source_file = ${sourceFile}
+                    AND chunk_index = ${chunkIndexInt} LIMIT 1
+                `;
 
             if (rows.length > 0) {
-              const row = rows[0];
-              results.push({
-                ...result,
-                docId: row.doc_id,
-                text: row.full_text,
-                metadata: { ...result.metadata, ...row.metadata },
-              });
-              found = true;
-              break;
+              return { row: rows[0] };
             }
           }
-        } catch (error: any) {
-          console.error(`[Neon Fetch] ❌ Error (attempt ${dbAttempt}):`, error.message);
+
+          return null;
+        } catch (_error) {
+          return null;
         }
+      });
+
+      const dbResults = await Promise.all(dbPromises);
+      const found = dbResults.find((r) => r !== null);
+
+      if (found) {
+        return {
+          ...result,
+          docId: found.row.doc_id,
+          text: found.row.full_text,
+          metadata: { ...result.metadata, ...found.row.metadata },
+        };
       }
 
-      if (!found) {
-        console.warn(
-          `[Neon Fetch] ⚠️ Not found: ${source}/${sourceFile}/${chunkIndex} after ${dbAttempt} attempts`
-        );
-        results.push({
-          ...result,
-          text: "[TEXT NOT FOUND IN NEON]",
-        });
-      }
-    }
+      return { ...result, text: "[TEXT NOT FOUND IN NEON]" };
+    });
+
+    const results = await Promise.all(resultPromises);
+    const foundCount = results.filter(
+      (r) => r.text !== "[TEXT NOT FOUND IN NEON]"
+    ).length;
+    console.log(
+      `[Neon Fetch] ✅ Completed: ${foundCount}/${results.length} found`
+    );
 
     return results;
   }

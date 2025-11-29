@@ -427,6 +427,126 @@ export async function streamMastraAgentWithHistory(
 }
 
 /**
+ * Extract citations from assistant messages containing tool results
+ */
+function extractCitationsFromMessages(messages: any[]) {
+  // Dynamically import to avoid circular dependencies
+  const { buildCitationsFromResults } = require("@/lib/citations");
+  const sources: any[] = [];
+
+  for (const msg of messages) {
+    if (msg.role !== "assistant") continue;
+
+    for (const part of msg.parts || []) {
+      // Check for tool results from search/research tools
+      if (part.type === "tool-result") {
+        const toolName = part.toolName || "";
+
+        try {
+          const result =
+            typeof part.content === "string"
+              ? JSON.parse(part.content)
+              : part.content || part.result;
+
+          // Extract sources from various tool result formats
+          if (result?.rawResults && Array.isArray(result.rawResults)) {
+            sources.push(...result.rawResults);
+          }
+          if (result?.results && Array.isArray(result.results)) {
+            // Check if these are legal DB results
+            for (const r of result.results) {
+              if (r.source && r.sourceFile && r.text) {
+                // Legal DB format - convert to unified format
+                sources.push({
+                  title: `${r.source} - ${r.sourceFile}`,
+                  url: `legal-db://${r.docId || "unknown"}`,
+                  content: r.text,
+                  score: r.score,
+                  isLegalDb: true,
+                });
+              } else {
+                sources.push(r);
+              }
+            }
+          }
+          if (result?.sources && Array.isArray(result.sources)) {
+            sources.push(...result.sources);
+          }
+
+          // Handle nested rawResults.results (from workflow tools)
+          if (
+            result?.rawResults?.results &&
+            Array.isArray(result.rawResults.results)
+          ) {
+            sources.push(...result.rawResults.results);
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+  }
+
+  if (sources.length === 0) {
+    return null;
+  }
+
+  // Deduplicate sources by URL
+  const seenUrls = new Set<string>();
+  const uniqueSources = sources.filter((s) => {
+    const key = s.url || s.title || JSON.stringify(s);
+    if (seenUrls.has(key)) return false;
+    seenUrls.add(key);
+    return true;
+  });
+
+  // Build citations from sources
+  const citations = buildCitationsFromResults(uniqueSources);
+
+  if (citations.length === 0) {
+    return null;
+  }
+
+  // Calculate metadata
+  const verifiedCount = citations.filter(
+    (c: any) => c.confidence >= 0.7
+  ).length;
+  const avgConfidence =
+    citations.reduce((sum: number, c: any) => sum + c.confidence, 0) /
+    citations.length;
+
+  // Count by source type
+  const legalDbCount = citations.filter(
+    (c: any) => c.domain === "legal-db"
+  ).length;
+  const webCount = citations.length - legalDbCount;
+
+  logger.log(
+    `[Citations] Built ${citations.length} citations (${legalDbCount} legal DB, ${webCount} web)`
+  );
+
+  return {
+    citations: citations.map((c: any) => ({
+      id: c.id,
+      marker: c.marker,
+      title: c.title,
+      url: c.url,
+      snippet: c.snippet,
+      type: c.type,
+      confidence: c.confidence,
+      domain: c.domain,
+    })),
+    metadata: {
+      totalCitations: citations.length,
+      verifiedCount,
+      averageConfidence: avgConfidence,
+      legalDbCount,
+      webCount,
+    },
+  };
+}
+
+/**
  * Wrap a Mastra stream with resumable stream context
  * Enables automatic recovery if connection is lost during streaming
  *
@@ -450,16 +570,36 @@ export async function createResumableMastraStream(
     hasContext: !!streamContext,
   });
 
+  // Wrap the onFinish callback to extract and emit citations
+  const wrappedCallbacks = {
+    ...callbacks,
+    onFinish: async (result: { messages: any[] }) => {
+      // Extract citations from tool results
+      const citationData = extractCitationsFromMessages(result.messages);
+
+      if (citationData) {
+        logger.log(
+          `[Mastra SDK] 📚 Extracted ${citationData.citations.length} citations from tool results`
+        );
+      }
+
+      // Call original onFinish
+      if (callbacks?.onFinish) {
+        await callbacks.onFinish(result);
+      }
+    },
+  };
+
   if (!streamContext) {
     // Fallback to regular stream if context not available
     logger.warn(
       "[Mastra SDK] ⚠️  No resumable context - using regular stream (no recovery on disconnect)"
     );
-    return stream.toUIMessageStreamResponse(callbacks);
+    return stream.toUIMessageStreamResponse(wrappedCallbacks);
   }
 
   // Create the base stream response with callbacks
-  const baseStreamResponse = stream.toUIMessageStreamResponse(callbacks);
+  const baseStreamResponse = stream.toUIMessageStreamResponse(wrappedCallbacks);
 
   // Wrap in resumable stream context for automatic recovery
   try {
