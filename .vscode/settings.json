@@ -36,5 +36,6 @@
     "editor.defaultFormatter": "ms-vscode.powershell"
   },
   "css.validate": false,
-  "css.lint.unknownAtRules": "ignore"
+  "css.lint.unknownAtRules": "ignore",
+  "typescript.autoClosingTags": false
 }
