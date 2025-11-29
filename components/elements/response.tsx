@@ -32,9 +32,10 @@ export const Response = memo(
     <Streamdown
       className={cn(
         "w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_code]:whitespace-pre-wrap [&_code]:break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto",
-        // Simple table styling - no display changes, just styling
+        // Blockquote styling
+        "[&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground/30 [&_blockquote]:pl-3 [&_blockquote]:my-2 [&_blockquote]:text-muted-foreground",
+        // Table styling
         "[&_table]:my-4 [&_table]:w-auto [&_table]:border-collapse [&_table]:text-sm",
-        // Cell styling with smaller padding on mobile
         "[&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1.5 [&_td]:text-left [&_td]:align-top md:[&_td]:px-3 md:[&_td]:py-2",
         "[&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_th]:align-top md:[&_th]:px-3 md:[&_th]:py-2",
         className

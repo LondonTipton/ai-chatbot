@@ -50,6 +50,62 @@ type ExtractedSource = {
 };
 
 /**
+ * Validate case identifier format (e.g., "HH 226-20", "SC 540/19", "LC/H/REV/108/16")
+ * Returns true if it looks like a valid Zimbabwe case citation
+ */
+function isValidCaseIdentifier(caseId: string | undefined | null): boolean {
+  if (!caseId || typeof caseId !== "string") return false;
+
+  const trimmed = caseId.trim();
+  if (trimmed.length < 3 || trimmed.length > 50) return false;
+
+  // Valid patterns: "HH 226-20", "SC 540/19", "LC/H/REV/108/16", "CCZ 1/15"
+  // Should contain letters and numbers, possibly with spaces, dashes, or slashes
+  const validPattern = /^[A-Z]{1,4}[\s\/]?[A-Z]*[\s\/]?\d+[-\/]?\d*$/i;
+
+  // Also check it's not just a filename or garbage
+  if (trimmed.includes(".json") || trimmed.includes(".doc")) return false;
+  if (trimmed.toLowerCase().startsWith("scan")) return false;
+
+  return validPattern.test(trimmed) || trimmed.includes("/");
+}
+
+/**
+ * Sanitize source file name to create a readable title
+ * e.g., "HH 226-20.json" -> "HH 226-20", "scan0004.json" -> "Case Document"
+ */
+function sanitizeSourceFileName(sourceFile: string): string {
+  if (!sourceFile) return "Legal Document";
+
+  // Remove file extension
+  let name = sourceFile.replace(/\.(json|doc|docx|pdf)$/i, "");
+
+  // If it's a scan file or numeric, return generic name
+  if (/^scan\d+$/i.test(name) || /^\d+$/.test(name)) {
+    return "Legal Document";
+  }
+
+  // Clean up common patterns
+  name = name.replace(/_/g, " ").replace(/-+/g, "-").trim();
+
+  return name || "Legal Document";
+}
+
+/**
+ * Get the best title for a legal DB source
+ * Prioritizes valid case identifier, falls back to sanitized source file
+ */
+function getLegalSourceTitle(
+  caseIdentifier: string | undefined | null,
+  sourceFile: string
+): string {
+  if (isValidCaseIdentifier(caseIdentifier)) {
+    return caseIdentifier!.trim();
+  }
+  return sanitizeSourceFileName(sourceFile);
+}
+
+/**
  * Extract sources from message tool results for citation numbering and tooltips
  */
 function extractSourcesFromMessage(message: ChatMessage): ExtractedSource[] {
@@ -124,10 +180,10 @@ function extractSourcesFromMessage(message: ChatMessage): ExtractedSource[] {
             });
           }
 
-          const caseId = metadata.case_identifier;
-          const title = caseId
-            ? `${caseId} (${r.source})`
-            : `${r.source} - ${r.sourceFile}`.replace(/\.json$/, "");
+          const title = getLegalSourceTitle(
+            metadata.case_identifier,
+            r.sourceFile
+          );
 
           sources.push({
             title,
@@ -851,6 +907,13 @@ function MessageCitations({ message }: { message: ChatMessage }) {
               if (r.source && r.sourceFile && r.text) {
                 const docId = r.docId || r.sourceFile;
                 const existing = legalDbSources.get(docId);
+                const metadata = r.metadata || {};
+
+                // Use validated case identifier or sanitized source file for title
+                const title = getLegalSourceTitle(
+                  metadata.case_identifier,
+                  r.sourceFile
+                );
 
                 if (existing) {
                   // Combine chunks - keep highest score, append content
@@ -866,16 +929,24 @@ function MessageCitations({ message }: { message: ChatMessage }) {
                   existing.chunkCount = (existing.chunkCount || 1) + 1;
                 } else {
                   legalDbSources.set(docId, {
-                    title: `${r.source} - ${r.sourceFile}`.replace(
-                      /\.json$/,
-                      ""
-                    ),
+                    title,
                     url: `legal-db://${docId}`,
                     content: r.text?.substring(0, 400),
                     relevanceScore: r.score,
                     docId,
                     isLegalDb: true,
                     chunkCount: 1,
+                    // Include rich legal metadata from Zilliz
+                    legalMetadata: {
+                      caseIdentifier: metadata.case_identifier,
+                      court: metadata.court,
+                      judge: metadata.primary_judge,
+                      decisionDate: metadata.decision_date,
+                      caseYear: metadata.case_year,
+                      documentType: metadata.document_type,
+                      topics: metadata.top_legal_topics,
+                      labels: metadata.labels,
+                    },
                   });
                 }
               } else if (r.url && !r.url.startsWith("legal-db://")) {
@@ -892,19 +963,41 @@ function MessageCitations({ message }: { message: ChatMessage }) {
             }
           }
 
-          // Extract from sources array
+          // Extract from sources array (workflow tool output)
           if (data?.sources && Array.isArray(data.sources)) {
             for (const s of data.sources) {
               if (s.url?.startsWith("legal-db://")) {
                 const docId = s.url.replace("legal-db://", "");
                 if (!legalDbSources.has(docId)) {
+                  const metadata = s.metadata || {};
+                  const legalMeta = s.legalMetadata || {
+                    caseIdentifier: metadata.case_identifier,
+                    court: metadata.court,
+                    judge: metadata.primary_judge,
+                    decisionDate: metadata.decision_date,
+                    caseYear: metadata.case_year,
+                    documentType: metadata.document_type,
+                    topics: metadata.top_legal_topics,
+                    labels: metadata.labels,
+                  };
+
+                  // Use validated case identifier or sanitized source file for title
+                  const title = getLegalSourceTitle(
+                    legalMeta.caseIdentifier,
+                    s.sourceFile || s.title
+                  );
+
                   legalDbSources.set(docId, {
-                    title: s.title,
+                    title,
                     url: s.url,
-                    content: s.content?.substring(0, 400) || s.snippet,
+                    content:
+                      s.content?.substring(0, 400) ||
+                      s.text?.substring(0, 400) ||
+                      s.snippet,
                     relevanceScore: s.score,
                     docId,
                     isLegalDb: true,
+                    legalMetadata: legalMeta,
                   });
                 }
               } else if (s.url) {

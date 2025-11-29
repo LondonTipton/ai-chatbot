@@ -10,9 +10,23 @@ import {
   FileTextIcon,
   BuildingIcon,
   CheckCircleIcon,
+  CalendarIcon,
+  UserIcon,
+  TagIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
+export type LegalMetadata = {
+  caseIdentifier?: string;
+  court?: string;
+  judge?: string;
+  decisionDate?: string;
+  caseYear?: string;
+  documentType?: string;
+  topics?: string[];
+  labels?: string[];
+};
 
 export type CitationSource = {
   position?: number;
@@ -26,6 +40,7 @@ export type CitationSource = {
   confidence?: number;
   publishedDate?: string;
   type?: string;
+  legalMetadata?: LegalMetadata;
 };
 
 export type CitationResultProps = {
@@ -85,6 +100,22 @@ function inferCitationType(url: string): string {
 }
 
 /**
+ * Format date string for display (e.g., "2020-07-28" -> "28 Jul 2020")
+ */
+function formatDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
  * Single citation card
  */
 function CitationCard({
@@ -101,6 +132,8 @@ function CitationCard({
   const Icon = getCitationIcon(type);
   const content = source.content || source.snippet || "";
   const confidence = source.confidence || source.relevanceScore || source.score;
+  const isLegalDb = source.url?.startsWith("legal-db://");
+  const legalMeta = source.legalMetadata;
 
   const confidenceColor =
     confidence !== undefined
@@ -139,14 +172,66 @@ function CitationCard({
         </div>
 
         <a
-          className="inline-flex items-center gap-1.5 font-medium text-foreground text-sm transition-colors hover:text-primary"
-          href={source.url}
+          className={cn(
+            "inline-flex items-center gap-1.5 font-medium text-foreground text-sm transition-colors",
+            !isLegalDb && "hover:text-primary"
+          )}
+          href={isLegalDb ? undefined : source.url}
           rel="noopener noreferrer"
           target="_blank"
+          onClick={(e) => isLegalDb && e.preventDefault()}
         >
           <span className="line-clamp-2">{source.title}</span>
-          <ExternalLinkIcon className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+          {!isLegalDb && (
+            <ExternalLinkIcon className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+          )}
         </a>
+
+        {/* Legal Case Metadata */}
+        {isLegalDb && legalMeta && (
+          <div className="space-y-1 pt-1">
+            {/* Court */}
+            {legalMeta.court && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <ScaleIcon className="size-3 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                <span className="text-foreground/80">{legalMeta.court}</span>
+              </div>
+            )}
+
+            {/* Judge & Date */}
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              {legalMeta.judge && (
+                <div className="flex items-center gap-1">
+                  <UserIcon className="size-3 flex-shrink-0" />
+                  <span>{legalMeta.judge}</span>
+                </div>
+              )}
+              {legalMeta.decisionDate && (
+                <div className="flex items-center gap-1">
+                  <CalendarIcon className="size-3 flex-shrink-0" />
+                  <span>{formatDate(legalMeta.decisionDate)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Legal Topics */}
+            {legalMeta.topics && legalMeta.topics.length > 0 && (
+              <div className="flex items-start gap-1.5 text-xs">
+                <TagIcon className="size-3 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div className="flex flex-wrap gap-1">
+                  {legalMeta.topics.slice(0, 4).map((topic) => (
+                    <span
+                      key={topic}
+                      className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-[10px]"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {content && (
           <>
@@ -181,13 +266,17 @@ function CitationCard({
         )}
 
         <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
-          <span className="max-w-[200px] truncate">{source.url}</span>
-          {source.publishedDate && source.publishedDate !== "Not available" && (
-            <>
-              <span>•</span>
-              <span>{source.publishedDate}</span>
-            </>
-          )}
+          <span className="max-w-[200px] truncate">
+            {isLegalDb ? "Internal Legal Database" : source.url}
+          </span>
+          {!isLegalDb &&
+            source.publishedDate &&
+            source.publishedDate !== "Not available" && (
+              <>
+                <span>•</span>
+                <span>{source.publishedDate}</span>
+              </>
+            )}
         </div>
       </div>
     </div>
