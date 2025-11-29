@@ -10,7 +10,8 @@ import { CitationResult } from "./citation-result";
 import { useDataStream } from "./data-stream-provider";
 import {
   cleanupVerboseCitations,
-  convertLinksToNumberedBadges,
+  convertMarkdownLinksToBadges,
+  removeGeneratedReferenceSections,
 } from "@/lib/citations/citation-processor";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
@@ -30,41 +31,123 @@ import { PreviewAttachment } from "./preview-attachment";
 import { Weather } from "./weather";
 
 /**
- * Extract sources from message tool results for citation numbering
+ * Source type for citation tooltips with optional legal metadata
  */
-function extractSourcesFromMessage(
-  message: ChatMessage
-): Array<{ title: string; url: string }> {
-  const sources: Array<{ title: string; url: string }> = [];
+type ExtractedSource = {
+  title: string;
+  url: string;
+  content?: string;
+  legalMetadata?: {
+    caseIdentifier?: string;
+    court?: string;
+    judge?: string;
+    decisionDate?: string;
+    caseYear?: string;
+    documentType?: string;
+    topics?: string[];
+    labels?: string[];
+  };
+};
+
+/**
+ * Extract sources from message tool results for citation numbering and tooltips
+ */
+function extractSourcesFromMessage(message: ChatMessage): ExtractedSource[] {
+  const sources: ExtractedSource[] = [];
 
   for (const part of message.parts || []) {
-    if ((part as any).type === "tool-result" || (part as any).output) {
-      const result = (part as any).result || (part as any).output;
-      if (!result) continue;
+    const partType = (part as any).type || "";
 
-      try {
-        const data = typeof result === "string" ? JSON.parse(result) : result;
+    // Handle various tool result formats
+    const isToolResult =
+      partType === "tool-result" ||
+      partType.startsWith("tool-") ||
+      (part as any).output !== undefined;
 
-        // Extract from various result formats
-        const allResults = [
-          ...(data?.rawResults || []),
-          ...(data?.results || []),
-          ...(data?.sources || []),
-        ];
+    if (!isToolResult) continue;
 
-        for (const r of allResults) {
-          if (r.url) {
-            sources.push({ title: r.title || "", url: r.url });
-          } else if (r.source && r.sourceFile) {
-            sources.push({
-              title: `${r.source} - ${r.sourceFile}`,
-              url: `legal-db://${r.docId || "doc"}`,
+    const result = (part as any).result || (part as any).output;
+    if (!result) continue;
+
+    try {
+      const data = typeof result === "string" ? JSON.parse(result) : result;
+
+      // Debug: log what we're getting
+      if (typeof window !== "undefined" && partType.startsWith("tool-")) {
+        console.log("[Citation Debug] Tool result:", {
+          type: partType,
+          hasRawResults: !!data?.rawResults,
+          hasResults: !!data?.results,
+          hasSources: !!data?.sources,
+          dataKeys: Object.keys(data || {}),
+        });
+        // Log first source to see its structure
+        const firstSource = data?.sources?.[0] || data?.rawResults?.[0];
+        if (firstSource) {
+          console.log("[Citation Debug] First source structure:", {
+            hasUrl: !!firstSource.url,
+            hasSourceField: !!firstSource.source,
+            hasSourceFile: !!firstSource.sourceFile,
+            hasMetadata: !!firstSource.metadata,
+            keys: Object.keys(firstSource),
+            isLegalDb: firstSource.url?.startsWith("legal-db://"),
+          });
+        }
+      }
+
+      // Extract from various result formats
+      const allResults = [
+        ...(data?.rawResults || []),
+        ...(data?.results || []),
+        ...(data?.sources || []),
+      ];
+
+      for (const r of allResults) {
+        if (r.url) {
+          sources.push({
+            title: r.title || "",
+            url: r.url,
+            content:
+              r.content?.substring(0, 200) || r.snippet?.substring(0, 200),
+          });
+        } else if (r.source && r.sourceFile) {
+          // Legal DB source - extract rich metadata
+          const metadata = r.metadata || {};
+
+          // Debug: log metadata
+          if (typeof window !== "undefined") {
+            console.log("[Citation Debug] Legal DB metadata:", {
+              source: r.source,
+              hasMetadata: !!r.metadata,
+              caseIdentifier: metadata.case_identifier,
+              court: metadata.court,
             });
           }
+
+          const caseId = metadata.case_identifier;
+          const title = caseId
+            ? `${caseId} (${r.source})`
+            : `${r.source} - ${r.sourceFile}`.replace(/\.json$/, "");
+
+          sources.push({
+            title,
+            url: `legal-db://${r.docId || metadata.doc_id || "doc"}`,
+            content: r.text?.substring(0, 200),
+            legalMetadata: {
+              caseIdentifier: metadata.case_identifier,
+              court: metadata.court,
+              judge: metadata.primary_judge,
+              decisionDate: metadata.decision_date,
+              caseYear: metadata.case_year,
+              documentType: metadata.document_type,
+              topics: metadata.top_legal_topics,
+              labels: metadata.labels,
+            },
+          });
         }
-      } catch {
-        // Ignore parse errors
       }
+    } catch {
+      // Ignore parse errors
     }
   }
 
@@ -78,37 +161,259 @@ function extractSourcesFromMessage(
 }
 
 /**
- * Response component that renders [[n]] as styled citation badges
- * Matches the style of badges in the Sources section (gray, rounded, centered)
+ * Citation badge with hover tooltip showing source preview
+ * Enhanced with rich legal metadata display
  */
-function ResponseWithBadges({ children }: { children: string }) {
-  // Convert [[n]] to a span (not sup) for proper vertical alignment
+function CitationBadgeWithTooltip({
+  number,
+  source,
+}: {
+  number: number;
+  source?: ExtractedSource;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const isLegalDb = source?.url?.startsWith("legal-db://");
+  const displayDomain = isLegalDb
+    ? "Legal Database"
+    : source?.url
+    ? new URL(source.url).hostname.replace("www.", "")
+    : "";
+
+  const legalMeta = source?.legalMetadata;
+
+  return (
+    <span
+      className="relative inline-block"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <span className="inline-flex items-center justify-center size-6 text-xs font-semibold bg-secondary text-secondary-foreground rounded-full mx-0.5 align-middle cursor-default border-transparent">
+        {number}
+      </span>
+
+      {/* Tooltip */}
+      {isHovered && source && (
+        <div className="absolute z-50 w-72 bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-popover border border-border rounded-lg shadow-lg text-left animate-in fade-in-0 zoom-in-95 duration-150">
+          {/* Arrow */}
+          <div className="absolute w-2 h-2 bg-popover border-border rotate-45 left-1/2 -translate-x-1/2 bottom-0 translate-y-1/2 border-r border-b" />
+
+          {/* Domain */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <span className="truncate">{displayDomain}</span>
+          </div>
+
+          {/* Title */}
+          <p className="font-medium text-sm text-foreground line-clamp-2 mb-1">
+            {source.title}
+          </p>
+
+          {/* Legal Metadata (for legal-db sources) */}
+          {isLegalDb && legalMeta && (
+            <div className="space-y-1.5 py-1.5 border-t border-border/50 mt-1.5">
+              {/* Court */}
+              {legalMeta.court && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-amber-600 dark:text-amber-400">⚖️</span>
+                  <span className="text-foreground/80 truncate">
+                    {legalMeta.court}
+                  </span>
+                </div>
+              )}
+
+              {/* Judge & Date */}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                {legalMeta.judge && (
+                  <div className="flex items-center gap-1">
+                    <span>👤</span>
+                    <span className="truncate max-w-[100px]">
+                      {legalMeta.judge}
+                    </span>
+                  </div>
+                )}
+                {legalMeta.decisionDate && (
+                  <div className="flex items-center gap-1">
+                    <span>📅</span>
+                    <span>
+                      {new Date(legalMeta.decisionDate).toLocaleDateString(
+                        "en-GB",
+                        { day: "numeric", month: "short", year: "numeric" }
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Legal Topics */}
+              {legalMeta.topics && legalMeta.topics.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {legalMeta.topics.slice(0, 3).map((topic) => (
+                    <span
+                      key={topic}
+                      className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-[10px]"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Content preview */}
+          {source.content && (
+            <p className="text-xs text-muted-foreground line-clamp-3 mt-1.5">
+              {source.content}
+            </p>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Response component that renders [[n]] as styled citation badges with tooltips
+ * Renders markdown first, then adds interactivity via event delegation
+ * Enhanced with rich legal metadata display
+ */
+function ResponseWithBadges({
+  children,
+  sources,
+}: {
+  children: string;
+  sources: ExtractedSource[];
+}) {
+  const [hoveredBadge, setHoveredBadge] = useState<number | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+
+  // Convert [[n]] to styled spans
   const processedContent = children.replace(
     /\[\[(\d+)\]\]/g,
-    '<span class="cite-badge">$1</span>'
+    '<span class="cite-badge" data-cite="$1">$1</span>'
   );
+
+  // Event delegation for badge hover
+  const handleMouseOver = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains("cite-badge")) {
+      const num = parseInt(target.dataset.cite || "0", 10);
+      setHoveredBadge(num);
+      const rect = target.getBoundingClientRect();
+      setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    }
+  }, []);
+
+  const handleMouseOut = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains("cite-badge")) {
+      setHoveredBadge(null);
+    }
+  }, []);
+
+  const source = hoveredBadge ? sources[hoveredBadge - 1] : null;
+  const isLegalDb = source?.url?.startsWith("legal-db://");
+  const legalMeta = source?.legalMetadata;
+  const domain = isLegalDb
+    ? "Legal Database"
+    : source?.url
+    ? (() => {
+        try {
+          return new URL(source.url).hostname.replace("www.", "");
+        } catch {
+          return "";
+        }
+      })()
+    : "";
 
   return (
     <div
       className={cn(
-        "response-with-badges",
-        // Badge styling - matches the Sources section badges
-        "[&_.cite-badge]:inline-flex",
-        "[&_.cite-badge]:items-center",
-        "[&_.cite-badge]:justify-center",
-        "[&_.cite-badge]:size-6", // Fixed size circle
-        "[&_.cite-badge]:text-xs",
-        "[&_.cite-badge]:font-semibold",
-        "[&_.cite-badge]:bg-muted", // Gray background like sources
-        "[&_.cite-badge]:text-muted-foreground",
-        "[&_.cite-badge]:rounded-full", // Circular like sources
-        "[&_.cite-badge]:mx-1",
-        "[&_.cite-badge]:align-middle", // Vertically centered with text
-        "[&_.cite-badge]:cursor-default",
-        "[&_.cite-badge]:shrink-0"
+        "response-with-badges relative",
+        "[&_.cite-badge]:inline-flex [&_.cite-badge]:items-center [&_.cite-badge]:justify-center",
+        "[&_.cite-badge]:size-6 [&_.cite-badge]:text-xs [&_.cite-badge]:font-semibold",
+        "[&_.cite-badge]:bg-secondary [&_.cite-badge]:text-secondary-foreground",
+        "[&_.cite-badge]:rounded-full [&_.cite-badge]:mx-0.5 [&_.cite-badge]:align-middle",
+        "[&_.cite-badge]:cursor-pointer [&_.cite-badge]:hover:bg-secondary/80"
       )}
+      onMouseOver={handleMouseOver}
+      onMouseOut={handleMouseOut}
     >
       <Response>{processedContent}</Response>
+
+      {hoveredBadge && source && (
+        <div
+          className="fixed z-50 w-72 p-3 bg-popover border border-border rounded-lg shadow-lg text-left"
+          style={{
+            left: tooltipPos.x,
+            top: tooltipPos.y - 8,
+            transform: "translate(-50%, -100%)",
+          }}
+        >
+          <div className="text-xs text-muted-foreground mb-1">{domain}</div>
+          <p className="font-medium text-sm text-foreground line-clamp-2 mb-1">
+            {source.title}
+          </p>
+
+          {/* Legal Metadata (for legal-db sources) */}
+          {isLegalDb && legalMeta && (
+            <div className="space-y-1.5 py-1.5 border-t border-border/50 mt-1.5">
+              {/* Court */}
+              {legalMeta.court && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-amber-600 dark:text-amber-400">⚖️</span>
+                  <span className="text-foreground/80 truncate">
+                    {legalMeta.court}
+                  </span>
+                </div>
+              )}
+
+              {/* Judge & Date */}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                {legalMeta.judge && (
+                  <div className="flex items-center gap-1">
+                    <span>👤</span>
+                    <span className="truncate max-w-[100px]">
+                      {legalMeta.judge}
+                    </span>
+                  </div>
+                )}
+                {legalMeta.decisionDate && (
+                  <div className="flex items-center gap-1">
+                    <span>📅</span>
+                    <span>
+                      {new Date(legalMeta.decisionDate).toLocaleDateString(
+                        "en-GB",
+                        { day: "numeric", month: "short", year: "numeric" }
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Legal Topics */}
+              {legalMeta.topics && legalMeta.topics.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {legalMeta.topics.slice(0, 3).map((topic) => (
+                    <span
+                      key={topic}
+                      className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-[10px]"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {source.content && (
+            <p className="text-xs text-muted-foreground line-clamp-3 mt-1.5">
+              {source.content}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -224,13 +529,18 @@ const PurePreviewMessage = ({
                 // 2. Convert markdown links to numbered badges
                 let displayText = part.text;
                 if (message.role === "assistant") {
-                  // First clean up verbose citations
-                  displayText = cleanupVerboseCitations(displayText);
-                  // Then convert remaining markdown links to numbered badges
                   // Extract sources from message for numbering
                   const sources = extractSourcesFromMessage(message);
+
+                  // Remove LLM-generated reference sections and legal-db URLs
+                  displayText = removeGeneratedReferenceSections(displayText);
+
+                  // Clean up verbose citations (also converts [n] to [[n]])
+                  displayText = cleanupVerboseCitations(displayText);
+
+                  // Then convert any remaining markdown links to numbered badges
                   if (sources.length > 0) {
-                    displayText = convertLinksToNumberedBadges(
+                    displayText = convertMarkdownLinksToBadges(
                       displayText,
                       sources
                     );
@@ -241,6 +551,12 @@ const PurePreviewMessage = ({
                 if (!displayText.trim()) {
                   return null;
                 }
+
+                // Get sources for tooltip display
+                const messageSources =
+                  message.role === "assistant"
+                    ? extractSourcesFromMessage(message)
+                    : [];
 
                 return (
                   <div key={key}>
@@ -258,7 +574,7 @@ const PurePreviewMessage = ({
                           : undefined
                       }
                     >
-                      <ResponseWithBadges>
+                      <ResponseWithBadges sources={messageSources}>
                         {sanitizeText(displayText)}
                       </ResponseWithBadges>
                     </MessageContent>

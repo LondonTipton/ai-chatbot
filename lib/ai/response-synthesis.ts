@@ -3,6 +3,7 @@ import {
   buildCitationsFromResults,
   formatReferencesSection,
   type TavilySource,
+  type CombinedSource,
   type Citation,
 } from "@/lib/citations";
 
@@ -270,8 +271,8 @@ export function formatToolResults(parts: MessagePart[]): string {
  * Extract all sources from tool results for citation building
  * Handles Tavily results, legal DB results, and workflow tool results
  */
-export function extractTavilySources(parts: MessagePart[]): TavilySource[] {
-  const sources: TavilySource[] = [];
+export function extractTavilySources(parts: MessagePart[]): CombinedSource[] {
+  const sources: CombinedSource[] = [];
 
   // Find all tool results
   const toolParts = parts.filter((p) => p.type === "tool-result");
@@ -334,7 +335,7 @@ export function extractTavilySources(parts: MessagePart[]): TavilySource[] {
       if (resultData?.sources && Array.isArray(resultData.sources)) {
         for (const source of resultData.sources) {
           // Skip if already added via rawResults
-          if (sources.some((s) => s.url === source.url)) continue;
+          if (sources.some((s) => "url" in s && s.url === source.url)) continue;
 
           sources.push({
             title: source.title,
@@ -350,12 +351,14 @@ export function extractTavilySources(parts: MessagePart[]): TavilySource[] {
     if (toolName === "legal-search") {
       if (resultData?.results && Array.isArray(resultData.results)) {
         for (const result of resultData.results) {
-          // Convert legal DB format to TavilySource format for unified handling
+          // Preserve full legal DB format with metadata for rich citations
           sources.push({
-            title: `${result.source} - ${result.sourceFile}`,
-            url: `legal-db://${result.docId || "unknown"}`,
-            content: result.text,
+            source: result.source,
+            sourceFile: result.sourceFile,
+            text: result.text,
             score: result.score,
+            docId: result.docId || result.metadata?.doc_id,
+            metadata: result.metadata,
           });
         }
       }
@@ -369,7 +372,7 @@ export function extractTavilySources(parts: MessagePart[]): TavilySource[] {
         Array.isArray(resultData.rawResults.results)
       ) {
         for (const result of resultData.rawResults.results) {
-          if (sources.some((s) => s.url === result.url)) continue;
+          if (sources.some((s) => "url" in s && s.url === result.url)) continue;
           sources.push({
             title: result.title,
             url: result.url,

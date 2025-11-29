@@ -162,71 +162,83 @@ const multiSearchStep = createStep({
 
         // Enhance the sub-query with variations and HyDE
         const enhanced = await enhanceSearchQuery(
-            subQuery,
-            conversationHistory || []
+          subQuery,
+          conversationHistory || []
         );
 
-        console.log(`[Multi-Search] Sub-query ${i+1} enhanced variations:`, enhanced.variations.length);
+        console.log(
+          `[Multi-Search] Sub-query ${i + 1} enhanced variations:`,
+          enhanced.variations.length
+        );
 
         // Prepare parallel search promises
         // 1. Tavily search (use first variation + Zimbabwe context)
         const tavilyQuery = enhanced.variations[0];
         const tavilyPromise = tavilySearchAdvancedTool.execute({
-            context: {
-                query: tavilyQuery,
-                maxResults: 5, // Fewer results per sub-query
-                includeRawContent: true,
-                jurisdiction: jurisdiction || "Zimbabwe"
-            },
-            runtimeContext
+          context: {
+            query: tavilyQuery,
+            maxResults: 5, // Fewer results per sub-query
+            includeRawContent: true,
+            jurisdiction: jurisdiction || "Zimbabwe",
+          },
+          runtimeContext,
         });
 
         // 2. Legal searches (Variations + HyDE)
         // For multi-search, we use variations + HyDE but with lower topK
-        const legalQueries = [
-            enhanced.hydePassage,
-            ...enhanced.variations
-        ];
+        const legalQueries = [enhanced.hydePassage, ...enhanced.variations];
 
-        const legalPromise = legalSearchTool.execute({
+        const legalPromise = legalSearchTool
+          .execute({
             context: {
-                queries: legalQueries, // Use batch input
-                topK: 5 // 5 results per variation
+              queries: legalQueries, // Use batch input
+              topK: 5, // 5 results per variation
             },
-            runtimeContext
-        }).catch(err => {
-            console.error(`[Multi-Search] Legal search failed for sub-query ${i+1}:`, err);
+            runtimeContext,
+          })
+          .catch((err) => {
+            console.error(
+              `[Multi-Search] Legal search failed for sub-query ${i + 1}:`,
+              err
+            );
             return { results: [], batchResults: [] };
-        });
+          });
 
         // Execute all searches for this sub-query
         const [tavilyResults, legalResultsOutput] = await Promise.all([
-            tavilyPromise,
-            legalPromise
+          tavilyPromise,
+          legalPromise,
         ]);
 
         // Merge legal results
         const allLegalResults = legalResultsOutput.results || [];
-        
+
         // Deduplicate legal results by docId
         const uniqueLegalResults = Array.from(
-            new Map(allLegalResults.map(item => [item.docId, item])).values()
+          new Map(allLegalResults.map((item) => [item.docId, item])).values()
         );
 
         // Sort by score
         uniqueLegalResults.sort((a, b) => b.score - a.score);
-        
+
         // Take top 10 unique legal results
         const finalLegalResults = uniqueLegalResults.slice(0, 10);
 
         const mergedResults = [
-            ...finalLegalResults.map((r: any) => ({
-                title: `${r.source} - ${r.sourceFile}`,
-                url: `legal-db://${r.docId}`,
-                content: r.text,
-                score: r.score
-            })),
-            ...(tavilyResults.results || [])
+          ...finalLegalResults.map((r: any) => ({
+            title: r.metadata?.case_identifier
+              ? `${r.metadata.case_identifier} (${r.source})`
+              : `${r.source} - ${r.sourceFile}`,
+            url: `legal-db://${r.docId || r.metadata?.doc_id || "unknown"}`,
+            content: r.text,
+            score: r.score,
+            source: r.source,
+            sourceFile: r.sourceFile,
+            text: r.text,
+            docId: r.docId,
+            metadata: r.metadata,
+          })),
+          ...(tavilyResults.results || []),
         ];
 
         totalResults += mergedResults.length;
@@ -238,7 +250,11 @@ const multiSearchStep = createStep({
         });
 
         console.log(
-          `[Multi-Search] Search ${i + 1} found ${mergedResults.length} results (Legal: ${finalLegalResults.length}, Web: ${tavilyResults.results?.length || 0})`
+          `[Multi-Search] Search ${i + 1} found ${
+            mergedResults.length
+          } results (Legal: ${finalLegalResults.length}, Web: ${
+            tavilyResults.results?.length || 0
+          })`
         );
       }
 

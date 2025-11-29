@@ -456,13 +456,14 @@ function extractCitationsFromMessages(messages: any[]) {
             // Check if these are legal DB results
             for (const r of result.results) {
               if (r.source && r.sourceFile && r.text) {
-                // Legal DB format - convert to unified format
+                // Legal DB format - preserve full metadata for rich citations
                 sources.push({
-                  title: `${r.source} - ${r.sourceFile}`,
-                  url: `legal-db://${r.docId || "unknown"}`,
-                  content: r.text,
+                  source: r.source,
+                  sourceFile: r.sourceFile,
+                  text: r.text,
                   score: r.score,
-                  isLegalDb: true,
+                  docId: r.docId || r.metadata?.doc_id,
+                  metadata: r.metadata,
                 });
               } else {
                 sources.push(r);

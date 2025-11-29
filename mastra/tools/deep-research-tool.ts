@@ -178,15 +178,20 @@ export const deepResearchTool = createTool({
       const rawTavilyResults = output.rawResults?.results || [];
 
       // Enhance sources with content excerpts and scores
-      const enhancedSources = output.sources.map((source) => {
+      // Preserve all source fields including metadata for legal DB sources
+      const enhancedSources = output.sources.map((source: any) => {
         const rawResult = rawTavilyResults.find(
           (r: any) => r.url === source.url
         );
         return {
+          ...source, // Preserve all original fields (including metadata for legal DB)
           title: source.title,
           url: source.url,
-          content: rawResult?.content?.substring(0, 500) || "", // First 500 chars
-          score: rawResult?.score,
+          content:
+            rawResult?.content?.substring(0, 500) ||
+            source.text?.substring(0, 500) ||
+            "",
+          score: rawResult?.score || source.score,
         };
       });
 

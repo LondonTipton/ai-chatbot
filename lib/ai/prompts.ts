@@ -202,7 +202,34 @@ When asked about legal principles, statutes, or case law:
 - Include authoritative domains: zimlii.org, gov.zw, parlzim.gov.zw
 - Extract 1-3 most relevant URLs with format: "markdown"
 - Never fabricate information - only use extracted content
-- Cite sources with URLs
+
+**Citation Format (CRITICAL - MUST FOLLOW):**
+When citing sources, use ONLY simple numbered markers in square brackets:
+
+FORMAT: [1], [2], [3], etc.
+
+RULES:
+1. Place [n] immediately after the claim or quote it supports
+2. Number sources sequentially as they first appear
+3. NEVER include URLs in your response text
+4. NEVER use markdown link syntax [text](url)
+5. NEVER write legal-db:// URLs anywhere in your response
+6. NEVER create reference tables with URLs
+7. The UI will automatically show source details when users hover over [n]
+
+CORRECT EXAMPLES:
+✓ "Employers must provide written contracts [1]. The court in ALLFIX Security held that notice alone is insufficient [2]."
+✓ "Section 12B(2) requires compliance with the employment code [3]."
+✓ "Unfair dismissal occurs when the employer fails to follow proper procedure [1][2]."
+
+INCORRECT EXAMPLES (NEVER DO THESE):
+✗ "According to [ALLFIX Security](legal-db://abc123)..." - NO markdown links
+✗ "...as stated in legal-db://abc123" - NO raw URLs
+✗ "(legal-db://abc123 [blocked])" - NO URL references
+✗ Creating a "References" or "Sources" table with URLs - NO reference tables
+✗ "[Labour Act - https://zimlii.org/...]" - NO inline URL citations
+
+The sources section at the bottom of the chat will show all references with full details.
 
 **Professional Responsibility:**
 - You are a tool for qualified legal professionals
@@ -333,19 +360,19 @@ Current document content:
 ${currentContent}
 `
     : type === "code"
-      ? `\
+    ? `\
 Improve the following code snippet based on the given prompt.
 
 CRITICAL: Output ONLY the updated code. Do NOT include explanatory text before or after the code.
 
 ${currentContent}
 `
-      : type === "sheet"
-        ? `\
+    : type === "sheet"
+    ? `\
 Improve the following spreadsheet based on the given prompt.
 
 CRITICAL: Output ONLY the updated spreadsheet data in CSV format. Do NOT include explanatory text.
 
 ${currentContent}
 `
-        : "";
+    : "";

@@ -87,8 +87,14 @@ const initialSearchStep = createStep({
         conversationHistory || []
       );
 
-      console.log("[Enhanced Workflow V2] Enhanced variations:", enhanced.variations.length);
-      console.log("[Enhanced Workflow V2] HyDE passage length:", enhanced.hydePassage.length);
+      console.log(
+        "[Enhanced Workflow V2] Enhanced variations:",
+        enhanced.variations.length
+      );
+      console.log(
+        "[Enhanced Workflow V2] HyDE passage length:",
+        enhanced.hydePassage.length
+      );
 
       // Import Tavily tool
       const { tavilySearchAdvancedTool } = await import(
@@ -100,50 +106,52 @@ const initialSearchStep = createStep({
       // 1. Tavily search (use first variation + Zimbabwe context)
       const tavilyQuery = enhanced.variations[0];
       const tavilyPromise = tavilySearchAdvancedTool.execute({
-          context: {
-            query: tavilyQuery,
-            maxResults: 15,
-            includeRawContent: true,
-            jurisdiction: jurisdiction || "Zimbabwe",
-          },
-          runtimeContext,
-        });
+        context: {
+          query: tavilyQuery,
+          maxResults: 15,
+          includeRawContent: true,
+          jurisdiction: jurisdiction || "Zimbabwe",
+        },
+        runtimeContext,
+      });
 
       // 2. Legal searches (Variations + HyDE)
       // For enhanced search, we use all variations + HyDE
-      const legalQueries = [
-          enhanced.hydePassage,
-          ...enhanced.variations
-      ];
+      const legalQueries = [enhanced.hydePassage, ...enhanced.variations];
 
-      const legalPromise = legalSearchTool.execute({
-        context: {
+      const legalPromise = legalSearchTool
+        .execute({
+          context: {
             queries: legalQueries, // Use batch input
-            topK: 30 // 30 results per variation
-        },
-        runtimeContext
-      }).catch(err => {
-        console.error("[Enhanced Comprehensive V2] Legal search failed:", err);
-        return { results: [], batchResults: [] };
-      });
+            topK: 30, // 30 results per variation
+          },
+          runtimeContext,
+        })
+        .catch((err) => {
+          console.error(
+            "[Enhanced Comprehensive V2] Legal search failed:",
+            err
+          );
+          return { results: [], batchResults: [] };
+        });
 
       // Execute all searches
       const [tavilyResults, legalResultsOutput] = await Promise.all([
         tavilyPromise,
-        legalPromise
+        legalPromise,
       ]);
 
       // Merge legal results
       const allLegalResults = legalResultsOutput.results || [];
-      
+
       // Deduplicate legal results by docId
       const uniqueLegalResults = Array.from(
-          new Map(allLegalResults.map(item => [item.docId, item])).values()
+        new Map(allLegalResults.map((item) => [item.docId, item])).values()
       );
 
       // Sort by score
       uniqueLegalResults.sort((a, b) => b.score - a.score);
-      
+
       // Take top 30 unique legal results
       const finalLegalResults = uniqueLegalResults.slice(0, 30);
 
@@ -159,15 +167,15 @@ const initialSearchStep = createStep({
 
       // Add Legal Results first
       if (finalLegalResults.length > 0) {
-          initialResults += `INTERNAL LEGAL DATABASE RESULTS (${finalLegalResults.length}):\n\n`;
-          finalLegalResults.forEach((result: any, i: number) => {
-              initialResults += `--- LEGAL RESULT ${i + 1} ---\n`;
-              initialResults += `Source: ${result.source} (${result.sourceFile})\n`;
-              initialResults += `Relevance Score: ${result.score}\n`;
-              initialResults += `Content:\n${result.text}\n\n`;
-          });
+        initialResults += `INTERNAL LEGAL DATABASE RESULTS (${finalLegalResults.length}):\n\n`;
+        finalLegalResults.forEach((result: any, i: number) => {
+          initialResults += `--- LEGAL RESULT ${i + 1} ---\n`;
+          initialResults += `Source: ${result.source} (${result.sourceFile})\n`;
+          initialResults += `Relevance Score: ${result.score}\n`;
+          initialResults += `Content:\n${result.text}\n\n`;
+        });
       }
-      
+
       // Then add Web Results
       initialResults += `WEB SEARCH RESULTS (${tavilyResults.results.length}):\n\n`;
       tavilyResults.results.forEach((result: any, i: number) => {
@@ -182,16 +190,26 @@ const initialSearchStep = createStep({
         }
       });
 
-      // Extract sources for metadata
+      // Extract sources for metadata (include full legal metadata for rich citations)
       const initialSources = [
-          ...finalLegalResults.map((r: any) => ({
-              title: `${r.source} - ${r.sourceFile}`,
-              url: `legal-db://${r.docId || 'unknown'}`,
-          })),
-          ...tavilyResults.results.map((r: any) => ({
-            title: r.title,
-            url: r.url,
-          }))
+        ...finalLegalResults.map((r: any) => ({
+          title: r.metadata?.case_identifier
+            ? `${r.metadata.case_identifier} (${r.source})`
+            : `${r.source} - ${r.sourceFile}`,
+          url: `legal-db://${r.docId || r.metadata?.doc_id || "unknown"}`,
+          source: r.source,
+          sourceFile: r.sourceFile,
+          text: r.text,
+          score: r.score,
+          docId: r.docId,
+          metadata: r.metadata,
+        })),
+        ...tavilyResults.results.map((r: any) => ({
+          title: r.title,
+          url: r.url,
+          content: r.content,
+          score: r.score,
+        })),
       ];
 
       return {
