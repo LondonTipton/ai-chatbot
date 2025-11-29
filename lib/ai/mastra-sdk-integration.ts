@@ -431,7 +431,8 @@ export async function streamMastraAgentWithHistory(
  */
 async function extractCitationsFromMessages(messages: any[]) {
   // Dynamically import to avoid circular dependencies
-  const { buildCitationsFromResults } = await import("@/lib/citations");
+  // Use relative path for Vercel webpack compatibility
+  const { buildCitationsFromResults } = await import("../citations");
   const sources: any[] = [];
 
   for (const msg of messages) {
