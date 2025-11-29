@@ -429,9 +429,9 @@ export async function streamMastraAgentWithHistory(
 /**
  * Extract citations from assistant messages containing tool results
  */
-function extractCitationsFromMessages(messages: any[]) {
+async function extractCitationsFromMessages(messages: any[]) {
   // Dynamically import to avoid circular dependencies
-  const { buildCitationsFromResults } = require("@/lib/citations");
+  const { buildCitationsFromResults } = await import("@/lib/citations");
   const sources: any[] = [];
 
   for (const msg of messages) {
@@ -576,7 +576,7 @@ export async function createResumableMastraStream(
     ...callbacks,
     onFinish: async (result: { messages: any[] }) => {
       // Extract citations from tool results
-      const citationData = extractCitationsFromMessages(result.messages);
+      const citationData = await extractCitationsFromMessages(result.messages);
 
       if (citationData) {
         logger.log(
