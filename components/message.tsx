@@ -8,7 +8,10 @@ import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { CitationResult } from "./citation-result";
 import { useDataStream } from "./data-stream-provider";
-import { cleanupVerboseCitations } from "@/lib/citations/citation-processor";
+import {
+  cleanupVerboseCitations,
+  convertLinksToNumberedBadges,
+} from "@/lib/citations/citation-processor";
 import { DocumentToolResult } from "./document";
 import { DocumentPreview } from "./document-preview";
 import { MessageContent } from "./elements/message";
@@ -25,6 +28,90 @@ import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
 import { Weather } from "./weather";
+
+/**
+ * Extract sources from message tool results for citation numbering
+ */
+function extractSourcesFromMessage(
+  message: ChatMessage
+): Array<{ title: string; url: string }> {
+  const sources: Array<{ title: string; url: string }> = [];
+
+  for (const part of message.parts || []) {
+    if ((part as any).type === "tool-result" || (part as any).output) {
+      const result = (part as any).result || (part as any).output;
+      if (!result) continue;
+
+      try {
+        const data = typeof result === "string" ? JSON.parse(result) : result;
+
+        // Extract from various result formats
+        const allResults = [
+          ...(data?.rawResults || []),
+          ...(data?.results || []),
+          ...(data?.sources || []),
+        ];
+
+        for (const r of allResults) {
+          if (r.url) {
+            sources.push({ title: r.title || "", url: r.url });
+          } else if (r.source && r.sourceFile) {
+            sources.push({
+              title: `${r.source} - ${r.sourceFile}`,
+              url: `legal-db://${r.docId || "doc"}`,
+            });
+          }
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+
+  // Deduplicate by URL
+  const seen = new Set<string>();
+  return sources.filter((s) => {
+    if (seen.has(s.url)) return false;
+    seen.add(s.url);
+    return true;
+  });
+}
+
+/**
+ * Response component that renders [[n]] as styled citation badges
+ * Matches the style of badges in the Sources section (gray, rounded, centered)
+ */
+function ResponseWithBadges({ children }: { children: string }) {
+  // Convert [[n]] to a span (not sup) for proper vertical alignment
+  const processedContent = children.replace(
+    /\[\[(\d+)\]\]/g,
+    '<span class="cite-badge">$1</span>'
+  );
+
+  return (
+    <div
+      className={cn(
+        "response-with-badges",
+        // Badge styling - matches the Sources section badges
+        "[&_.cite-badge]:inline-flex",
+        "[&_.cite-badge]:items-center",
+        "[&_.cite-badge]:justify-center",
+        "[&_.cite-badge]:size-6", // Fixed size circle
+        "[&_.cite-badge]:text-xs",
+        "[&_.cite-badge]:font-semibold",
+        "[&_.cite-badge]:bg-muted", // Gray background like sources
+        "[&_.cite-badge]:text-muted-foreground",
+        "[&_.cite-badge]:rounded-full", // Circular like sources
+        "[&_.cite-badge]:mx-1",
+        "[&_.cite-badge]:align-middle", // Vertically centered with text
+        "[&_.cite-badge]:cursor-default",
+        "[&_.cite-badge]:shrink-0"
+      )}
+    >
+      <Response>{processedContent}</Response>
+    </div>
+  );
+}
 
 const PurePreviewMessage = ({
   chatId,
@@ -132,11 +219,22 @@ const PurePreviewMessage = ({
 
             if (type === "text") {
               if (mode === "view") {
-                // Clean up verbose inline citations for assistant messages
-                // The actual sources are shown in the CitationResult component below
+                // Process text for assistant messages:
+                // 1. Clean up verbose inline citations
+                // 2. Convert markdown links to numbered badges
                 let displayText = part.text;
                 if (message.role === "assistant") {
+                  // First clean up verbose citations
                   displayText = cleanupVerboseCitations(displayText);
+                  // Then convert remaining markdown links to numbered badges
+                  // Extract sources from message for numbering
+                  const sources = extractSourcesFromMessage(message);
+                  if (sources.length > 0) {
+                    displayText = convertLinksToNumberedBadges(
+                      displayText,
+                      sources
+                    );
+                  }
                 }
 
                 // Don't render empty messages
@@ -160,7 +258,9 @@ const PurePreviewMessage = ({
                           : undefined
                       }
                     >
-                      <Response>{sanitizeText(displayText)}</Response>
+                      <ResponseWithBadges>
+                        {sanitizeText(displayText)}
+                      </ResponseWithBadges>
                     </MessageContent>
                   </div>
                 );
