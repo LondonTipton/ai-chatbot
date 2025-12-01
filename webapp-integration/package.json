@@ -1,0 +1,15 @@
+{
+  "name": "legal-search-integration",
+  "version": "1.0.0",
+  "description": "Next.js integration for legal document search",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.9.0",
+    "next": "^14.0.0",
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}

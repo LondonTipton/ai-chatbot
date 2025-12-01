@@ -1,19 +1,23 @@
 import { neon } from "@neondatabase/serverless";
 import { type SearchResult, ZillizClient } from "./zilliz-client";
+import { generateEmbeddingsBatch } from "@/lib/embeddings/modal-client";
 
 interface SearchServiceConfig {
-  modalWebhookUrl: string;
+  modalWebhookUrl?: string; // Now optional - uses failover client by default
   zillizUri: string;
   zillizToken: string;
   zillizCollection: string;
+  useFailover?: boolean; // Enable failover (default: true)
 }
 
 export class SearchService {
   private readonly zillizClient: ZillizClient;
-  private readonly modalWebhookUrl: string;
+  private readonly modalWebhookUrl?: string;
+  private readonly useFailover: boolean;
 
   constructor(config: SearchServiceConfig) {
     this.modalWebhookUrl = config.modalWebhookUrl;
+    this.useFailover = config.useFailover ?? true; // Default to failover enabled
     this.zillizClient = new ZillizClient(
       config.zillizUri,
       config.zillizToken,
@@ -72,13 +76,26 @@ export class SearchService {
   }
 
   private async getDenseEmbeddings(queries: string[]): Promise<number[][]> {
+    // Use failover client by default for automatic endpoint redundancy
+    if (this.useFailover) {
+      try {
+        return await generateEmbeddingsBatch(queries, { timeout: 120_000 });
+      } catch (error) {
+        console.error("Failed to get dense embeddings (failover):", error);
+        throw error;
+      }
+    }
+
+    // Legacy: direct endpoint call (when failover is disabled)
     try {
-      const response = await fetch(this.modalWebhookUrl, {
+      const embedUrl = `${this.modalWebhookUrl?.replace(/\/$/, "")}/embed`;
+
+      const response = await fetch(embedUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ queries }), // Send 'queries' array
+        body: JSON.stringify({ queries }),
       });
 
       if (!response.ok) {
@@ -87,13 +104,10 @@ export class SearchService {
 
       const data = await response.json();
 
-      // Handle new batch format { embeddings: [[...], [...]] }
       if (data.embeddings && Array.isArray(data.embeddings)) {
         return data.embeddings;
       }
 
-      // Fallback for legacy single query response { dense_embedding: [...] } or { embedding: [...] }
-      // If we sent a batch but got a single result (shouldn't happen with correct endpoint), handle gracefully
       if (data.dense_embedding || data.embedding) {
         return [data.dense_embedding || data.embedding];
       }
